@@ -1,0 +1,125 @@
+const scoreboard = document.getElementById("scoreboard-new");
+let respawnTimer = null;
+let movementTimer = null;
+
+let ii = setInterval(() => {
+    if (scoreboard.offsetParent === null) {
+        // not visible
+        return;
+    }
+    
+    const respawnButton = [...document.getElementsByTagName("button")]
+        .filter(b => b.innerText.indexOf("Respawn [Space]") === 0)[0];
+    
+    if (respawnButton) {
+        // Clear any existing timers
+        if (respawnTimer) clearTimeout(respawnTimer);
+        if (movementTimer) clearTimeout(movementTimer);
+        
+        // Click the respawn button
+        respawnButton.click();
+        
+        // Set timer for movement sequence
+        respawnTimer = setTimeout(() => {
+            console.log("Executing movement sequence");
+            
+            // Simulate left keypress
+            const leftKeyDown = new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37 });
+            document.dispatchEvent(leftKeyDown);
+            
+            // Release left key after 200ms
+            setTimeout(() => {
+                const leftKeyUp = new KeyboardEvent('keyup', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37 });
+                document.dispatchEvent(leftKeyUp);
+                
+                // Simulate right keypress after left completes
+                setTimeout(() => {
+                    const rightKeyDown = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 });
+                    document.dispatchEvent(rightKeyDown);
+                    
+                    // Release right key after 200ms
+                    setTimeout(() => {
+                        const rightKeyUp = new KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 });
+                        document.dispatchEvent(rightKeyUp);
+                    }, 50);
+                }, 50);
+            }, 50);
+        }, 3000); // 3 seconds after respawn
+    }
+}, 100);
+//Auto Chain
+
+let active = false; // Script starts disabled
+let bombInterval = null; // Interval for spamming "K"
+let movementTimeout = null; // Timeout for 3.9s delay
+let isToggling = false; // Flag to prevent duplicate toggling
+
+// Function to simulate key press down
+function simulateKeyDown(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+}
+
+// Function to simulate key release
+function simulateKeyUp(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+}
+
+// Function to start actions when enabled
+function startActions() {
+    console.log("Script Enabled");
+
+    // Place the first bomb
+    simulateKeyDown(75); // "K" key (Bomb)
+    setTimeout(() => simulateKeyUp(75), 50);
+
+    // Wait 3.9 seconds before movement begins
+    movementTimeout = setTimeout(() => {
+        if (!active) return; // Stop if disabled during delay
+
+        // Hold down "W" and "A" for movement
+        simulateKeyDown(87); // "W" key (Up)
+        simulateKeyDown(65); // "A" key (Left)
+
+        // Start spamming "K" (10 times per second)
+        bombInterval = setInterval(() => {
+            if (!active) {
+                clearInterval(bombInterval);
+                return;
+            }
+            simulateKeyDown(75); // "K" key (Bomb)
+            setTimeout(() => simulateKeyUp(75), 50);
+        }, 100);
+    }, 3900); // 3.9-second delay
+}
+
+// Function to stop everything when disabled
+function stopActions() {
+    console.log("Script Disabled");
+
+    clearInterval(bombInterval); // Stop bomb spamming
+    clearTimeout(movementTimeout); // Stop movement delay
+
+    // Release "W" and "A"
+    simulateKeyUp(87); // "W" key (Up)
+    simulateKeyUp(65); // "A" key (Left)
+}
+
+// Toggle script on/off when "Z" is RELEASED (keyup event prevents duplication)
+document.addEventListener("keyup", (event) => {
+    if ((event.key === "z" || event.key === "Z") && !isToggling) {
+        isToggling = true; // Lock toggling
+
+        active = !active;
+
+        if (active) {
+            startActions();
+        } else {
+            stopActions();
+        }
+
+        // Unlock toggling after 100ms to prevent fast multiple presses
+        setTimeout(() => {
+            isToggling = false;
+        }, 100);
+    }
+});
