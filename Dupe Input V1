@@ -1,0 +1,127 @@
+// Script 4: IndexedDB Method
+// This script uses IndexedDB with frequent polling for communication
+
+// Initialize IndexedDB
+let db;
+const dbName = "gameOfBombsKeyEvents";
+const storeName = "keyEvents";
+const windowId = Math.random().toString(36).substring(2, 15);
+let lastProcessedTimestamp = Date.now();
+
+// Open IndexedDB
+const request = indexedDB.open(dbName, 1);
+
+request.onupgradeneeded = function(event) {
+    db = event.target.result;
+    if (!db.objectStoreNames.contains(storeName)) {
+        const store = db.createObjectStore(storeName, { keyPath: "timestamp" });
+        store.createIndex("timestamp", "timestamp", { unique: false });
+    }
+};
+
+request.onsuccess = function(event) {
+    db = event.target.result;
+    console.log("IndexedDB opened successfully");
+    
+    // Start polling for new events
+    setInterval(checkForNewEvents, 50); // Poll every 50ms
+};
+
+request.onerror = function(event) {
+    console.error("Error opening IndexedDB:", event.target.errorCode);
+};
+
+// Keys we want to broadcast
+const keysToMonitor = ['w', 'a', 's', 'd', 'k', 'r', 'c', 'z', 'x', 'y', 'u', 'h', 'j', ' '];
+
+// Listen for our own key events
+document.addEventListener("keydown", function(event) {
+    if (keysToMonitor.includes(event.key.toLowerCase())) {
+        // Store the key event in IndexedDB
+        storeKeyEvent({
+            type: "keydown",
+            key: event.key,
+            keyCode: event.keyCode,
+            timestamp: Date.now(),
+            origin: windowId
+        });
+    }
+});
+
+document.addEventListener("keyup", function(event) {
+    if (keysToMonitor.includes(event.key.toLowerCase())) {
+        // Store the key event in IndexedDB
+        storeKeyEvent({
+            type: "keyup",
+            key: event.key,
+            keyCode: event.keyCode,
+            timestamp: Date.now(),
+            origin: windowId
+        });
+    }
+});
+
+// Store a key event in IndexedDB
+function storeKeyEvent(keyEvent) {
+    if (!db) return;
+    
+    const transaction = db.transaction([storeName], "readwrite");
+    const store = transaction.objectStore(storeName);
+    store.add(keyEvent);
+    
+    // Clean up old events
+    const oldTimestamp = Date.now() - 1000; // Remove events older than 1 second
+    const index = store.index("timestamp");
+    const range = IDBKeyRange.upperBound(oldTimestamp);
+    index.openCursor(range).onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+            store.delete(cursor.primaryKey);
+            cursor.continue();
+        }
+    };
+}
+
+// Check for new key events
+function checkForNewEvents() {
+    if (!db) return;
+    
+    const transaction = db.transaction([storeName], "readonly");
+    const store = transaction.objectStore(storeName);
+    const range = IDBKeyRange.lowerBound(lastProcessedTimestamp + 1);
+    
+    store.openCursor(range).onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+            const keyEvent = cursor.value;
+            
+            // Don't process our own events
+            if (keyEvent.origin !== windowId) {
+                // Process the event
+                if (Date.now() - keyEvent.timestamp < 100) {
+                    // Create and dispatch the event
+                    const evt = new KeyboardEvent(keyEvent.type, {
+                        key: keyEvent.key,
+                        keyCode: keyEvent.keyCode,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    
+                    document.dispatchEvent(evt);
+                }
+            }
+            
+            lastProcessedTimestamp = keyEvent.timestamp;
+            cursor.continue();
+        }
+    };
+}
+
+// Clean up when window is closed
+window.addEventListener('beforeunload', function() {
+    if (db) {
+        db.close();
+    }
+});
+
+console.log("Game of Bombs - Key Broadcaster (IndexedDB) loaded!");
