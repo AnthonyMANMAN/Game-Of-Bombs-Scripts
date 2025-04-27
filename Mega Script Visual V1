@@ -80,10 +80,10 @@ function createVisualUI() {
 
     // Create status displays for each feature
     const features = [
-        { id: 'movement-status', label: 'Move + Bombs (Z)', active: firstScriptActive },
-        { id: 'respawn-status', label: 'Auto Respawn (X)', active: secondScriptActive },
-        { id: 'bombspam-status', label: 'Bomb Chain (C)', active: false },
-        { id: 'direction-status', label: 'Direction Active', active: false, direction: 'None' }
+        { id: 'movement-status', label: 'Бот с Бомбами (Z)', active: firstScriptActive },
+        { id: 'respawn-status', label: 'Респавн с тыквой (X)', active: secondScriptActive },
+        { id: 'bombspam-status', label: 'Авто Цепь (C)', active: false },
+        { id: 'direction-status', label: 'Диаг цепь', active: false, direction: 'None' }
     ];
 
     features.forEach(feature => {
@@ -704,7 +704,7 @@ function startBombAction() {
 
 // Function to stop everything when disabled
 function stopBombAction() {
-    logActivity("Направленное движение с бомбами деактивировано");
+
     
     if (bombInterval) {
         clearInterval(bombInterval);
@@ -729,12 +729,6 @@ function initializeScript() {
     updateStatus('bombspam-status', bombSpamActive);
     updateStatus('direction-status', false, 'None');
     
-    // Log initial state
-    logActivity("Скрипт успешно загружен!");
-    logActivity("Движения бота + респавн (Z): " + (firstScriptActive ? "Включено" : "Отключено"));
-    logActivity("Тыква + респавн (X): " + (secondScriptActive ? "Включено" : "Отключено"));
-    logActivity("Авто Цепь (держать C): Готово");
-    logActivity("Направленное движение с бомбами (Y/U/H/J): Готово");
 }
 
 // Toggle scripts with Z and X keys, hold C for bomb spam
@@ -743,7 +737,7 @@ document.addEventListener("keydown", (event) => {
     if (event.key === "z" || event.key === "Z") {
         firstScriptActive = !firstScriptActive;
         updateStatus('movement-status', firstScriptActive);
-        logActivity(`Движения бота + респавн ${firstScriptActive ? "включено" : "отключено"}`);
+
         
         if (firstScriptActive) {
             moveCharacter(); // Restart movement loop when re-enabled
@@ -766,7 +760,7 @@ document.addEventListener("keydown", (event) => {
     if (event.key === "x" || event.key === "X") {
         secondScriptActive = !secondScriptActive;
         updateStatus('respawn-status', secondScriptActive);
-        logActivity(`Тыква + респавн ${secondScriptActive ? "включено" : "отключено"}`);
+ 
         
         if (secondScriptActive && !scoreBoardInterval) {
             startAutoRespawn(); // Restart auto-respawn if needed
@@ -777,7 +771,6 @@ document.addEventListener("keydown", (event) => {
     if (event.key === "c" || event.key === "C") {
         bombSpamActive = true;
         updateStatus('bombspam-status', true);
-        logActivity("Авто цепь активирована");
     }
     
     // Fourth script directional controls
@@ -826,7 +819,7 @@ document.addEventListener("keyup", (event) => {
     if (event.key === "c" || event.key === "C") {
         bombSpamActive = false;
         updateStatus('bombspam-status', false);
-        logActivity("Авто цепь деактивирована");
+
     }
     
     // Fourth script key releases
@@ -847,7 +840,6 @@ document.addEventListener("keyup", (event) => {
         else if (event.key === "h" || event.key === "H") dirLabel = "DOWN-LEFT";
         else if (event.key === "j" || event.key === "J") dirLabel = "DOWN-RIGHT";
         
-        logActivity(`Направленное движение ${dirLabel} остановлено`);
     }
 });
 
@@ -918,7 +910,6 @@ function reattachUI() {
     updateActiveKeysDisplay();
     
     // Log the reattachment
-    logActivity("UI reattached - visual controls restored");
 }
 
 // Add a global function that can be called from the console to fix UI issues
