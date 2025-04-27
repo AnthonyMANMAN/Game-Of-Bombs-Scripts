@@ -1,4 +1,4 @@
-// Original script with visual UI added
+// Improved script with fixes for stuck keys and grid display issues
 // Global variables for script control
 let active = true; // Toggle state for the original script
 let firstScriptActive = false;
@@ -13,6 +13,8 @@ let isToggling = false; // Flag to prevent duplicate toggling
 let bombInterval = null; // Interval for spamming "K"
 let lastFlashTime = 0; // Track the last time a button was flashed
 const FLASH_COOLDOWN = 300; // Minimum time between UI flashes in milliseconds
+let minimized = false; // Track UI state
+let activeKeys = new Set(); // Track currently pressed keys to prevent stuck keys
 
 // Define key codes
 const ee = {
@@ -26,8 +28,25 @@ const ee = {
     downRight: { keys: [83, 68] }
 };
 
+// Key mapping for easy reference 
+const KEY_MAP = {
+    87: "W",
+    65: "A",
+    83: "S",
+    68: "D",
+    75: "K",
+    32: "Space",
+    82: "R"
+};
+
 // Create UI for visual feedback
 function createVisualUI() {
+    // Remove any existing UI first (prevents duplicates on re-initialization)
+    const existingUI = document.getElementById('bot-ui-container');
+    if (existingUI) {
+        existingUI.remove();
+    }
+
     // Create container for the UI
     const uiContainer = document.createElement('div');
     uiContainer.id = 'bot-ui-container';
@@ -98,6 +117,7 @@ function createVisualUI() {
 
     // Add direction indicator
     const directionContainer = document.createElement('div');
+    directionContainer.id = 'direction-container';
     directionContainer.style.cssText = `
         margin-top: 10px;
         padding-top: 10px;
@@ -157,6 +177,32 @@ function createVisualUI() {
     directionContainer.appendChild(directionIndicator);
     uiContainer.appendChild(directionContainer);
 
+    // Add active keys display (to help debug stuck keys)
+    const keysContainer = document.createElement('div');
+    keysContainer.style.cssText = `
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+    `;
+
+    const keysLabel = document.createElement('div');
+    keysLabel.textContent = 'Active Keys:';
+    keysLabel.style.marginBottom = '5px';
+    keysContainer.appendChild(keysLabel);
+
+    const keysDisplay = document.createElement('div');
+    keysDisplay.id = 'active-keys-display';
+    keysDisplay.style.cssText = `
+        font-size: 12px;
+        font-family: monospace;
+        padding: 4px;
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 4px;
+        min-height: 20px;
+    `;
+    keysContainer.appendChild(keysDisplay);
+    uiContainer.appendChild(keysContainer);
+
     // Add activity log
     const logContainer = document.createElement('div');
     logContainer.style.cssText = `
@@ -181,6 +227,26 @@ function createVisualUI() {
     logContainer.appendChild(logContent);
     uiContainer.appendChild(logContainer);
 
+    // Add emergency key release button
+    const emergencyButton = document.createElement('button');
+    emergencyButton.textContent = 'Release All Keys';
+    emergencyButton.style.cssText = `
+        background-color: #d9534f;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 10px;
+        margin-top: 10px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+    `;
+    emergencyButton.addEventListener('click', () => {
+        releaseAllKeysEmergency();
+        logActivity('Emergency key release triggered!');
+    });
+    uiContainer.appendChild(emergencyButton);
+
     // Add minimize/maximize button
     const toggleButton = document.createElement('button');
     toggleButton.textContent = '−';
@@ -200,16 +266,22 @@ function createVisualUI() {
         justify-content: center;
     `;
 
-    let minimized = false;
-    const contentElements = [header, ...uiContainer.querySelectorAll('div:not(#bot-log)')];
+    // Store references to content elements for minimize/maximize
+    const contentElements = [
+        document.getElementById('direction-container'),
+        keysContainer,
+        logContainer,
+        emergencyButton
+    ];
     
     toggleButton.addEventListener('click', () => {
         minimized = !minimized;
-        contentElements.forEach(el => {
+        const elementsToToggle = document.querySelectorAll('#bot-ui-container > div:not(:first-child)');
+        elementsToToggle.forEach(el => {
             el.style.display = minimized ? 'none' : 'block';
         });
+        emergencyButton.style.display = minimized ? 'none' : 'block';
         toggleButton.textContent = minimized ? '+' : '−';
-        uiContainer.style.height = minimized ? 'auto' : '';
     });
     
     uiContainer.appendChild(toggleButton);
@@ -224,6 +296,20 @@ function updateStatus(id, active, text = null) {
     if (element) {
         element.textContent = text || (active ? 'ON' : 'OFF');
         element.style.color = active ? '#4CAF50' : '#F44336';
+    }
+}
+
+// Update active keys display
+function updateActiveKeysDisplay() {
+    const keysDisplay = document.getElementById('active-keys-display');
+    if (keysDisplay) {
+        if (activeKeys.size === 0) {
+            keysDisplay.textContent = 'None';
+            keysDisplay.style.color = '#CCC';
+        } else {
+            keysDisplay.textContent = Array.from(activeKeys).map(key => KEY_MAP[key] || key).join(', ');
+            keysDisplay.style.color = '#FFD700'; // Gold color when keys are active
+        }
     }
 }
 
@@ -296,50 +382,95 @@ function updateDirectionIndicator(direction) {
     }
 }
 
-// First Script: Character Movement & Bomb Placement
+// Enhanced key simulation functions that track key state
 function simulateKeyDown(direction) {
     if (typeof direction === 'number') {
-        // Handle single keyCode input for the second script
+        // Handle single keyCode input
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction }));
+        activeKeys.add(direction); // Add to active keys set
+        updateActiveKeysDisplay();
         return;
     }
     
     if (direction.keys) {
         direction.keys.forEach(keyCode => {
-            let event = new KeyboardEvent("keydown", { keyCode: keyCode });
-            document.dispatchEvent(event);
+            document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+            activeKeys.add(keyCode); // Add to active keys set
         });
     } else {
-        let event = new KeyboardEvent("keydown", { keyCode: direction.keyCode, key: direction.key });
-        document.dispatchEvent(event);
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction.keyCode, key: direction.key }));
+        activeKeys.add(direction.keyCode); // Add to active keys set
     }
+    updateActiveKeysDisplay();
 }
 
 function simulateKeyUp(direction) {
     if (typeof direction === 'number') {
-        // Handle single keyCode input for the second script
+        // Handle single keyCode input
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction }));
+        activeKeys.delete(direction); // Remove from active keys
+        updateActiveKeysDisplay();
         return;
     }
     
     if (direction.keys) {
         direction.keys.forEach(keyCode => {
-            let event = new KeyboardEvent("keyup", { keyCode: keyCode });
-            document.dispatchEvent(event);
+            document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+            activeKeys.delete(keyCode); // Remove from active keys
         });
     } else {
-        let event = new KeyboardEvent("keyup", { keyCode: direction.keyCode, key: direction.key });
-        document.dispatchEvent(event);
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction.keyCode, key: direction.key }));
+        activeKeys.delete(direction.keyCode); // Remove from active keys
     }
+    updateActiveKeysDisplay();
+}
+
+// Emergency function to release ALL keys (for stuck keys)
+function releaseAllKeysEmergency() {
+    // Release all common game keys
+    [65, 68, 75, 82, 83, 87, 32].forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    });
+    
+    // Also release any keys tracked in our activeKeys set
+    activeKeys.forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    });
+    
+    // Clear the active keys set
+    activeKeys.clear();
+    updateActiveKeysDisplay();
+    
+    // Reset any active directions or states
+    currentDirection = null;
+    updateDirectionIndicator(null);
+    
+    // Stop any ongoing actions
+    if (moveTimeout) {
+        clearTimeout(moveTimeout);
+        moveTimeout = null;
+    }
+    
+    // Stop bomb actions
+    stopBombAction();
+    
+    logActivity("All keys released - reset complete");
 }
 
 // Function to simulate placing a bomb (pressing "K")
 function placeBomb() {
-    var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "K" });
+    if (!firstScriptActive) return;
+    
+    var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "k" });
     document.dispatchEvent(bombKeyEvent);
+    activeKeys.add(75);
+    updateActiveKeysDisplay();
+    
     setTimeout(() => {
-        var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75, key: "K" });
+        var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75, key: "k" });
         document.dispatchEvent(bombKeyReleaseEvent);
+        activeKeys.delete(75);
+        updateActiveKeysDisplay();
     }, 100);
     
     // Visual feedback - but only occasionally to reduce flickering
@@ -363,6 +494,8 @@ function getRandomPause(min, max) {
 
 // Function to simulate random direction presses (W, A, S, D) for 50ms during pause
 function randomDirectionPress() {
+    if (!firstScriptActive) return;
+    
     const directions = [ee.up, ee.left, ee.down, ee.right];
     const direction = directions[Math.floor(Math.random() * directions.length)];
     // Simulate pressing a random direction key for 50ms
@@ -372,22 +505,27 @@ function randomDirectionPress() {
     }, 50);
 }
 
-// Function to Move Character
+// Improved Move Character function with better key tracking
 function moveCharacter() {
     if (!firstScriptActive) return;
+    
     const direction = getRandomDirection();
     const delay = getRandomDelay(900, 1500); // Longer motion time
     const pauseTime = getRandomPause(125, 1000);
+    
     // If there's an ongoing movement, stop it before starting a new one
     if (moveTimeout) {
         clearTimeout(moveTimeout); // Clear the previous movement timeout
     }
-    // Stop the current direction if it's moving
+    
+    // Always release all direction keys before changing direction to prevent stuck keys
     if (currentDirection) {
         simulateKeyUp(currentDirection);
     }
+    
     // Place a bomb before changing direction
     placeBomb();
+    
     // Start the new movement direction after bomb placement
     currentDirection = direction;
     
@@ -398,26 +536,34 @@ function moveCharacter() {
         simulateKeyDown(direction);
         moveTimeout = setTimeout(() => {
             simulateKeyUp(direction); // Stop the current movement after delay
+            currentDirection = null;
             
             // Simulate random direction press during the pause (50ms)
             randomDirectionPress();
             
-            setTimeout(moveCharacter, pauseTime); // Pause before next movement
+            // Set timer for next movement
+            moveTimeout = setTimeout(moveCharacter, pauseTime);
         }, delay);
     }, 100); // Wait 100ms for bomb placement before moving
 }
 
 function simulateSpaceKeyPress() {
     if (!firstScriptActive) return;
+    
     var spaceKeyEvent = new KeyboardEvent("keydown", { keyCode: 32, key: " " });
     document.dispatchEvent(spaceKeyEvent);
+    activeKeys.add(32);
+    updateActiveKeysDisplay();
+    
     setTimeout(() => {
         var spaceKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 32, key: " " });
         document.dispatchEvent(spaceKeyReleaseEvent);
+        activeKeys.delete(32);
+        updateActiveKeysDisplay();
     }, 100);
 }
 
-// Second Script: Auto Respawn and R key press
+// Improved Auto Respawn
 function startAutoRespawn() {
     // Clear any existing interval first to prevent multiple instances
     if (scoreBoardInterval) {
@@ -447,6 +593,9 @@ function startAutoRespawn() {
             // Flash UI feedback, but not too often
             flashButtonStatus('respawn-status', '#FFD700', 300);
             
+            // Make sure all keys are released first
+            releaseAllKeysEmergency();
+            
             // Set timer to press R after respawn
             respawnTimer = setTimeout(() => {
                 logActivity("Нажата клавиша R");
@@ -454,18 +603,22 @@ function startAutoRespawn() {
                 // Simulate R keypress
                 const rKeyDown = new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', keyCode: 82, which: 82 });
                 document.dispatchEvent(rKeyDown);
+                activeKeys.add(82);
+                updateActiveKeysDisplay();
                 
                 // Release R key after a short delay
                 setTimeout(() => {
                     const rKeyUp = new KeyboardEvent('keyup', { key: 'r', code: 'KeyR', keyCode: 82, which: 82 });
                     document.dispatchEvent(rKeyUp);
+                    activeKeys.delete(82);
+                    updateActiveKeysDisplay();
                 }, 50);
             }, 1000); // 1 second after respawn
         }
     }, 100);
 }
 
-// Third Script: Bomb Spam when C is held
+// Bomb Spam when C is held
 function startBombSpam() {
     // If an interval is already running, don't create a new one
     if (bombSpamInterval) return;
@@ -476,6 +629,8 @@ function startBombSpam() {
             // Simulate K keypress (place bomb) as fast as possible
             var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "k" });
             document.dispatchEvent(bombKeyEvent);
+            activeKeys.add(75);
+            updateActiveKeysDisplay();
             
             // Flash UI feedback (much less frequently to avoid flickering)
             if (Math.random() < 0.02) { // Only flash for ~2% of bombs
@@ -486,9 +641,11 @@ function startBombSpam() {
             setTimeout(() => {
                 var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75, key: "k" });
                 document.dispatchEvent(bombKeyReleaseEvent);
+                activeKeys.delete(75);
+                updateActiveKeysDisplay();
             }, 10); // Very short delay for rapid spam
         }
-    }, 20); // 20ms interval for very fast bomb spam (close to 50 times per second)
+    }, 20); // 20ms interval for very fast bomb spam
 }
 
 // Stop bomb spam
@@ -499,21 +656,34 @@ function stopBombSpam() {
     }
 }
 
-// Fourth Script: Directional bombing with held keys
-// Function to hold down keys
+// Directional bombing with held keys - improved to prevent stuck keys
 function holdKeys(keys) {
-    keys.forEach(key => simulateKeyDown(key));
+    // First release any existing keys to prevent conflicts
+    releaseAllKeys();
+    
+    // Now hold the new keys
+    keys.forEach(key => {
+        simulateKeyDown(key);
+    });
 }
 
-// Function to release all held keys
+// Release all held direction keys
 function releaseAllKeys() {
-    [87, 65, 83, 68].forEach(key => simulateKeyUp(key)); // Release "W", "A", "S", "D"
+    [87, 65, 83, 68].forEach(key => {
+        simulateKeyUp(key); // Release "W", "A", "S", "D"
+    });
     updateDirectionIndicator(null); // Reset direction indicator
 }
 
-// Function to start actions when enabled (bomb spamming)
+// Function to start bomb spamming actions
 function startBombAction() {
     logActivity("Направленное движение с бомбами активировано");
+    
+    // Clear existing interval before creating a new one
+    if (bombInterval) {
+        clearInterval(bombInterval);
+    }
+    
     bombInterval = setInterval(() => {
         if (!active) {
             clearInterval(bombInterval);
@@ -526,17 +696,23 @@ function startBombAction() {
             flashButtonStatus('direction-status');
         }
         
-        setTimeout(() => simulateKeyUp(75), 50);
+        setTimeout(() => {
+            simulateKeyUp(75);
+        }, 50);
     }, 100); // Spams "K" key every 100ms
 }
 
 // Function to stop everything when disabled
 function stopBombAction() {
     logActivity("Направленное движение с бомбами деактивировано");
-    clearInterval(bombInterval); // Stop bomb spamming
+    
+    if (bombInterval) {
+        clearInterval(bombInterval);
+        bombInterval = null;
+    }
 }
 
-// Initialize UI
+// Initialize UI and script
 function initializeScript() {
     // Create the visual UI
     createVisualUI();
@@ -568,10 +744,16 @@ document.addEventListener("keydown", (event) => {
         firstScriptActive = !firstScriptActive;
         updateStatus('movement-status', firstScriptActive);
         logActivity(`Движения бота + респавн ${firstScriptActive ? "включено" : "отключено"}`);
+        
         if (firstScriptActive) {
             moveCharacter(); // Restart movement loop when re-enabled
         } else {
-            // Clear direction when disabled
+            // Stop all movement and clear direction when disabled
+            if (moveTimeout) {
+                clearTimeout(moveTimeout);
+                moveTimeout = null;
+            }
+            
             if (currentDirection) {
                 simulateKeyUp(currentDirection);
                 currentDirection = null;
@@ -585,6 +767,7 @@ document.addEventListener("keydown", (event) => {
         secondScriptActive = !secondScriptActive;
         updateStatus('respawn-status', secondScriptActive);
         logActivity(`Тыква + респавн ${secondScriptActive ? "включено" : "отключено"}`);
+        
         if (secondScriptActive && !scoreBoardInterval) {
             startAutoRespawn(); // Restart auto-respawn if needed
         }
@@ -634,7 +817,7 @@ document.addEventListener("keydown", (event) => {
     // Prevent fast toggling
     setTimeout(() => {
         isToggling = false;
-    }, 100);
+}, 100);
 });
 
 // Event listener for key releases
@@ -647,28 +830,131 @@ document.addEventListener("keyup", (event) => {
     }
     
     // Fourth script key releases
-    if (event.key === "y" || event.key === "Y") {
+    if (event.key === "y" || event.key === "Y" || 
+        event.key === "u" || event.key === "U" || 
+        event.key === "h" || event.key === "H" || 
+        event.key === "j" || event.key === "J") {
+        
         active = false;
-        releaseAllKeys(); // Release "W" and "A" when "Y" is released
+        releaseAllKeys(); // Release all direction keys
         updateStatus('direction-status', false, 'None');
         stopBombAction(); // Stop bomb spamming
-    } else if (event.key === "u" || event.key === "U") {
-        active = false;
-        releaseAllKeys(); // Release "W" and "D" when "U" is released
-        updateStatus('direction-status', false, 'None');
-        stopBombAction(); // Stop bomb spamming
-    } else if (event.key === "h" || event.key === "H") {
-        active = false;
-        releaseAllKeys(); // Release "A" and "S" when "H" is released
-        updateStatus('direction-status', false, 'None');
-        stopBombAction(); // Stop bomb spamming
-    } else if (event.key === "j" || event.key === "J") {
-        active = false;
-        releaseAllKeys(); // Release "S" and "D" when "J" is released
-        updateStatus('direction-status', false, 'None');
-        stopBombAction(); // Stop bomb spamming
+        
+        // Log which directional movement was stopped
+        let dirLabel = "";
+        if (event.key === "y" || event.key === "Y") dirLabel = "UP-LEFT";
+        else if (event.key === "u" || event.key === "U") dirLabel = "UP-RIGHT";
+        else if (event.key === "h" || event.key === "H") dirLabel = "DOWN-LEFT";
+        else if (event.key === "j" || event.key === "J") dirLabel = "DOWN-RIGHT";
+        
+        logActivity(`Направленное движение ${dirLabel} остановлено`);
     }
 });
 
+// Handle UI visibility restoration when window/tab becomes active again
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && minimized) {
+        // If the page was hidden and becomes visible again while UI is minimized
+        const elementsToKeepHidden = document.querySelectorAll('#bot-ui-container > div:not(:first-child)');
+        elementsToKeepHidden.forEach(el => {
+            el.style.display = 'none';
+        });
+        
+        // Also ensure the emergency button stays hidden
+        const emergencyBtn = document.querySelector('#bot-ui-container > button:not(:last-child)');
+        if (emergencyBtn) emergencyBtn.style.display = 'none';
+    }
+    
+    // If we become visible again, make sure the grid display is correct
+    updateDirectionIndicator(currentDirection);
+    
+    // Also ensure active key display is up to date
+    updateActiveKeysDisplay();
+});
+
+// Handle any cleanup needed when the window is closing
+window.addEventListener('beforeunload', () => {
+    // Make sure we clean up by releasing all keys
+    releaseAllKeysEmergency();
+    
+    // Clear all intervals to prevent memory leaks
+    if (moveTimeout) clearTimeout(moveTimeout);
+    if (respawnTimer) clearTimeout(respawnTimer);
+    if (scoreBoardInterval) clearInterval(scoreBoardInterval);
+    if (bombSpamInterval) clearInterval(bombSpamInterval);
+    if (bombInterval) clearInterval(bombInterval);
+});
+
+// Function to reload/reattach the UI if it's missing (can be used for troubleshooting)
+function reattachUI() {
+    // Re-create the UI
+    createVisualUI();
+    
+    // Update all statuses
+    updateStatus('movement-status', firstScriptActive);
+    updateStatus('respawn-status', secondScriptActive);
+    updateStatus('bombspam-status', bombSpamActive);
+    
+    if (currentDirection) {
+        let dirStatus = 'None';
+        if (currentDirection === ee.upLeft) dirStatus = 'UP-LEFT';
+        else if (currentDirection === ee.upRight) dirStatus = 'UP-RIGHT';
+        else if (currentDirection === ee.downLeft) dirStatus = 'DOWN-LEFT';
+        else if (currentDirection === ee.downRight) dirStatus = 'DOWN-RIGHT';
+        else if (currentDirection === ee.up) dirStatus = 'UP';
+        else if (currentDirection === ee.down) dirStatus = 'DOWN'; 
+        else if (currentDirection === ee.left) dirStatus = 'LEFT';
+        else if (currentDirection === ee.right) dirStatus = 'RIGHT';
+        
+        updateStatus('direction-status', true, dirStatus);
+    } else {
+        updateStatus('direction-status', false, 'None');
+    }
+    
+    // Update direction indicators
+    updateDirectionIndicator(currentDirection);
+    
+    // Update active keys display
+    updateActiveKeysDisplay();
+    
+    // Log the reattachment
+    logActivity("UI reattached - visual controls restored");
+}
+
+// Add a global function that can be called from the console to fix UI issues
+window.fixGameBot = function() {
+    // Release all keys to fix any stuck keys
+    releaseAllKeysEmergency();
+    
+    // Reattach the UI
+    reattachUI();
+    
+    // Restart necessary processes
+    if (secondScriptActive) {
+        startAutoRespawn();
+    }
+    
+    // Make sure bomb spam capability is available
+    startBombSpam();
+    
+    console.log("Game bot fixed and restarted!");
+    return "Game bot UI and functionality restored.";
+};
+
 // Initialize the script with UI
 initializeScript();
+
+// Add periodic key state verification to prevent stuck keys
+setInterval(() => {
+    // If movement script is inactive but we have movement keys recorded as active,
+    // something is wrong - release them
+    if (!firstScriptActive && !active && activeKeys.size > 0) {
+        const movementKeys = [87, 65, 83, 68, 75]; // W, A, S, D, K
+        const hasMovementKey = movementKeys.some(key => activeKeys.has(key));
+        
+        if (hasMovementKey) {
+            logActivity("Detected stuck movement keys - releasing");
+            releaseAllKeysEmergency();
+        }
+    }
+}, 5000); // Check every 5 seconds
