@@ -11,6 +11,8 @@ let respawnTimer = null;
 let scoreBoardInterval = null;
 let isToggling = false; // Flag to prevent duplicate toggling
 let bombInterval = null; // Interval for spamming "K"
+let lastFlashTime = 0; // Track the last time a button was flashed
+const FLASH_COOLDOWN = 300; // Minimum time between UI flashes in milliseconds
 
 // Define key codes
 const ee = {
@@ -86,6 +88,7 @@ function createVisualUI() {
             background-color: rgba(0, 0, 0, 0.3);
             padding: 2px 6px;
             border-radius: 4px;
+            transition: background-color 0.2s ease;
         `;
 
         featureContainer.appendChild(label);
@@ -127,6 +130,7 @@ function createVisualUI() {
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: background-color 0.2s ease;
         `;
         
         // Center cell is different
@@ -220,6 +224,23 @@ function updateStatus(id, active, text = null) {
     if (element) {
         element.textContent = text || (active ? 'ON' : 'OFF');
         element.style.color = active ? '#4CAF50' : '#F44336';
+    }
+}
+
+// Improved flash function with cooldown to reduce flickering
+function flashButtonStatus(id, color = '#FFD700', duration = 100) {
+    const now = Date.now();
+    // Only flash if enough time has passed since the last flash
+    if (now - lastFlashTime >= FLASH_COOLDOWN) {
+        const element = document.getElementById(id);
+        if (element) {
+            const originalBackground = element.style.backgroundColor;
+            element.style.backgroundColor = color;
+            setTimeout(() => {
+                element.style.backgroundColor = originalBackground;
+            }, duration);
+        }
+        lastFlashTime = now;
     }
 }
 
@@ -321,13 +342,9 @@ function placeBomb() {
         document.dispatchEvent(bombKeyReleaseEvent);
     }, 100);
     
-    // Visual feedback - flash the bomb status
-    const bombStatus = document.getElementById('movement-status');
-    if (bombStatus) {
-        bombStatus.style.backgroundColor = '#FFD700';
-        setTimeout(() => {
-            bombStatus.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-        }, 100);
+    // Visual feedback - but only occasionally to reduce flickering
+    if (Math.random() < 0.1) { // Only flash for 10% of bombs
+        flashButtonStatus('movement-status');
     }
 }
 
@@ -427,14 +444,8 @@ function startAutoRespawn() {
             respawnButton.click();
             logActivity("Автоматический респавн активирован");
             
-            // Flash UI feedback
-            const respawnStatus = document.getElementById('respawn-status');
-            if (respawnStatus) {
-                respawnStatus.style.backgroundColor = '#FFD700';
-                setTimeout(() => {
-                    respawnStatus.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-                }, 300);
-            }
+            // Flash UI feedback, but not too often
+            flashButtonStatus('respawn-status', '#FFD700', 300);
             
             // Set timer to press R after respawn
             respawnTimer = setTimeout(() => {
@@ -466,15 +477,9 @@ function startBombSpam() {
             var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "k" });
             document.dispatchEvent(bombKeyEvent);
             
-            // Flash UI feedback (less frequently to avoid performance issues)
-            if (Math.random() < 0.2) { // Only flash for ~20% of bombs
-                const bombSpamStatus = document.getElementById('bombspam-status');
-                if (bombSpamStatus) {
-                    bombSpamStatus.style.backgroundColor = '#FFD700';
-                    setTimeout(() => {
-                        bombSpamStatus.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-                    }, 20);
-                }
+            // Flash UI feedback (much less frequently to avoid flickering)
+            if (Math.random() < 0.02) { // Only flash for ~2% of bombs
+                flashButtonStatus('bombspam-status');
             }
             
             // Release K key immediately
@@ -516,15 +521,9 @@ function startBombAction() {
         }
         simulateKeyDown(75); // "K" key (Bomb)
         
-        // Flash UI feedback (less frequently)
-        if (Math.random() < 0.2) {
-            const directionStatus = document.getElementById('direction-status');
-            if (directionStatus) {
-                directionStatus.style.backgroundColor = '#FFD700';
-                setTimeout(() => {
-                    directionStatus.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-                }, 20);
-            }
+        // Flash UI feedback (much less frequently)
+        if (Math.random() < 0.02) { // Only flash for ~2% of bombs
+            flashButtonStatus('direction-status');
         }
         
         setTimeout(() => simulateKeyUp(75), 50);
