@@ -1,0 +1,3 @@
+//in previous version it relied on indexedDB and got stuck with different versions occassionally. 
+//Hopefully this fixes that
+// give me a second i dont know how to do this quite yet fix will be up soon
