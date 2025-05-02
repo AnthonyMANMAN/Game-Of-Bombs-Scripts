@@ -5,6 +5,7 @@ EN VERSION
 //injectFakeUserMessage("Message","Sender") for white text
 //CHEATS is just game code nothing written by me
 //Dupe Input V2.3 RU PATCH - Duplicate inputs between windows. Paste into console of both windows. Use English Letter "v" to turn off in window
+//If it gives Error IndexedDB Version is greater than requested or something like that then go to line 55 and change that number 
 //Use Mega Script Visual V1 As final version of Gob Script V2 & V1
 
 RU VERSION
@@ -14,4 +15,5 @@ RU VERSION
 //injectFakeUserMessage("текст","кто послал") для белого
 //CHEATS - это просто игровой код, ничего не написанное мной
 //Dupe Input V2.3 RU PATCH - дублирование ввода между окнами. Вставьте в консоль обоих окон. Используйте английскую букву "v" для отключения в окне
+//Если выдается ошибка «Версия IndexedDB больше запрошенной» или что-то в этом роде, то перейдите к строке 55 и измените это число
 //Используйте Mega Script Visual V1 как финальную версию Gob Script V2 & V1 - комбинация много чего. Справа вверху минус чтобы спрятать
