@@ -1,3 +1,5 @@
+//тут ниче интересного просто код который уже в игре, не я писал
+
 bombermine.run(function(Game) {
     cheat_cmds = []
 
