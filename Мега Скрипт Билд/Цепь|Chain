@@ -1,0 +1,202 @@
+/**
+ * Auto Chain Addon - Rapidly places bombs when activated
+ * This addon adds a keyboard-toggle bomb spamming feature to the game bot
+ */
+
+// Auto Chain specific state variables
+const autoChain = {
+    active: false,
+    interval: null,
+    toggleKey: 'c',  // Key to toggle auto chain
+    keyCode: 75      // Bomb key ("K")
+};
+
+// Initialize the Auto Chain addon
+function initAutoChainAddon() {
+    // Register with main UI if it exists
+    addFeatureToUI('auto-chain-status', 'Авто Цепь (C)', autoChain.active);
+    
+    // Start the bomb spam handler (inactive until toggled)
+    startAutoChainHandler();
+    
+    // Log initialization
+    if (typeof logActivity === 'function') {
+        logActivity("Auto Chain addon initialized");
+    } else {
+        console.log("Auto Chain addon initialized");
+    }
+}
+
+// Setup the bomb spam interval handler
+function startAutoChainHandler() {
+    // Clear any existing interval to prevent duplicates
+    if (autoChain.interval) {
+        clearInterval(autoChain.interval);
+        autoChain.interval = null;
+    }
+    
+    // Create a rapid interval to spam bombs (K key)
+    autoChain.interval = setInterval(() => {
+        if (!autoChain.active) return;
+        
+        // Simulate K keypress (place bomb) as fast as possible
+        const bombKeyEvent = new KeyboardEvent("keydown", { keyCode: autoChain.keyCode, key: "k" });
+        document.dispatchEvent(bombKeyEvent);
+        
+        // Track key state in global key tracker if available
+        if (typeof gameBot !== 'undefined' && gameBot.keyTracker) {
+            gameBot.keyTracker.markKeyAsPressed(autoChain.keyCode);
+        }
+        
+        // Flash UI feedback (much less frequently to avoid flickering)
+        if (Math.random() < 0.02) { // Only flash for ~2% of bombs
+            if (typeof flashButtonStatus === 'function') {
+                flashButtonStatus('auto-chain-status');
+            }
+        }
+        
+        // Release K key immediately
+        setTimeout(() => {
+            const bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: autoChain.keyCode, key: "k" });
+            document.dispatchEvent(bombKeyReleaseEvent);
+            
+            // Update key tracker if available
+            if (typeof gameBot !== 'undefined' && gameBot.keyTracker) {
+                gameBot.keyTracker.markKeyAsReleased(autoChain.keyCode);
+            }
+        }, 10); // Very short delay for rapid spam
+    }, 20); // 20ms interval for very fast bomb spam
+}
+
+// Update addon status in UI
+function updateAutoChainStatus() {
+    if (typeof updateStatus === 'function') {
+        updateStatus('auto-chain-status', autoChain.active);
+    } else {
+        const statusElement = document.getElementById('auto-chain-status');
+        if (statusElement) {
+            statusElement.textContent = autoChain.active ? 'ON' : 'OFF';
+            statusElement.style.color = autoChain.active ? '#4CAF50' : '#F44336';
+        }
+    }
+    
+    // Log status change
+    if (typeof logActivity === 'function') {
+        logActivity(`Auto Chain ${autoChain.active ? 'activated' : 'deactivated'}`);
+    } else {
+        console.log(`Auto Chain ${autoChain.active ? 'activated' : 'deactivated'}`);
+    }
+}
+
+// Toggle auto chain status
+function toggleAutoChain() {
+    autoChain.active = !autoChain.active;
+    updateAutoChainStatus();
+}
+
+// Define cleanup function
+function cleanupAutoChain() {
+    if (autoChain.interval) {
+        clearInterval(autoChain.interval);
+        autoChain.interval = null;
+    }
+    autoChain.active = false;
+}
+
+// Add optional feature to UI if main UI system exists
+function addFeatureToUI(id, label, initialState) {
+    // If the main UI container exists
+    const uiContainer = document.getElementById('bot-ui-container');
+    if (!uiContainer) return false;
+    
+    // Create feature container
+    const featureContainer = document.createElement('div');
+    featureContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        align-items: center;
+    `;
+    
+    const featureLabel = document.createElement('span');
+    featureLabel.textContent = label;
+    
+    const status = document.createElement('span');
+    status.id = id;
+    status.textContent = initialState ? 'ON' : 'OFF';
+    status.style.cssText = `
+        font-weight: bold;
+        color: ${initialState ? '#4CAF50' : '#F44336'};
+        background-color: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    `;
+    
+    featureContainer.appendChild(featureLabel);
+    featureContainer.appendChild(status);
+    
+    // Find where to insert - after movement-status if it exists
+    const movementStatus = document.getElementById('bombspam-status');
+    if (movementStatus) {
+        const parentElement = movementStatus.parentElement;
+        if (parentElement && parentElement.parentElement) {
+            parentElement.parentElement.insertBefore(featureContainer, parentElement.nextSibling);
+            return true;
+        }
+    }
+    
+    // Fallback: just add to the container before the direction indicator
+    const directionContainer = document.getElementById('direction-container');
+    if (directionContainer) {
+        uiContainer.insertBefore(featureContainer, directionContainer);
+    } else {
+        uiContainer.appendChild(featureContainer);
+    }
+    
+    return true;
+}
+
+// Add keyboard event listeners for toggle
+document.addEventListener("keydown", (event) => {
+    // Toggle auto chain when C is pressed
+    if (event.key.toLowerCase() === autoChain.toggleKey) {
+        autoChain.active = true;
+        updateAutoChainStatus();
+    }
+});
+
+document.addEventListener("keyup", (event) => {
+    // Turn off auto chain when C is released
+    if (event.key.toLowerCase() === autoChain.toggleKey) {
+        autoChain.active = false;
+        updateAutoChainStatus();
+    }
+});
+
+// Register cleanup for page unload
+window.addEventListener('beforeunload', cleanupAutoChain);
+
+// Register with global gameBot object if it exists
+if (typeof window.gameBot !== 'undefined') {
+    window.gameBot.autoChain = {
+        toggle: toggleAutoChain,
+        isActive: () => autoChain.active,
+        cleanup: cleanupAutoChain
+    };
+    
+    // Register with emergency key release if it exists
+    if (window.gameBot.emergencyRelease) {
+        window.gameBot.emergencyRelease.registerCleanupFunction(cleanupAutoChain);
+    }
+}
+
+// Auto-initialize the addon
+initAutoChainAddon();
+
+// Export module functions for use in console
+window.autoChainAddon = {
+    toggle: toggleAutoChain,
+    isActive: () => autoChain.active,
+    cleanup: cleanupAutoChain
+};
