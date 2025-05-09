@@ -1,0 +1,597 @@
+// Base Script - Game Bot Framework
+// Core functionality for the game bot with UI and key tracking
+
+// Global variables for script control
+let active = true; // General toggle state for the bot
+let isToggling = false; // Flag to prevent duplicate toggling
+let lastFlashTime = 0; // Track the last time a button was flashed
+const FLASH_COOLDOWN = 300; // Minimum time between UI flashes in milliseconds
+let minimized = false; // Track UI state
+let activeKeys = new Set(); // Track currently pressed keys to prevent stuck keys
+
+// Key mapping for easy reference 
+const KEY_MAP = {
+    87: "W",
+    65: "A",
+    83: "S",
+    68: "D",
+    75: "K",
+    32: "Space",
+    82: "R",
+    37: "←",
+    38: "↑",
+    39: "→",
+    40: "↓"
+};
+
+// Define key codes
+const ee = {
+    up: { keyCode: 87, key: "w" },
+    left: { keyCode: 65, key: "a" },
+    down: { keyCode: 83, key: "s" },
+    right: { keyCode: 68, key: "d" },
+    upLeft: { keys: [87, 65] },
+    upRight: { keys: [87, 68] },
+    downLeft: { keys: [83, 65] },
+    downRight: { keys: [83, 68] }
+};
+
+// Create UI for visual feedback
+function createVisualUI() {
+    // Remove any existing UI first (prevents duplicates on re-initialization)
+    const existingUI = document.getElementById('bot-ui-container');
+    if (existingUI) {
+        existingUI.remove();
+    }
+
+    // Create container for the UI
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'bot-ui-container';
+    uiContainer.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 250px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+        z-index: 9999;
+        user-select: none;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    `;
+
+    // Create header
+    const header = document.createElement('div');
+    header.innerHTML = 'Game Bot Controls';
+    header.style.cssText = `
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        text-align: center;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #555;
+    `;
+    uiContainer.appendChild(header);
+
+    // Create direction indicator
+    const directionContainer = document.createElement('div');
+    directionContainer.id = 'direction-container';
+    directionContainer.style.cssText = `
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+    `;
+
+    const directionLabel = document.createElement('div');
+    directionLabel.textContent = 'Current Direction:';
+    directionLabel.style.marginBottom = '5px';
+    directionContainer.appendChild(directionLabel);
+
+    const directionIndicator = document.createElement('div');
+    directionIndicator.id = 'direction-indicator';
+    directionIndicator.style.cssText = `
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        width: 90px;
+        height: 90px;
+        margin: 0 auto;
+    `;
+
+    // Create 3x3 grid for direction indicator
+    for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.style.cssText = `
+            width: 30px;
+            height: 30px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+        `;
+        
+        // Center cell is different
+        if (i === 4) {
+            cell.style.backgroundColor = '#444';
+            cell.textContent = '⚪';
+        } else {
+            cell.style.border = '1px solid #333';
+        }
+        
+        // Assign IDs to the cells that represent directions
+        if (i === 0) cell.id = 'dir-up-left';
+        if (i === 1) cell.id = 'dir-up';
+        if (i === 2) cell.id = 'dir-up-right';
+        if (i === 3) cell.id = 'dir-left';
+        if (i === 5) cell.id = 'dir-right';
+        if (i === 6) cell.id = 'dir-down-left';
+        if (i === 7) cell.id = 'dir-down';
+        if (i === 8) cell.id = 'dir-down-right';
+        
+        directionIndicator.appendChild(cell);
+    }
+    
+    directionContainer.appendChild(directionIndicator);
+    uiContainer.appendChild(directionContainer);
+
+    // Add active keys display (to help debug stuck keys)
+    const keysContainer = document.createElement('div');
+    keysContainer.style.cssText = `
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+    `;
+
+    const keysLabel = document.createElement('div');
+    keysLabel.textContent = 'Active Keys:';
+    keysLabel.style.marginBottom = '5px';
+    keysContainer.appendChild(keysLabel);
+
+    const keysDisplay = document.createElement('div');
+    keysDisplay.id = 'active-keys-display';
+    keysDisplay.style.cssText = `
+        font-size: 12px;
+        font-family: monospace;
+        padding: 4px;
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 4px;
+        min-height: 20px;
+    `;
+    keysContainer.appendChild(keysDisplay);
+    uiContainer.appendChild(keysContainer);
+
+    // Add activity log
+    const logContainer = document.createElement('div');
+    logContainer.style.cssText = `
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+        max-height: 100px;
+        overflow-y: auto;
+    `;
+
+    const logLabel = document.createElement('div');
+    logLabel.textContent = 'Activity Log:';
+    logLabel.style.marginBottom = '5px';
+    logContainer.appendChild(logLabel);
+
+    const logContent = document.createElement('div');
+    logContent.id = 'bot-log';
+    logContent.style.cssText = `
+        font-size: 12px;
+        color: #CCC;
+    `;
+    logContainer.appendChild(logContent);
+    uiContainer.appendChild(logContainer);
+
+    // Add emergency key release button
+    const emergencyButton = document.createElement('button');
+    emergencyButton.textContent = 'Release All Keys';
+    emergencyButton.style.cssText = `
+        background-color: #d9534f;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 10px;
+        margin-top: 10px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+    `;
+    emergencyButton.addEventListener('click', () => {
+        releaseAllKeysEmergency();
+        logActivity('Emergency key release triggered!');
+    });
+    uiContainer.appendChild(emergencyButton);
+
+    // Add minimize/maximize button
+    const toggleButton = document.createElement('button');
+    toggleButton.textContent = '−';
+    toggleButton.style.cssText = `
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 20px;
+        height: 20px;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    // Store references to content elements for minimize/maximize
+    const contentElements = [
+        document.getElementById('direction-container'),
+        keysContainer,
+        logContainer,
+        emergencyButton
+    ];
+    
+    toggleButton.addEventListener('click', () => {
+        minimized = !minimized;
+        const elementsToToggle = document.querySelectorAll('#bot-ui-container > div:not(:first-child)');
+        elementsToToggle.forEach(el => {
+            el.style.display = minimized ? 'none' : 'block';
+        });
+        emergencyButton.style.display = minimized ? 'none' : 'block';
+        toggleButton.textContent = minimized ? '+' : '−';
+    });
+    
+    uiContainer.appendChild(toggleButton);
+
+    // Add the container to the document
+    document.body.appendChild(uiContainer);
+}
+
+// Update UI status for a feature
+function updateStatus(id, active, text = null) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = text || (active ? 'ON' : 'OFF');
+        element.style.color = active ? '#4CAF50' : '#F44336';
+    }
+}
+
+// Update active keys display
+function updateActiveKeysDisplay() {
+    const keysDisplay = document.getElementById('active-keys-display');
+    if (keysDisplay) {
+        if (activeKeys.size === 0) {
+            keysDisplay.textContent = 'None';
+            keysDisplay.style.color = '#CCC';
+        } else {
+            keysDisplay.textContent = Array.from(activeKeys).map(key => KEY_MAP[key] || key).join(', ');
+            keysDisplay.style.color = '#FFD700'; // Gold color when keys are active
+        }
+    }
+}
+
+// Improved flash function with cooldown to reduce flickering
+function flashButtonStatus(id, color = '#FFD700', duration = 100) {
+    const now = Date.now();
+    // Only flash if enough time has passed since the last flash
+    if (now - lastFlashTime >= FLASH_COOLDOWN) {
+        const element = document.getElementById(id);
+        if (element) {
+            const originalBackground = element.style.backgroundColor;
+            element.style.backgroundColor = color;
+            setTimeout(() => {
+                element.style.backgroundColor = originalBackground;
+            }, duration);
+        }
+        lastFlashTime = now;
+    }
+}
+
+// Add message to the log
+function logActivity(message) {
+    const logElement = document.getElementById('bot-log');
+    if (logElement) {
+        const timestamp = new Date().toLocaleTimeString();
+        const logItem = document.createElement('div');
+        logItem.textContent = `[${timestamp}] ${message}`;
+        logElement.prepend(logItem);
+        
+        // Limit number of log items
+        if (logElement.children.length > 10) {
+            logElement.removeChild(logElement.lastChild);
+        }
+    }
+    console.log(message); // Still log to console as well
+}
+
+// Update direction indicator
+function updateDirectionIndicator(direction) {
+    // Reset all direction cells
+    ['dir-up', 'dir-down', 'dir-left', 'dir-right', 
+     'dir-up-left', 'dir-up-right', 'dir-down-left', 'dir-down-right'].forEach(id => {
+        const cell = document.getElementById(id);
+        if (cell) {
+            cell.style.backgroundColor = '';
+            cell.textContent = '';
+        }
+    });
+    
+    // Set active direction
+    if (direction) {
+        let dirId = null;
+        
+        if (direction === ee.up) dirId = 'dir-up';
+        else if (direction === ee.down) dirId = 'dir-down';
+        else if (direction === ee.left) dirId = 'dir-left';
+        else if (direction === ee.right) dirId = 'dir-right';
+        else if (direction === ee.upLeft) dirId = 'dir-up-left';
+        else if (direction === ee.upRight) dirId = 'dir-up-right';
+        else if (direction === ee.downLeft) dirId = 'dir-down-left';
+        else if (direction === ee.downRight) dirId = 'dir-down-right';
+        
+        if (dirId) {
+            const cell = document.getElementById(dirId);
+            if (cell) {
+                cell.style.backgroundColor = '#4CAF50';
+                cell.textContent = '🔥';
+            }
+        }
+    }
+}
+
+// Enhanced key simulation functions that track key state
+function simulateKeyDown(direction) {
+    if (typeof direction === 'number') {
+        // Handle single keyCode input
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction }));
+        activeKeys.add(direction); // Add to active keys set
+        updateActiveKeysDisplay();
+        return;
+    }
+    
+    if (direction.keys) {
+        direction.keys.forEach(keyCode => {
+            document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+            activeKeys.add(keyCode); // Add to active keys set
+        });
+    } else {
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction.keyCode, key: direction.key }));
+        activeKeys.add(direction.keyCode); // Add to active keys set
+    }
+    updateActiveKeysDisplay();
+}
+
+function simulateKeyUp(direction) {
+    if (typeof direction === 'number') {
+        // Handle single keyCode input
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction }));
+        activeKeys.delete(direction); // Remove from active keys
+        updateActiveKeysDisplay();
+        return;
+    }
+    
+    if (direction.keys) {
+        direction.keys.forEach(keyCode => {
+            document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+            activeKeys.delete(keyCode); // Remove from active keys
+        });
+    } else {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction.keyCode, key: direction.key }));
+        activeKeys.delete(direction.keyCode); // Remove from active keys
+    }
+    updateActiveKeysDisplay();
+}
+
+// Emergency function to release ALL keys (for stuck keys)
+function releaseAllKeysEmergency() {
+    // Release all common game keys
+    [65, 68, 75, 82, 83, 87, 32, 37, 38, 39, 40].forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    });
+    
+    // Also release any keys tracked in our activeKeys set
+    activeKeys.forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    });
+    
+    // Clear the active keys set
+    activeKeys.clear();
+    updateActiveKeysDisplay();
+    
+    // Reset any active directions or states
+    updateDirectionIndicator(null);
+    
+    logActivity("All keys released - reset complete");
+    
+    // Call registered cleanup functions if any exist
+    if (typeof window.gameBotCleanupFunctions === 'object') {
+        window.gameBotCleanupFunctions.forEach(fn => {
+            try {
+                fn();
+            } catch (e) {
+                console.error("Error in cleanup function:", e);
+            }
+        });
+    }
+}
+
+// Function to add feature display to the UI
+function addFeatureToUI(id, label, initialActive) {
+    const uiContainer = document.getElementById('bot-ui-container');
+    if (!uiContainer) return false; // UI not initialized yet
+    
+    // Check if feature already exists
+    if (document.getElementById(id)) return false;
+    
+    // Where to insert the new feature - right after the header
+    const header = uiContainer.querySelector('div:first-child');
+    
+    // Create feature container
+    const featureContainer = document.createElement('div');
+    featureContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        align-items: center;
+    `;
+
+    const featureLabel = document.createElement('span');
+    featureLabel.textContent = label;
+
+    const status = document.createElement('span');
+    status.id = id;
+    status.textContent = initialActive ? 'ON' : 'OFF';
+    status.style.cssText = `
+        font-weight: bold;
+        color: ${initialActive ? '#4CAF50' : '#F44336'};
+        background-color: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    `;
+
+    featureContainer.appendChild(featureLabel);
+    featureContainer.appendChild(status);
+    
+    // Insert after header
+    if (header && header.nextSibling) {
+        uiContainer.insertBefore(featureContainer, header.nextSibling);
+    } else {
+        uiContainer.appendChild(featureContainer);
+    }
+    
+    return true;
+}
+
+// Initialize addon manager
+window.gameBotAddonManager = {
+    // Feature registry
+    features: {},
+    
+    // Function to register a new feature/addon
+    registerFeature: function(id, options) {
+        if (this.features[id]) {
+            console.warn(`Feature ${id} is already registered`);
+            return false;
+        }
+        
+        this.features[id] = {
+            id: id,
+            label: options.label || id,
+            active: options.initialActive || false,
+            initialize: options.initialize || function() {},
+            cleanup: options.cleanup || function() {},
+            onKeyDown: options.onKeyDown || function() {},
+            onKeyUp: options.onKeyUp || function() {}
+        };
+        
+        // Register cleanup function
+        if (!window.gameBotCleanupFunctions) {
+            window.gameBotCleanupFunctions = [];
+        }
+        window.gameBotCleanupFunctions.push(this.features[id].cleanup);
+        
+        // Initialize UI for the feature
+        addFeatureToUI(id, this.features[id].label, this.features[id].active);
+        
+        // Initialize the feature
+        this.features[id].initialize();
+        
+        console.log(`Feature ${id} registered successfully`);
+        return true;
+    }
+};
+
+// Add global document key event handlers
+document.addEventListener("keydown", (event) => {
+    // Call registered feature keydown handlers
+    for (const id in window.gameBotAddonManager.features) {
+        try {
+            window.gameBotAddonManager.features[id].onKeyDown(event);
+        } catch (e) {
+            console.error(`Error in ${id} keydown handler:`, e);
+        }
+    }
+});
+
+document.addEventListener("keyup", (event) => {
+    // Call registered feature keyup handlers
+    for (const id in window.gameBotAddonManager.features) {
+        try {
+            window.gameBotAddonManager.features[id].onKeyUp(event);
+        } catch (e) {
+            console.error(`Error in ${id} keyup handler:`, e);
+        }
+    }
+});
+
+// Handle UI visibility restoration when window/tab becomes active again
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && minimized) {
+        // If the page was hidden and becomes visible again while UI is minimized
+        const elementsToKeepHidden = document.querySelectorAll('#bot-ui-container > div:not(:first-child)');
+        elementsToKeepHidden.forEach(el => {
+            el.style.display = 'none';
+        });
+        
+        // Also ensure the emergency button stays hidden
+        const emergencyBtn = document.querySelector('#bot-ui-container > button:not(:last-child)');
+        if (emergencyBtn) emergencyBtn.style.display = 'none';
+    }
+    
+    // Also ensure active key display is up to date
+    updateActiveKeysDisplay();
+});
+
+// Handle any cleanup needed when the window is closing
+window.addEventListener('beforeunload', () => {
+    // Make sure we clean up by releasing all keys
+    releaseAllKeysEmergency();
+});
+
+// Function to fix/reload the bot UI and functionality
+window.fixGameBot = function() {
+    // Release all keys to fix any stuck keys
+    releaseAllKeysEmergency();
+    
+    // Re-create the UI
+    createVisualUI();
+    
+    // Re-initialize all registered features
+    for (const id in window.gameBotAddonManager.features) {
+        const feature = window.gameBotAddonManager.features[id];
+        // Add the feature to the UI
+        addFeatureToUI(id, feature.label, feature.active);
+        // Reinitialize the feature
+        try {
+            feature.initialize();
+        } catch (e) {
+            console.error(`Error reinitializing ${id}:`, e);
+        }
+    }
+    
+    // Update active keys display
+    updateActiveKeysDisplay();
+    
+    console.log("Game bot fixed and restarted!");
+    return "Game bot UI and functionality restored.";
+};
+
+// Add periodic key state verification to prevent stuck keys
+setInterval(() => {
+    // If we have movement keys recorded as active for over 5 seconds,
+    // something might be wrong - check and possibly release them
+    if (activeKeys.size > 0) {
+        logActivity("Periodic key check - ensuring no stuck keys");
+        
+        // For now, just update the display to ensure it's accurate
+        updateActiveKeysDisplay();
+    }
+}, 5000); // Check every 5 seconds
+
+// Initialize the script with UI
+createVisualUI();
+logActivity("Base Game Bot Framework initialized");
