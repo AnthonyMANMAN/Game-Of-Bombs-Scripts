@@ -1,0 +1,194 @@
+let db;
+const dbName = "gameOfBombsKeyEvents";
+const storeName = "keyEvents";
+const windowId = Math.random().toString(36).substring(2, 15);
+let lastProcessedTimestamp = Date.now();
+
+const keyStates = {};
+// Adding arrow keys and the 'i' key to the monitored keys
+const keysToMonitor = ['w', 'a', 's', 'd', 'k', 'r', 'c', 'z', 'x', 'y', 'u', 'h', 'j', 'i', ' ', 'arrowup', 'arrowright', 'arrowdown', 'arrowleft'];
+
+let isEnabled = true;
+let pollingInterval = null;
+let cleanupInterval = null;
+
+function createVisualIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'keyBroadcasterIndicator';
+    indicator.style.position = 'fixed';
+    indicator.style.bottom = '10px';
+    indicator.style.right = '10px';
+    indicator.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
+    indicator.style.color = 'white';
+    indicator.style.padding = '5px 10px';
+    indicator.style.borderRadius = '5px';
+    indicator.style.fontFamily = 'Arial, sans-serif';
+    indicator.style.fontSize = '12px';
+    indicator.style.zIndex = '9999';
+    indicator.style.pointerEvents = 'none';
+    indicator.style.transition = 'background-color 0.3s';
+    indicator.textContent = 'Key Broadcaster: ON';
+    document.body.appendChild(indicator);
+    return indicator;
+}
+
+function updateIndicator() {
+    const indicator = document.getElementById('keyBroadcasterIndicator') || createVisualIndicator();
+    
+    if (isEnabled) {
+        indicator.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
+        indicator.textContent = 'Key Broadcaster: ON';
+    } else {
+        indicator.style.backgroundColor = 'rgba(128, 0, 0, 0.7)';
+        indicator.textContent = 'Key Broadcaster: OFF';
+    }
+}
+
+function openDatabase() {
+    const request = indexedDB.open(dbName, 2);  // Update version here to 2
+
+    request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains(storeName)) {
+            const store = db.createObjectStore(storeName, { keyPath: "id" });
+            store.createIndex("timestamp", "timestamp", { unique: false });
+        }
+    };
+
+    request.onsuccess = function(event) {
+        db = event.target.result;
+        startServices();
+    };
+
+    request.onerror = function(event) {
+        console.error("Error opening IndexedDB:", event.target.error);
+    };
+}
+
+function startServices() {
+    if (isEnabled && !pollingInterval) {
+        pollingInterval = setInterval(checkForNewEvents, 16);
+        cleanupInterval = setInterval(cleanupOldEvents, 1000);
+    }
+}
+
+function stopServices() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    if (cleanupInterval) clearInterval(cleanupInterval);
+}
+
+function toggleKeyBroadcaster() {
+    isEnabled = !isEnabled;
+    if (isEnabled) {
+        startServices();
+    } else {
+        stopServices();
+    }
+    updateIndicator();
+}
+
+document.addEventListener("keydown", function(event) {
+    if (event.key.toLowerCase() === 'v') {
+        toggleKeyBroadcaster();
+        return;
+    }
+
+    const key = event.key.toLowerCase();
+    if (!isEnabled || !keysToMonitor.includes(key)) return;
+
+    if (!keyStates[key]) {
+        keyStates[key] = true;
+        storeKeyEvent({
+            id: `${windowId}-${key}-${Date.now()}`,
+            type: "keydown",
+            key: event.key,
+            keyCode: event.keyCode,
+            timestamp: Date.now(),
+            origin: windowId
+        });
+    }
+});
+
+document.addEventListener("keyup", function(event) {
+    if (event.key.toLowerCase() === 'v') return;
+
+    const key = event.key.toLowerCase();
+    if (!isEnabled || !keysToMonitor.includes(key)) return;
+
+    keyStates[key] = false;
+    storeKeyEvent({
+        id: `${windowId}-${key}-${Date.now()}`,
+        type: "keyup",
+        key: event.key,
+        keyCode: event.keyCode,
+        timestamp: Date.now(),
+        origin: windowId
+    });
+});
+
+function storeKeyEvent(keyEvent) {
+    const transaction = db.transaction([storeName], "readwrite");
+    const store = transaction.objectStore(storeName);
+
+    const request = store.add(keyEvent);
+    request.onerror = function(event) {
+        console.error("Failed to store key event:", event.target.error);
+    };
+}
+
+function cleanupOldEvents() {
+    const transaction = db.transaction([storeName], "readwrite");
+    const store = transaction.objectStore(storeName);
+    const oldTimestamp = Date.now() - 500;
+
+    const index = store.index("timestamp");
+    const range = IDBKeyRange.upperBound(oldTimestamp);
+
+    index.openCursor(range).onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+            store.delete(cursor.primaryKey);
+            cursor.continue();
+        }
+    };
+}
+
+function checkForNewEvents() {
+    const transaction = db.transaction([storeName], "readonly");
+    const store = transaction.objectStore(storeName);
+    const range = IDBKeyRange.lowerBound(lastProcessedTimestamp + 1);
+
+    const index = store.index("timestamp");
+    index.openCursor(range).onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+            const keyEvent = cursor.value;
+            if (keyEvent.origin !== windowId && Date.now() - keyEvent.timestamp < 100) {
+                if (keyEvent.type === "keydown" && !keyStates[keyEvent.key]) {
+                    keyStates[keyEvent.key] = true;
+                    simulateKeyEvent(keyEvent);
+                } else if (keyEvent.type === "keyup" && keyStates[keyEvent.key]) {
+                    keyStates[keyEvent.key] = false;
+                    simulateKeyEvent(keyEvent);
+                }
+            }
+
+            lastProcessedTimestamp = Math.max(lastProcessedTimestamp, keyEvent.timestamp);
+            cursor.continue();
+        }
+    };
+}
+
+function simulateKeyEvent(keyEvent) {
+    const evt = new KeyboardEvent(keyEvent.type, {
+        key: keyEvent.key,
+        keyCode: keyEvent.keyCode,
+        code: keyEvent.key.startsWith('Arrow') ? keyEvent.key : `Key${keyEvent.key.toUpperCase()}`,
+        bubbles: true,
+        cancelable: true
+    });
+    document.dispatchEvent(evt);
+}
+
+openDatabase();
+createVisualIndicator();

@@ -1,0 +1,478 @@
+// Game of Bombs Key Broadcaster using IndexedDB
+// With toggle feature (v key) and visual indicator
+
+// Initialize IndexedDB
+let db;
+const dbName = "gameOfBombsKeyEvents";
+const storeName = "keyEvents";
+const windowId = Math.random().toString(36).substring(2, 15);
+let lastProcessedTimestamp = Date.now();
+
+// Track key states to prevent stuck keys
+const keyStates = {};
+const keysToMonitor = ['w', 'a', 's', 'd', 'k', 'r', 'c', 'z', 'x', 'y', 'u', 'h', 'j', ' '];
+
+// Toggle feature
+let isEnabled = true; // Start enabled
+let pollingInterval = null;
+let cleanupInterval = null;
+
+// Create visual indicator
+function createVisualIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'keyBroadcasterIndicator';
+    indicator.style.position = 'fixed';
+    indicator.style.bottom = '10px';
+    indicator.style.right = '10px';
+    indicator.style.backgroundColor = 'rgba(0, 128, 0, 0.7)'; // Green when active
+    indicator.style.color = 'white';
+    indicator.style.padding = '5px 10px';
+    indicator.style.borderRadius = '5px';
+    indicator.style.fontFamily = 'Arial, sans-serif';
+    indicator.style.fontSize = '12px';
+    indicator.style.zIndex = '9999';
+    indicator.style.pointerEvents = 'none'; // Don't interfere with clicks
+    indicator.style.transition = 'background-color 0.3s';
+    indicator.textContent = 'Key Broadcaster: ON';
+    document.body.appendChild(indicator);
+    return indicator;
+}
+
+// Update visual indicator
+function updateIndicator() {
+    const indicator = document.getElementById('keyBroadcasterIndicator') || createVisualIndicator();
+    
+    if (isEnabled) {
+        indicator.style.backgroundColor = 'rgba(0, 128, 0, 0.7)'; // Green when active
+        indicator.textContent = 'Key Broadcaster: ON';
+    } else {
+        indicator.style.backgroundColor = 'rgba(128, 0, 0, 0.7)'; // Red when inactive
+        indicator.textContent = 'Key Broadcaster: OFF';
+    }
+}
+
+// Try to open with proper version handling
+function openDatabase() {
+    console.log("Attempting to open IndexedDB...");
+    
+    // First, check the current version
+    const checkRequest = indexedDB.open(dbName);
+    
+    checkRequest.onsuccess = function(event) {
+        const existingDb = event.target.result;
+        const currentVersion = existingDb.version;
+        console.log("Current database version:", currentVersion);
+        existingDb.close();
+        
+        // Now open with the correct version
+        openWithVersion(currentVersion || 1);
+    };
+    
+    checkRequest.onerror = function(event) {
+        console.error("Error checking database version:", event.target.error);
+        // Try with version 1 as fallback
+        openWithVersion(1);
+    };
+}
+
+function openWithVersion(version) {
+    console.log("Opening database with version:", version);
+    const request = indexedDB.open(dbName, version);
+    
+    request.onupgradeneeded = function(event) {
+        console.log("Database upgrade needed, old version:", event.oldVersion, "new version:", event.newVersion);
+        try {
+            db = event.target.result;
+            // Only create store if it doesn't exist
+            if (!db.objectStoreNames.contains(storeName)) {
+                const store = db.createObjectStore(storeName, { keyPath: "id" });
+                store.createIndex("timestamp", "timestamp", { unique: false });
+                console.log("Object store created successfully");
+            }
+        } catch (e) {
+            console.error("Error during database upgrade:", e);
+        }
+    };
+    
+    request.onsuccess = function(event) {
+        console.log("IndexedDB opened successfully with version:", version);
+        db = event.target.result;
+        
+        // Add error handler for database
+        db.onerror = function(event) {
+            console.error("Database error:", event.target.error);
+        };
+        
+        // Clean up old events first
+        cleanupOldEvents();
+        
+        // Start polling for new events with more frequent checks when enabled
+        startServices();
+    };
+    
+    request.onerror = function(event) {
+        const error = event.target.error;
+        console.error("Error opening IndexedDB:", error.name, error.message);
+        
+        if (error.name === "VersionError") {
+            // Try to delete and recreate if we have version issues
+            console.log("Version error detected, attempting to delete and recreate database");
+            const deleteRequest = indexedDB.deleteDatabase(dbName);
+            deleteRequest.onsuccess = function() {
+                console.log("Database deleted successfully, recreating");
+                openWithVersion(1);
+            };
+            deleteRequest.onerror = function(e) {
+                console.error("Failed to delete database:", e.target.error);
+                useFallbackMethod();
+            };
+        } else {
+            // Try alternative approach
+            useFallbackMethod();
+        }
+    };
+}
+
+// Start polling and cleanup services
+function startServices() {
+    if (isEnabled && !pollingInterval) {
+        pollingInterval = setInterval(checkForNewEvents, 16); // ~60fps for smoother input handling
+        cleanupInterval = setInterval(cleanupOldEvents, 1000);
+        console.log("Key Broadcaster services started");
+    }
+}
+
+// Stop polling and cleanup services
+function stopServices() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        cleanupInterval = null;
+    }
+    console.log("Key Broadcaster services stopped");
+}
+
+// Toggle the key broadcaster
+function toggleKeyBroadcaster() {
+    isEnabled = !isEnabled;
+    console.log("Key Broadcaster " + (isEnabled ? "enabled" : "disabled"));
+    
+    if (isEnabled) {
+        startServices();
+    } else {
+        stopServices();
+    }
+    
+    updateIndicator();
+}
+
+// Fallback to an alternative approach if IndexedDB fails
+function useFallbackMethod() {
+    console.log("Using fallback method for key broadcasting...");
+    // Initialize a simple localStorage-based approach
+    
+    // Check if localStorage is available
+    if (typeof localStorage === 'undefined') {
+        console.error("localStorage not available for fallback");
+        return;
+    }
+    
+    // Use localStorage for very basic communication
+    setInterval(function() {
+        if (!isEnabled) return;
+        
+        for (const key in keyStates) {
+            if (keyStates[key]) {
+                const eventData = JSON.stringify({
+                    key: key,
+                    type: "keydown",
+                    timestamp: Date.now(),
+                    origin: windowId
+                });
+                localStorage.setItem(`keyEvent_${key}`, eventData);
+            }
+        }
+    }, 20);
+    
+    // Listen for storage events
+    window.addEventListener('storage', function(event) {
+        if (!isEnabled) return;
+        
+        if (event.key && event.key.startsWith('keyEvent_')) {
+            try {
+                const data = JSON.parse(event.newValue);
+                if (data && data.origin !== windowId && data.timestamp > Date.now() - 100) {
+                    // Process the event
+                    const key = data.key.toLowerCase();
+                    if (data.type === "keydown" && !keyStates[key]) {
+                        keyStates[key] = true;
+                        simulateKeyEvent("keydown", key);
+                    } else if (data.type === "keyup" && keyStates[key]) {
+                        keyStates[key] = false;
+                        simulateKeyEvent("keyup", key);
+                    }
+                }
+            } catch (e) {
+                console.error("Error processing storage event:", e);
+            }
+        }
+    });
+}
+
+// Helper function to simulate key events
+function simulateKeyEvent(type, key) {
+    const keyCode = key.charCodeAt(0);
+    const evt = new KeyboardEvent(type, {
+        key: key,
+        keyCode: keyCode,
+        code: key.length === 1 ? 'Key' + key.toUpperCase() : key,
+        bubbles: true,
+        cancelable: true
+    });
+    document.dispatchEvent(evt);
+}
+
+// Listen for our own key events
+document.addEventListener("keydown", function(event) {
+    // Check for toggle key (v)
+    if (event.key.toLowerCase() === 'v') {
+        toggleKeyBroadcaster();
+        return;
+    }
+    
+    const key = event.key.toLowerCase();
+    if (!isEnabled || !keysToMonitor.includes(key)) return;
+    
+    // Prevent repeated keydown events
+    if (!keyStates[key]) {
+        keyStates[key] = true;
+        // Store the key event
+        if (db) {
+            storeKeyEvent({
+                id: `${windowId}-${key}-${Date.now()}`,
+                type: "keydown",
+                key: event.key,
+                keyCode: event.keyCode,
+                timestamp: Date.now(),
+                origin: windowId
+            });
+        } else {
+            // Use fallback if DB isn't available
+            localStorage.setItem(`keyEvent_${key}`, JSON.stringify({
+                key: key,
+                type: "keydown",
+                timestamp: Date.now(),
+                origin: windowId
+            }));
+        }
+    }
+});
+
+document.addEventListener("keyup", function(event) {
+    // Don't process the toggle key
+    if (event.key.toLowerCase() === 'v') {
+        return;
+    }
+    
+    const key = event.key.toLowerCase();
+    if (!isEnabled || !keysToMonitor.includes(key)) return;
+    
+    // Reset key state
+    keyStates[key] = false;
+    
+    // Store the key event
+    if (db) {
+        storeKeyEvent({
+            id: `${windowId}-${key}-${Date.now()}`,
+            type: "keyup",
+            key: event.key,
+            keyCode: event.keyCode,
+            timestamp: Date.now(),
+            origin: windowId
+        });
+    } else {
+        // Use fallback if DB isn't available
+        localStorage.setItem(`keyEvent_${key}`, JSON.stringify({
+            key: key,
+            type: "keyup",
+            timestamp: Date.now(),
+            origin: windowId
+        }));
+    }
+});
+
+// Store a key event in IndexedDB
+function storeKeyEvent(keyEvent) {
+    if (!db || !isEnabled) return;
+    
+    try {
+        const transaction = db.transaction([storeName], "readwrite");
+        const store = transaction.objectStore(storeName);
+        
+        // Handle potential errors during write
+        transaction.onerror = function(event) {
+            console.error("Error storing key event:", event.target.error);
+        };
+        
+        // Add the key event
+        const request = store.add(keyEvent);
+        request.onerror = function(event) {
+            console.error("Failed to store key event:", event.target.error);
+        };
+    } catch (e) {
+        console.error("Exception while storing key event:", e);
+    }
+}
+
+// Clean up old events
+function cleanupOldEvents() {
+    if (!db || !isEnabled) return;
+    
+    try {
+        const transaction = db.transaction([storeName], "readwrite");
+        const store = transaction.objectStore(storeName);
+        const oldTimestamp = Date.now() - 500; // Remove events older than 500ms
+        
+        const index = store.index("timestamp");
+        const range = IDBKeyRange.upperBound(oldTimestamp);
+        
+        index.openCursor(range).onsuccess = function(event) {
+            const cursor = event.target.result;
+            if (cursor) {
+                store.delete(cursor.primaryKey);
+                cursor.continue();
+            }
+        };
+    } catch (e) {
+        console.error("Error cleaning up old events:", e);
+    }
+}
+
+// Check for new key events
+function checkForNewEvents() {
+    if (!db || !isEnabled) return;
+    
+    try {
+        const transaction = db.transaction([storeName], "readonly");
+        const store = transaction.objectStore(storeName);
+        const range = IDBKeyRange.lowerBound(lastProcessedTimestamp + 1);
+        
+        const index = store.index("timestamp");
+        index.openCursor(range).onsuccess = function(event) {
+            const cursor = event.target.result;
+            if (cursor) {
+                const keyEvent = cursor.value;
+                
+                // Don't process our own events
+                if (keyEvent.origin !== windowId) {
+                    // Process the event only if it's recent
+                    if (Date.now() - keyEvent.timestamp < 100) {
+                        const key = keyEvent.key.toLowerCase();
+                        
+                        // Ensure consistent key state
+                        if (keyEvent.type === "keydown" && !keyStates[key]) {
+                            keyStates[key] = true;
+                            dispatchKeyEvent(keyEvent);
+                        } else if (keyEvent.type === "keyup" && keyStates[key]) {
+                            keyStates[key] = false;
+                            dispatchKeyEvent(keyEvent);
+                        }
+                    }
+                }
+                
+                lastProcessedTimestamp = Math.max(lastProcessedTimestamp, keyEvent.timestamp);
+                cursor.continue();
+            }
+        };
+    } catch (error) {
+        console.error("Error checking for new events:", error);
+    }
+}
+
+// Create and dispatch keyboard events
+function dispatchKeyEvent(keyEvent) {
+    try {
+        const evt = new KeyboardEvent(keyEvent.type, {
+            key: keyEvent.key,
+            keyCode: keyEvent.keyCode,
+            code: keyEvent.key.length === 1 ? 'Key' + keyEvent.key.toUpperCase() : keyEvent.key,
+            bubbles: true,
+            cancelable: true
+        });
+        
+        document.dispatchEvent(evt);
+    } catch (error) {
+        console.error("Error dispatching key event:", error);
+    }
+}
+
+// Handle lost focus to prevent stuck keys
+window.addEventListener('blur', function() {
+    if (!isEnabled) return;
+    
+    // Release all keys when window loses focus
+    for (const key in keyStates) {
+        if (keyStates[key]) {
+            keyStates[key] = false;
+            
+            // Create a synthetic keyup event
+            if (db) {
+                storeKeyEvent({
+                    id: `${windowId}-${key}-${Date.now()}-blur`,
+                    type: "keyup",
+                    key: key,
+                    keyCode: key.charCodeAt(0),
+                    timestamp: Date.now(),
+                    origin: windowId
+                });
+            } else {
+                localStorage.setItem(`keyEvent_${key}`, JSON.stringify({
+                    key: key,
+                    type: "keyup",
+                    timestamp: Date.now(),
+                    origin: windowId
+                }));
+            }
+        }
+    }
+});
+
+// Clean up when window is closed
+window.addEventListener('beforeunload', function() {
+    if (db) {
+        try {
+            // Release all pressed keys
+            for (const key in keyStates) {
+                if (keyStates[key]) {
+                    storeKeyEvent({
+                        id: `${windowId}-${key}-${Date.now()}-unload`,
+                        type: "keyup",
+                        key: key,
+                        keyCode: key.charCodeAt(0),
+                        timestamp: Date.now(),
+                        origin: windowId
+                    });
+                }
+            }
+            
+            db.close();
+        } catch (error) {
+            console.error("Error during cleanup:", error);
+        }
+    }
+    
+    // Remove the visual indicator
+    const indicator = document.getElementById('keyBroadcasterIndicator');
+    if (indicator) {
+        indicator.remove();
+    }
+});
+
+// Start the process
+openDatabase();
+createVisualIndicator();
+
+console.log("Game of Bombs - Key Broadcaster with toggle feature loaded!");
