@@ -1,0 +1,187 @@
+function directChatSend(message, options = {}) {
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+        console.error('Please provide a valid message');
+        return false;
+    }
+
+    // Default options without timestamp
+    const defaults = {
+        color: null,      // Text color (e.g., 'green', '#00FF00')
+        username: null    // Optional custom username
+    };
+
+    // Merge provided options with defaults
+    const settings = {...defaults, ...options};
+
+    console.log('Attempting direct chat manipulation for message:', message);
+
+    try {
+        // Get the chat list and its Angular scope
+        const chatList = document.getElementById('listChat');
+        if (!chatList) {
+            console.error('Chat list element not found');
+            return false;
+        }
+
+        const scope = angular.element(chatList).scope();
+        if (!scope) {
+            console.error('Angular scope not found');
+            return false;
+        }
+
+        // Examine existing chat messages to understand the structure
+        console.log('Chat array found:', scope.chat);
+
+        // Find a regular user message to clone
+        const regularMsg = scope.chat.find(msg => msg && !msg.special && msg.nickname);
+        if (!regularMsg) {
+            console.error('Could not find a regular message to use as template');
+            return false;
+        }
+
+        console.log('Using this message as template:', regularMsg);
+
+        // Get access to $sce service to mark content as trusted
+        const $sce = angular.element(document.body).injector().get('$sce');
+
+        // Format the message with color if needed
+        let formattedMsg = message;
+
+        // Add color if specified
+        if (settings.color) {
+            formattedMsg = `<span style="color: ${settings.color};">${formattedMsg}</span>`;
+        }
+
+        // Create a new message that looks like a regular message
+        const newMsg = {
+            text: $sce.trustAsHtml(formattedMsg),
+            showTime: true,
+            nickname: settings.username || regularMsg.nickname,
+            my: false,
+            special: undefined
+        };
+
+        // Add to the chat array
+        scope.chat.push(newMsg);
+
+        // Apply the changes to update the UI
+        if (typeof scope.$apply === 'function') {
+            scope.$apply();
+        }
+
+        console.log('Message added to chat display:', newMsg);
+
+        return true;
+    } catch (error) {
+        console.error('Error in directChatSend:', error);
+        return false;
+    }
+}
+
+function injectFakeUserMessage(message, username, options = {}) {
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+        console.error('Please provide a valid message');
+        return false;
+    }
+
+    // Default options without timestamp
+    const defaults = {
+        color: null,      // Text color (e.g., 'green', '#00FF00')
+    };
+
+    // Merge provided options with defaults
+    const settings = {...defaults, ...options};
+
+    // Use one of the existing usernames if none provided
+    if (!username) {
+        const chatList = document.getElementById('listChat');
+        if (chatList) {
+            const scope = angular.element(chatList).scope();
+            if (scope && scope.chat) {
+                const realUser = scope.chat.find(msg => msg && !msg.special && msg.nickname);
+                if (realUser) {
+                    username = realUser.nickname;
+                }
+            }
+        }
+
+        if (!username) {
+            username = 'User' + Math.floor(Math.random() * 10000);
+        }
+    }
+
+    console.log(`Injecting message as user "${username}": ${message}`);
+
+    try {
+        const chatList = document.getElementById('listChat');
+        if (!chatList) {
+            console.error('Chat list element not found');
+            return false;
+        }
+
+        const scope = angular.element(chatList).scope();
+        if (!scope || !scope.chat) {
+            console.error('Chat array not found in scope');
+            return false;
+        }
+
+        const $sce = angular.element(document.body).injector().get('$sce');
+
+        // Format the message with color if needed
+        let formattedMsg = message;
+
+        // Add color if specified
+        if (settings.color) {
+            formattedMsg = `<span style="color: ${settings.color};">${formattedMsg}</span>`;
+        }
+
+        // Create a message that looks like it's from another user
+        const newMsg = {
+            nickname: username,
+            text: $sce.trustAsHtml(formattedMsg),
+            showTime: true,
+            special: undefined,
+            my: false
+        };
+
+        // Add to chat array
+        scope.chat.push(newMsg);
+
+        if (typeof scope.$apply === 'function') {
+            scope.$apply();
+        }
+
+        console.log('Message injected successfully');
+        return true;
+    } catch (error) {
+        console.error('Error injecting fake message:', error);
+        return false;
+    }
+}
+
+// Convenience functions for green text
+function sendGreen(message, username = null) {
+    return directChatSend(message, {
+        color: 'green',
+        username: username
+    });
+}
+
+function sendFakeGreen(message, username = null) {
+    return injectFakeUserMessage(message, username, {
+        color: 'green'
+    });
+}
+
+function sendColoredMessage(message, color, username = null) {
+    return directChatSend(message, {
+        color: color,
+        username: username
+    });
+}
+
+// Shorthand functions
+const send = directChatSend;
+const fakeMsg = injectFakeUserMessage;
+
+console.log('Enhanced Chat Helper loaded!');
