@@ -6,7 +6,78 @@ let movementActive = false;
 let moveTimeout = null;
 let currentDirection = null;
 
-// Define helper functions
+// Initialize the movement addon
+function initMovementAddon() {
+    // Add status to UI
+    addFeatureStatus('movement-status', 'Бот с Бомбами (Z)', movementActive);
+    
+    // Register event handlers
+    document.addEventListener('keydown', handleMovementToggle);
+    document.addEventListener('gamebot-emergency-release', handleEmergencyRelease);
+    document.addEventListener('gamebot-unload', cleanupMovementAddon);
+    document.addEventListener('gamebot-ui-reattached', reinitMovementStatus);
+    document.addEventListener('gamebot-claim-keys-check', handleKeyClaim);
+    
+    logActivity("Movement with Bombs addon loaded");
+}
+
+// Reinitialize the status after UI reattach
+function reinitMovementStatus() {
+    addFeatureStatus('movement-status', 'Бот с Бомбами (Z)', movementActive);
+}
+
+// Handle emergency release event
+function handleEmergencyRelease() {
+    if (moveTimeout) {
+        clearTimeout(moveTimeout);
+        moveTimeout = null;
+    }
+    currentDirection = null;
+}
+
+// Handle key claim check - prevent false stuck key detection
+function handleKeyClaim(event) {
+    if (movementActive) {
+        // Claim keys if our addon is using them
+        event.detail.claimed = true;
+    }
+}
+
+// Cleanup function for addon
+function cleanupMovementAddon() {
+    if (moveTimeout) {
+        clearTimeout(moveTimeout);
+        moveTimeout = null;
+    }
+}
+
+// Toggle movement on Z key press
+function handleMovementToggle(event) {
+    if (event.key === "z" || event.key === "Z") {
+        movementActive = !movementActive;
+        updateStatus('movement-status', movementActive);
+
+        if (movementActive) {
+            logActivity("Movement with Bombs activated");
+            moveCharacter(); // Start movement loop
+        } else {
+            logActivity("Movement with Bombs deactivated");
+            // Stop all movement and clear direction when disabled
+            if (moveTimeout) {
+                clearTimeout(moveTimeout);
+                moveTimeout = null;
+            }
+            
+            if (currentDirection) {
+                simulateKeyUp(currentDirection);
+                currentDirection = null;
+                updateDirectionIndicator(null);
+            }
+        }
+    }
+}
+
+// Helper functions for random movement
 function getRandomDirection() {
     const directions = [ee.right, ee.down, ee.left, ee.up, ee.upLeft, ee.upRight, ee.downLeft, ee.downRight];
     return directions[Math.floor(Math.random() * directions.length)];
@@ -24,10 +95,16 @@ function getRandomPause(min, max) {
 function placeBomb() {
     if (!movementActive) return;
     
-    simulateKeyDown(75); // K key
+    var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "k" });
+    document.dispatchEvent(bombKeyEvent);
+    activeKeys.add(75);
+    updateActiveKeysDisplay();
     
     setTimeout(() => {
-        simulateKeyUp(75);
+        var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75, key: "k" });
+        document.dispatchEvent(bombKeyReleaseEvent);
+        activeKeys.delete(75);
+        updateActiveKeysDisplay();
     }, 100);
     
     // Visual feedback - but only occasionally to reduce flickering
@@ -42,6 +119,7 @@ function randomDirectionPress() {
     
     const directions = [ee.up, ee.left, ee.down, ee.right];
     const direction = directions[Math.floor(Math.random() * directions.length)];
+    
     // Simulate pressing a random direction key for 50ms
     simulateKeyDown(direction);
     setTimeout(() => {
@@ -49,7 +127,7 @@ function randomDirectionPress() {
     }, 50);
 }
 
-// Improved Move Character function with better key tracking
+// Main movement function
 function moveCharacter() {
     if (!movementActive) return;
     
@@ -91,51 +169,5 @@ function moveCharacter() {
     }, 100); // Wait 100ms for bomb placement before moving
 }
 
-// Feature cleanup function
-function movementCleanup() {
-    // Stop all movement and clear direction when disabled
-    if (moveTimeout) {
-        clearTimeout(moveTimeout);
-        moveTimeout = null;
-    }
-    
-    if (currentDirection) {
-        simulateKeyUp(currentDirection);
-        currentDirection = null;
-        updateDirectionIndicator(null);
-    }
-}
-
-// Key handler functions
-function movementKeyDown(event) {
-    // Toggle movement with Z key
-    if (event.key === "z" || event.key === "Z") {
-        movementActive = !movementActive;
-        updateStatus('movement-status', movementActive);
-        
-        logActivity(movementActive ? "Movement with bombs activated" : "Movement with bombs deactivated");
-        
-        if (movementActive) {
-            moveCharacter(); // Start movement loop when enabled
-        } else {
-            movementCleanup(); // Stop all movement when disabled
-        }
-    }
-}
-
-function movementKeyUp(event) {
-    // No specific keyup handling needed
-}
-
-// Register the feature
-window.gameBotAddonManager.registerFeature('movement-status', {
-    label: 'Бот с Бомбами (Z)',
-    initialActive: false,
-    initialize: function() {
-        // Any initialization code here
-        logActivity("Movement with bombs addon initialized");
-    },
-    cleanup: movementCleanup,
-    onKeyDown: movementKeyDown,
-    onKeyUp: movementKeyUp
-});
+// Initialize the addon when the core framework is ready
+document.addEventListener('gamebot-initialized', initMovementAddon);
