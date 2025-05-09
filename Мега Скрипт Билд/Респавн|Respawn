@@ -2,7 +2,7 @@
 // This addon automatically clicks the respawn button and presses R key after respawning
 
 // Global variables for the auto respawn functionality
-let ar_secondScriptActive = true; // Auto-respawn enabled by default
+let ar_secondScriptActive = false; // Auto-respawn disabled by default
 let ar_scoreBoardInterval = null;
 let ar_respawnTimer = null;
 
@@ -43,7 +43,6 @@ function ar_createUI() {
         background-color: rgba(0, 0, 0, 0.3);
         padding: 2px 6px;
         border-radius: 4px;
-        transition: background-color 0.2s ease;
     `;
     
     respawnContainer.appendChild(respawnLabel);
@@ -226,7 +225,7 @@ window.addEventListener('beforeunload', () => {
 
 // Initialize
 ar_createUI();
-ar_startAutoRespawn(); // Start auto respawn by default
+// Don't start auto respawn by default
 
 // Extend the fixGameBot function if it exists
 if (typeof window.fixGameBot !== 'undefined') {
