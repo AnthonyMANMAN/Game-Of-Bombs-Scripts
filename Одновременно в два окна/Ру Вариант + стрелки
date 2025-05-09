@@ -1,0 +1,279 @@
+let db;
+const dbName = "gameOfBombsKeyEvents";
+const storeName = "keyEvents";
+const windowId = Math.random().toString(36).substring(2, 15);
+let lastProcessedTimestamp = Date.now();
+
+const keyStates = {};
+// Extended key list to include Russian keyboard equivalents for movement and action keys
+// Russian equivalents: ц (w), ф (a), ы (s), в (d), л (k), к (r), с (c), я (z), ч (x), н (y), г (u), р (h), о (j), ш (i)
+const keysToMonitor = [
+  // Latin keys
+  'w', 'a', 's', 'd', 'k', 'r', 'c', 'z', 'x', 'y', 'u', 'h', 'j', 'i', ' ', 
+  'arrowup', 'arrowright', 'arrowdown', 'arrowleft',
+  // Russian keys
+  'ц', 'ф', 'ы', 'в', 'л', 'к', 'с', 'я', 'ч', 'н', 'г', 'р', 'о', 'ш'
+];
+
+let isEnabled = true;
+let pollingInterval = null;
+let cleanupInterval = null;
+
+function createVisualIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'keyBroadcasterIndicator';
+    indicator.style.position = 'fixed';
+    indicator.style.bottom = '10px';
+    indicator.style.right = '10px';
+    indicator.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
+    indicator.style.color = 'white';
+    indicator.style.padding = '5px 10px';
+    indicator.style.borderRadius = '5px';
+    indicator.style.fontFamily = 'Arial, sans-serif';
+    indicator.style.fontSize = '12px';
+    indicator.style.zIndex = '9999';
+    indicator.style.pointerEvents = 'none';
+    indicator.style.transition = 'background-color 0.3s';
+    indicator.textContent = 'Key Broadcaster: ON';
+    document.body.appendChild(indicator);
+    return indicator;
+}
+
+function updateIndicator() {
+    const indicator = document.getElementById('keyBroadcasterIndicator') || createVisualIndicator();
+    
+    if (isEnabled) {
+        indicator.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
+        indicator.textContent = 'Key Broadcaster: ON';
+    } else {
+        indicator.style.backgroundColor = 'rgba(128, 0, 0, 0.7)';
+        indicator.textContent = 'Key Broadcaster: OFF';
+    }
+}
+
+function openDatabase() {
+    const request = indexedDB.open(dbName, 2);
+
+    request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains(storeName)) {
+            const store = db.createObjectStore(storeName, { keyPath: "id" });
+            store.createIndex("timestamp", "timestamp", { unique: false });
+        }
+    };
+
+    request.onsuccess = function(event) {
+        db = event.target.result;
+        startServices();
+    };
+
+    request.onerror = function(event) {
+        console.error("Error opening IndexedDB:", event.target.error);
+    };
+}
+
+function startServices() {
+    if (isEnabled && !pollingInterval) {
+        pollingInterval = setInterval(checkForNewEvents, 16);
+        cleanupInterval = setInterval(cleanupOldEvents, 1000);
+    }
+}
+
+function stopServices() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    if (cleanupInterval) clearInterval(cleanupInterval);
+}
+
+function toggleKeyBroadcaster() {
+    isEnabled = !isEnabled;
+    if (isEnabled) {
+        startServices();
+    } else {
+        stopServices();
+    }
+    updateIndicator();
+}
+
+// Map of Russian keys to their equivalent Latin keys for Game of Bombs controls
+const russianToLatinKeyMap = {
+    'ц': 'w',
+    'ф': 'a',
+    'ы': 's',
+    'в': 'd',
+    'л': 'k',
+    'к': 'r',
+    'с': 'c',
+    'я': 'z',
+    'ч': 'x',
+    'н': 'y',
+    'г': 'u',
+    'р': 'h',
+    'о': 'j',
+    'ш': 'i'
+};
+
+// Function to map Russian keys to their Latin equivalents if needed
+function mapKeyIfNeeded(key) {
+    return russianToLatinKeyMap[key.toLowerCase()] || key;
+}
+
+// Helper to determine the correct key code
+function getKeyCode(key) {
+    // Convert Russian to Latin for key code mapping if possible
+    const mappedKey = mapKeyIfNeeded(key.toLowerCase());
+    
+    // Special handling for arrow keys
+    if (mappedKey.startsWith('arrow')) {
+        switch(mappedKey) {
+            case 'arrowup': return 38;
+            case 'arrowright': return 39;
+            case 'arrowdown': return 40;
+            case 'arrowleft': return 37;
+            default: return 0;
+        }
+    }
+    
+    // For letter keys
+    if (mappedKey.length === 1) {
+        return mappedKey.toUpperCase().charCodeAt(0);
+    }
+    
+    // Space key
+    if (mappedKey === ' ') return 32;
+    
+    // Default
+    return 0;
+}
+
+// Helper to determine the correct key code string
+function getCodeString(key) {
+    const mappedKey = mapKeyIfNeeded(key.toLowerCase());
+    
+    if (mappedKey.startsWith('arrow')) {
+        return mappedKey;
+    }
+    
+    if (mappedKey === ' ') {
+        return 'Space';
+    }
+    
+    if (mappedKey.length === 1) {
+        return `Key${mappedKey.toUpperCase()}`;
+    }
+    
+    return '';
+}
+
+document.addEventListener("keydown", function(event) {
+    if (event.key.toLowerCase() === 'v' || event.key.toLowerCase() === 'м') { // 'м' is 'v' in Russian layout
+        toggleKeyBroadcaster();
+        return;
+    }
+
+    const key = event.key.toLowerCase();
+    if (!isEnabled || !keysToMonitor.includes(key)) return;
+
+    if (!keyStates[key]) {
+        keyStates[key] = true;
+        storeKeyEvent({
+            id: `${windowId}-${key}-${Date.now()}`,
+            type: "keydown",
+            key: event.key,
+            keyCode: event.keyCode || getKeyCode(key),
+            timestamp: Date.now(),
+            origin: windowId,
+            mappedKey: mapKeyIfNeeded(key) // Store the mapped key for simulation
+        });
+    }
+});
+
+document.addEventListener("keyup", function(event) {
+    if (event.key.toLowerCase() === 'v' || event.key.toLowerCase() === 'м') return;
+
+    const key = event.key.toLowerCase();
+    if (!isEnabled || !keysToMonitor.includes(key)) return;
+
+    keyStates[key] = false;
+    storeKeyEvent({
+        id: `${windowId}-${key}-${Date.now()}`,
+        type: "keyup",
+        key: event.key,
+        keyCode: event.keyCode || getKeyCode(key),
+        timestamp: Date.now(),
+        origin: windowId,
+        mappedKey: mapKeyIfNeeded(key) // Store the mapped key for simulation
+    });
+});
+
+function storeKeyEvent(keyEvent) {
+    const transaction = db.transaction([storeName], "readwrite");
+    const store = transaction.objectStore(storeName);
+
+    const request = store.add(keyEvent);
+    request.onerror = function(event) {
+        console.error("Failed to store key event:", event.target.error);
+    };
+}
+
+function cleanupOldEvents() {
+    const transaction = db.transaction([storeName], "readwrite");
+    const store = transaction.objectStore(storeName);
+    const oldTimestamp = Date.now() - 500;
+
+    const index = store.index("timestamp");
+    const range = IDBKeyRange.upperBound(oldTimestamp);
+
+    index.openCursor(range).onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+            store.delete(cursor.primaryKey);
+            cursor.continue();
+        }
+    };
+}
+
+function checkForNewEvents() {
+    const transaction = db.transaction([storeName], "readonly");
+    const store = transaction.objectStore(storeName);
+    const range = IDBKeyRange.lowerBound(lastProcessedTimestamp + 1);
+
+    const index = store.index("timestamp");
+    index.openCursor(range).onsuccess = function(event) {
+        const cursor = event.target.result;
+        if (cursor) {
+            const keyEvent = cursor.value;
+            if (keyEvent.origin !== windowId && Date.now() - keyEvent.timestamp < 100) {
+                // Use the original key for state tracking
+                const lowerKey = keyEvent.key.toLowerCase();
+                
+                if (keyEvent.type === "keydown" && !keyStates[lowerKey]) {
+                    keyStates[lowerKey] = true;
+                    simulateKeyEvent(keyEvent);
+                } else if (keyEvent.type === "keyup" && keyStates[lowerKey]) {
+                    keyStates[lowerKey] = false;
+                    simulateKeyEvent(keyEvent);
+                }
+            }
+
+            lastProcessedTimestamp = Math.max(lastProcessedTimestamp, keyEvent.timestamp);
+            cursor.continue();
+        }
+    };
+}
+
+function simulateKeyEvent(keyEvent) {
+    // Use the mapped key if available (for Russian to Latin conversion)
+    const useKey = keyEvent.mappedKey || keyEvent.key;
+    
+    const evt = new KeyboardEvent(keyEvent.type, {
+        key: useKey,
+        keyCode: keyEvent.keyCode,
+        code: getCodeString(useKey),
+        bubbles: true,
+        cancelable: true
+    });
+    document.dispatchEvent(evt);
+}
+
+openDatabase();
+createVisualIndicator();
