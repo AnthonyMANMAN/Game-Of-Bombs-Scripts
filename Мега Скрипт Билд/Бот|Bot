@@ -1,0 +1,141 @@
+// Addon - Movement with Bombs
+// This addon implements random movement with bomb placement
+
+// Feature-specific variables
+let movementActive = false;
+let moveTimeout = null;
+let currentDirection = null;
+
+// Define helper functions
+function getRandomDirection() {
+    const directions = [ee.right, ee.down, ee.left, ee.up, ee.upLeft, ee.upRight, ee.downLeft, ee.downRight];
+    return directions[Math.floor(Math.random() * directions.length)];
+}
+
+function getRandomDelay(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getRandomPause(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+// Function to simulate placing a bomb (pressing "K")
+function placeBomb() {
+    if (!movementActive) return;
+    
+    simulateKeyDown(75); // K key
+    
+    setTimeout(() => {
+        simulateKeyUp(75);
+    }, 100);
+    
+    // Visual feedback - but only occasionally to reduce flickering
+    if (Math.random() < 0.1) { // Only flash for 10% of bombs
+        flashButtonStatus('movement-status');
+    }
+}
+
+// Function to simulate random direction presses (W, A, S, D) for 50ms during pause
+function randomDirectionPress() {
+    if (!movementActive) return;
+    
+    const directions = [ee.up, ee.left, ee.down, ee.right];
+    const direction = directions[Math.floor(Math.random() * directions.length)];
+    // Simulate pressing a random direction key for 50ms
+    simulateKeyDown(direction);
+    setTimeout(() => {
+        simulateKeyUp(direction); // Stop the key press after 50ms
+    }, 50);
+}
+
+// Improved Move Character function with better key tracking
+function moveCharacter() {
+    if (!movementActive) return;
+    
+    const direction = getRandomDirection();
+    const delay = getRandomDelay(900, 1500); // Longer motion time
+    const pauseTime = getRandomPause(125, 1000);
+    
+    // If there's an ongoing movement, stop it before starting a new one
+    if (moveTimeout) {
+        clearTimeout(moveTimeout); // Clear the previous movement timeout
+    }
+    
+    // Always release all direction keys before changing direction to prevent stuck keys
+    if (currentDirection) {
+        simulateKeyUp(currentDirection);
+    }
+    
+    // Place a bomb before changing direction
+    placeBomb();
+    
+    // Start the new movement direction after bomb placement
+    currentDirection = direction;
+    
+    // Update the direction indicator in UI
+    updateDirectionIndicator(direction);
+    
+    setTimeout(() => {
+        simulateKeyDown(direction);
+        moveTimeout = setTimeout(() => {
+            simulateKeyUp(direction); // Stop the current movement after delay
+            currentDirection = null;
+            
+            // Simulate random direction press during the pause (50ms)
+            randomDirectionPress();
+            
+            // Set timer for next movement
+            moveTimeout = setTimeout(moveCharacter, pauseTime);
+        }, delay);
+    }, 100); // Wait 100ms for bomb placement before moving
+}
+
+// Feature cleanup function
+function movementCleanup() {
+    // Stop all movement and clear direction when disabled
+    if (moveTimeout) {
+        clearTimeout(moveTimeout);
+        moveTimeout = null;
+    }
+    
+    if (currentDirection) {
+        simulateKeyUp(currentDirection);
+        currentDirection = null;
+        updateDirectionIndicator(null);
+    }
+}
+
+// Key handler functions
+function movementKeyDown(event) {
+    // Toggle movement with Z key
+    if (event.key === "z" || event.key === "Z") {
+        movementActive = !movementActive;
+        updateStatus('movement-status', movementActive);
+        
+        logActivity(movementActive ? "Movement with bombs activated" : "Movement with bombs deactivated");
+        
+        if (movementActive) {
+            moveCharacter(); // Start movement loop when enabled
+        } else {
+            movementCleanup(); // Stop all movement when disabled
+        }
+    }
+}
+
+function movementKeyUp(event) {
+    // No specific keyup handling needed
+}
+
+// Register the feature
+window.gameBotAddonManager.registerFeature('movement-status', {
+    label: 'Бот с Бомбами (Z)',
+    initialActive: false,
+    initialize: function() {
+        // Any initialization code here
+        logActivity("Movement with bombs addon initialized");
+    },
+    cleanup: movementCleanup,
+    onKeyDown: movementKeyDown,
+    onKeyUp: movementKeyUp
+});
