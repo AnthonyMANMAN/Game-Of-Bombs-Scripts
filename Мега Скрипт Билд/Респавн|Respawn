@@ -1,0 +1,255 @@
+// Auto Respawn Addon
+// This addon automatically clicks the respawn button and presses R key after respawning
+
+// Global variables for the auto respawn functionality
+let ar_secondScriptActive = true; // Auto-respawn enabled by default
+let ar_scoreBoardInterval = null;
+let ar_respawnTimer = null;
+
+// Create UI elements for auto respawn
+function ar_createUI() {
+    // Check if main UI container exists
+    const botUiContainer = document.getElementById('bot-ui-container');
+    if (!botUiContainer) {
+        console.log("Main bot UI not found. Auto Respawn will retry in 1 second.");
+        setTimeout(ar_createUI, 1000);
+        return;
+    }
+    
+    // Remove any existing auto respawn controls to prevent duplicates
+    const existingControl = document.getElementById('respawn-status');
+    if (existingControl && existingControl.parentElement) {
+        existingControl.parentElement.remove();
+    }
+    
+    // Create auto respawn container
+    const respawnContainer = document.createElement('div');
+    respawnContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        align-items: center;
+    `;
+    
+    const respawnLabel = document.createElement('span');
+    respawnLabel.textContent = 'Респавн с тыквой (X)';
+    
+    const respawnStatus = document.createElement('span');
+    respawnStatus.id = 'respawn-status';
+    respawnStatus.textContent = ar_secondScriptActive ? 'ON' : 'OFF';
+    respawnStatus.style.cssText = `
+        font-weight: bold;
+        color: ${ar_secondScriptActive ? '#4CAF50' : '#F44336'};
+        background-color: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    `;
+    
+    respawnContainer.appendChild(respawnLabel);
+    respawnContainer.appendChild(respawnStatus);
+    
+    // Find where to insert our control - try to insert after the first control
+    const firstControl = botUiContainer.querySelector('div > div:not(:first-child)');
+    if (firstControl) {
+        firstControl.insertAdjacentElement('afterend', respawnContainer);
+    } else {
+        // Fallback: append to the main container
+        botUiContainer.appendChild(respawnContainer);
+    }
+    
+    // Log the addition via the main script's logActivity if available
+    if (typeof logActivity === 'function') {
+        logActivity("Auto Respawn UI added");
+    } else {
+        console.log("Auto Respawn UI added");
+    }
+}
+
+// Update auto respawn status
+function ar_updateStatus() {
+    const respawnStatus = document.getElementById('respawn-status');
+    if (respawnStatus) {
+        respawnStatus.textContent = ar_secondScriptActive ? 'ON' : 'OFF';
+        respawnStatus.style.color = ar_secondScriptActive ? '#4CAF50' : '#F44336';
+    }
+}
+
+// Flash effect for visual feedback
+function ar_flashStatus(color = '#FFD700', duration = 300) {
+    const element = document.getElementById('respawn-status');
+    if (element) {
+        const originalBackground = element.style.backgroundColor;
+        element.style.backgroundColor = color;
+        setTimeout(() => {
+            element.style.backgroundColor = originalBackground;
+        }, duration);
+    }
+}
+
+// Function to simulate key press down
+function ar_simulateKeyDown(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+    
+    // If the main script has activeKeys tracking, use it
+    if (typeof window.activeKeys !== 'undefined') {
+        window.activeKeys.add(keyCode);
+        if (typeof window.updateActiveKeysDisplay === 'function') {
+            window.updateActiveKeysDisplay();
+        }
+    }
+}
+
+// Function to simulate key release
+function ar_simulateKeyUp(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    
+    // If the main script has activeKeys tracking, use it
+    if (typeof window.activeKeys !== 'undefined') {
+        window.activeKeys.delete(keyCode);
+        if (typeof window.updateActiveKeysDisplay === 'function') {
+            window.updateActiveKeysDisplay();
+        }
+    }
+}
+
+// Release all keys (emergency function)
+function ar_releaseAllKeys() {
+    // Common game keys
+    [65, 68, 75, 82, 83, 87, 32].forEach(keyCode => {
+        ar_simulateKeyUp(keyCode);
+    });
+    
+    // If main script has releaseAllKeysEmergency, use that instead
+    if (typeof window.releaseAllKeysEmergency === 'function') {
+        window.releaseAllKeysEmergency();
+    }
+}
+
+// Start auto respawn functionality
+function ar_startAutoRespawn() {
+    // Clear any existing interval to prevent duplicates
+    if (ar_scoreBoardInterval) {
+        clearInterval(ar_scoreBoardInterval);
+    }
+    
+    ar_scoreBoardInterval = setInterval(() => {
+        if (!ar_secondScriptActive) return;
+        
+        const scoreboard = document.getElementById("scoreboard-new");
+        if (scoreboard && scoreboard.offsetParent === null) {
+            // Scoreboard not visible, so do nothing
+            return;
+        }
+        
+        const respawnButton = [...document.getElementsByTagName("button")]
+            .filter(b => b.innerText.indexOf("Respawn [Space]") === 0)[0];
+        
+        if (respawnButton) {
+            // Clear any existing timer
+            if (ar_respawnTimer) clearTimeout(ar_respawnTimer);
+            
+            // Click the respawn button
+            respawnButton.click();
+            
+            // Log the action
+            if (typeof logActivity === 'function') {
+                logActivity("Автоматический респавн активирован");
+            } else {
+                console.log("Автоматический респавн активирован");
+            }
+            
+            // Visual feedback
+            ar_flashStatus('#FFD700', 300);
+            
+            // Make sure all keys are released first
+            ar_releaseAllKeys();
+            
+            // Set timer to press R after respawn
+            ar_respawnTimer = setTimeout(() => {
+                if (typeof logActivity === 'function') {
+                    logActivity("Нажата клавиша R");
+                } else {
+                    console.log("Нажата клавиша R");
+                }
+                
+                // Simulate R keypress
+                ar_simulateKeyDown(82); // R key
+                
+                // Release R key after a short delay
+                setTimeout(() => {
+                    ar_simulateKeyUp(82);
+                }, 50);
+            }, 1000); // 1 second after respawn
+        }
+    }, 100);
+}
+
+// Stop auto respawn
+function ar_stopAutoRespawn() {
+    if (ar_scoreBoardInterval) {
+        clearInterval(ar_scoreBoardInterval);
+        ar_scoreBoardInterval = null;
+    }
+    
+    if (ar_respawnTimer) {
+        clearTimeout(ar_respawnTimer);
+        ar_respawnTimer = null;
+    }
+}
+
+// Toggle auto respawn with X key
+document.addEventListener("keydown", (event) => {
+    // Toggle auto respawn with X key
+    if (event.key === "x" || event.key === "X") {
+        ar_secondScriptActive = !ar_secondScriptActive;
+        ar_updateStatus();
+        
+        if (typeof logActivity === 'function') {
+            logActivity(`Auto Respawn ${ar_secondScriptActive ? 'enabled' : 'disabled'}`);
+        } else {
+            console.log(`Auto Respawn ${ar_secondScriptActive ? 'enabled' : 'disabled'}`);
+        }
+        
+        if (ar_secondScriptActive) {
+            ar_startAutoRespawn();
+        } else {
+            ar_stopAutoRespawn();
+        }
+    }
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    ar_stopAutoRespawn();
+});
+
+// Initialize
+ar_createUI();
+ar_startAutoRespawn(); // Start auto respawn by default
+
+// Extend the fixGameBot function if it exists
+if (typeof window.fixGameBot !== 'undefined') {
+    const originalFixGameBot = window.fixGameBot;
+    window.fixGameBot = function() {
+        // Call the original function
+        const result = originalFixGameBot();
+        
+        // Re-add our UI and restart the auto respawn if needed
+        ar_createUI();
+        if (ar_secondScriptActive) {
+            ar_startAutoRespawn();
+        }
+        
+        return result + " Auto Respawn restored.";
+    };
+} else {
+    // Create a new fixGameBot function if it doesn't exist
+    window.fixGameBot = function() {
+        ar_createUI();
+        if (ar_secondScriptActive) {
+            ar_startAutoRespawn();
+        }
+        return "Auto Respawn restored.";
+    };
+}
