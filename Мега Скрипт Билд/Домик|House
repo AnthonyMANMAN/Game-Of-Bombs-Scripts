@@ -1,0 +1,240 @@
+// State variables for rotation functionality - renamed to avoid conflicts
+let bot_rotationActive = false;        // Whether rotation is currently enabled
+let bot_rotationInProgress = false;    // Whether a rotation sequence is currently executing
+let bot_rotationTimer = null;          // Timer for the rotation sequence
+let bot_rotationInterval = null;       // Interval for short key presses during rotation
+
+// Function to integrate rotation controls into existing UI
+function integrateRotationControls() {
+    // First check if main UI exists
+    const botUiContainer = document.getElementById('bot-ui-container');
+    if (!botUiContainer) {
+        console.log("Main bot UI not found. Waiting...");
+        // Try again in a second
+        setTimeout(integrateRotationControls, 1000);
+        return;
+    }
+    
+    // Remove standalone indicator if it exists
+    const oldIndicator = document.getElementById('rotation-status-indicator');
+    if (oldIndicator) {
+        oldIndicator.remove();
+    }
+    
+    // Remove any existing rotation controls to prevent duplicates
+    const existingRotation = document.getElementById('rotation-status');
+    if (existingRotation) {
+        // Find the parent container and remove it
+        let parent = existingRotation.parentElement;
+        if (parent) {
+            parent.remove();
+        }
+    }
+    
+    // Create rotation feature container - match style with other features
+    const rotationContainer = document.createElement('div');
+    rotationContainer.id = 'rotation-container'; // Add ID for easier identification
+    rotationContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        align-items: center;
+    `;
+    
+    const rotationLabel = document.createElement('span');
+    rotationLabel.textContent = 'Режим вращения (O/I)';
+    
+    const rotationStatus = document.createElement('span');
+    rotationStatus.id = 'rotation-status';
+    rotationStatus.textContent = bot_rotationActive ? 'ON' : 'OFF';
+    rotationStatus.style.cssText = `
+        font-weight: bold;
+        color: ${bot_rotationActive ? '#4CAF50' : '#F44336'};
+        background-color: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    `;
+    
+    rotationContainer.appendChild(rotationLabel);
+    rotationContainer.appendChild(rotationStatus);
+    
+    // Specifically target the "Диаг цепь" feature
+    const directionStatusElement = document.getElementById('direction-status');
+    if (directionStatusElement) {
+        // Find its parent container
+        let directionContainer = directionStatusElement.parentElement;
+        if (directionContainer) {
+            // Insert our rotation controls right after it
+            directionContainer.insertAdjacentElement('afterend', rotationContainer);
+            logActivity("Rotation controls integrated below 'Диаг цепь'");
+            return;
+        }
+    }
+    
+    // Fallback: insert before the direction indicator section
+    const directionIndicatorContainer = document.getElementById('direction-container');
+    if (directionIndicatorContainer) {
+        directionIndicatorContainer.insertAdjacentElement('beforebegin', rotationContainer);
+    } else {
+        // Last resort: just append to the UI container
+        botUiContainer.appendChild(rotationContainer);
+    }
+    
+    logActivity("Rotation controls integrated into UI");
+}
+
+// Function to update rotation status display
+function updateRotationStatus(active) {
+    const statusElement = document.getElementById('rotation-status');
+    if (statusElement) {
+        statusElement.textContent = active ? 'ON' : 'OFF';
+        statusElement.style.color = active ? '#4CAF50' : '#F44336';
+    }
+}
+
+// Flash function for rotation status (reusing existing flash function)
+function flashRotationStatus(color = '#FFD700', duration = 100) {
+    const element = document.getElementById('rotation-status');
+    if (element) {
+        const originalBackground = element.style.backgroundColor;
+        element.style.backgroundColor = color;
+        setTimeout(() => {
+            element.style.backgroundColor = originalBackground;
+        }, duration);
+    }
+}
+
+// Function to simulate key press down - use existing if available
+function bot_simulateKeyDown(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+    
+    // If the main script has activeKeys tracking, use it
+    if (typeof activeKeys !== 'undefined') {
+        activeKeys.add(keyCode);
+        updateActiveKeysDisplay();
+    }
+}
+
+// Function to simulate key release - use existing if available
+function bot_simulateKeyUp(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    
+    // If the main script has activeKeys tracking, use it
+    if (typeof activeKeys !== 'undefined') {
+        activeKeys.delete(keyCode);
+        updateActiveKeysDisplay();
+    }
+}
+
+// Clockwise rotation: Right → Down → Left → Up
+function performClockwiseRotation() {
+    if (!bot_rotationActive || bot_rotationInProgress) return;
+    
+    logActivity("Starting clockwise rotation for 6 seconds");
+    bot_rotationInProgress = true;
+    
+    // Visual feedback for active rotation
+    flashRotationStatus('#4CAF50', 500);
+    
+    // Set end timer for the entire rotation sequence (6 seconds)
+    bot_rotationTimer = setTimeout(() => {
+        clearInterval(bot_rotationInterval);
+        bot_rotationInProgress = false;
+        logActivity("Rotation sequence completed");
+        
+        // Flash to indicate completion
+        flashRotationStatus('#FFD700', 300);
+    }, 6600);
+    
+    // Perform short key presses in clockwise direction
+    let currentDirection = 0; // 0: Right, 1: Down, 2: Left, 3: Up
+    const directionKeys = [39, 40, 37, 38]; // Right, Down, Left, Up key codes
+    
+    bot_rotationInterval = setInterval(() => {
+        // Press current direction key
+        bot_simulateKeyDown(directionKeys[currentDirection]);
+        
+        // Release after ultra-short time (5ms)
+        setTimeout(() => {
+            bot_simulateKeyUp(directionKeys[currentDirection]);
+            
+            // Move to next direction in clockwise order
+            currentDirection = (currentDirection + 1) % 4;
+        }, 5);
+    }, 100); // Interval between key presses for rapid rotation
+}
+
+// Function to handle rotation hotkeys
+function handleRotationHotkeys(event) {
+    // Check for 'I' key to start rotation
+    if (event.key === "i" || event.key === "I") {
+        if (bot_rotationActive && !bot_rotationInProgress) {
+            performClockwiseRotation();
+        }
+    }
+    
+    // Toggle rotation with 'O' key or 'Щ' (Russian equivalent)
+    if (event.key === "o" || event.key === "O" || event.key === "щ" || event.key === "Щ") {
+        bot_rotationActive = !bot_rotationActive;
+        
+        // Update the visual indicator
+        updateRotationStatus(bot_rotationActive);
+        
+        if (bot_rotationActive) {
+            logActivity("Rotation mode enabled - press 'I' to rotate clockwise");
+            
+            // Flash indicator to confirm activation
+            flashRotationStatus('#4CAF50', 300);
+        } else {
+            logActivity("Rotation mode disabled");
+            
+            // Flash indicator to confirm deactivation
+            flashRotationStatus('#F44336', 300);
+            
+            // If rotation is in progress, stop it
+            if (bot_rotationInProgress) {
+                clearTimeout(bot_rotationTimer);
+                clearInterval(bot_rotationInterval);
+                bot_rotationInProgress = false;
+                
+                // Release all direction keys to be safe
+                [37, 38, 39, 40].forEach(keyCode => {
+                    bot_simulateKeyUp(keyCode);
+                });
+            }
+        }
+    }
+}
+
+// Add our rotation handler to the document
+document.addEventListener("keydown", handleRotationHotkeys);
+
+// Handle cleanup for page unload
+window.addEventListener('beforeunload', () => {
+    // Clean up rotation intervals
+    if (bot_rotationTimer) clearTimeout(bot_rotationTimer);
+    if (bot_rotationInterval) clearInterval(bot_rotationInterval);
+    
+    // Release all direction keys
+    [37, 38, 39, 40].forEach(keyCode => {
+        bot_simulateKeyUp(keyCode);
+    });
+});
+
+// Extend the existing fixGameBot function to include rotation UI
+if (typeof window.fixGameBot !== 'undefined') {
+    const originalFixGameBot = window.fixGameBot;
+    window.fixGameBot = function() {
+        // Call the original function
+        const result = originalFixGameBot();
+        
+        // Add our rotation UI
+        integrateRotationControls();
+        
+        return result + " Rotation controls restored.";
+    };
+}
+
+// Initialize rotation controls
+integrateRotationControls();
