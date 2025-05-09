@@ -1,173 +1,399 @@
-// Addon - Movement with Bombs
-// This addon implements random movement with bomb placement
+// Random Movement with Bombs Addon
+// This addon makes the character move in random directions and place bombs
 
-// Feature-specific variables
-let movementActive = false;
-let moveTimeout = null;
-let currentDirection = null;
+// Global variables for random movement
+let rm_firstScriptActive = false;
+let rm_moveTimeout = null;
+let rm_currentDirection = null;
 
-// Initialize the movement addon
-function initMovementAddon() {
-    // Add status to UI
-    addFeatureStatus('movement-status', 'Бот с Бомбами (Z)', movementActive);
+// Define key codes
+const rm_ee = {
+    up: { keyCode: 87, key: "w" },
+    left: { keyCode: 65, key: "a" },
+    down: { keyCode: 83, key: "s" },
+    right: { keyCode: 68, key: "d" },
+    upLeft: { keys: [87, 65] },
+    upRight: { keys: [87, 68] },
+    downLeft: { keys: [83, 65] },
+    downRight: { keys: [83, 68] }
+};
+
+// Create UI for this functionality
+function rm_createUI() {
+    // Check if main UI container exists
+    const botUiContainer = document.getElementById('bot-ui-container');
+    if (!botUiContainer) {
+        console.log("Main bot UI not found. Random Movement will retry in 1 second.");
+        setTimeout(rm_createUI, 1000);
+        return;
+    }
     
-    // Register event handlers
-    document.addEventListener('keydown', handleMovementToggle);
-    document.addEventListener('gamebot-emergency-release', handleEmergencyRelease);
-    document.addEventListener('gamebot-unload', cleanupMovementAddon);
-    document.addEventListener('gamebot-ui-reattached', reinitMovementStatus);
-    document.addEventListener('gamebot-claim-keys-check', handleKeyClaim);
+    // Remove any existing controls to prevent duplicates
+    const existingControl = document.getElementById('movement-status');
+    if (existingControl && existingControl.parentElement) {
+        existingControl.parentElement.remove();
+    }
     
-    logActivity("Movement with Bombs addon loaded");
-}
-
-// Reinitialize the status after UI reattach
-function reinitMovementStatus() {
-    addFeatureStatus('movement-status', 'Бот с Бомбами (Z)', movementActive);
-}
-
-// Handle emergency release event
-function handleEmergencyRelease() {
-    if (moveTimeout) {
-        clearTimeout(moveTimeout);
-        moveTimeout = null;
+    // Create movement container
+    const movementContainer = document.createElement('div');
+    movementContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        align-items: center;
+    `;
+    
+    const movementLabel = document.createElement('span');
+    movementLabel.textContent = 'Бот с Бомбами (Z)';
+    
+    const movementStatus = document.createElement('span');
+    movementStatus.id = 'movement-status';
+    movementStatus.textContent = rm_firstScriptActive ? 'ON' : 'OFF';
+    movementStatus.style.cssText = `
+        font-weight: bold;
+        color: ${rm_firstScriptActive ? '#4CAF50' : '#F44336'};
+        background-color: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    `;
+    
+    movementContainer.appendChild(movementLabel);
+    movementContainer.appendChild(movementStatus);
+    
+    // Insert at the top of the UI (right after the header)
+    const header = botUiContainer.querySelector('div:first-child');
+    if (header && header.nextSibling) {
+        botUiContainer.insertBefore(movementContainer, header.nextSibling);
+    } else {
+        // Fallback: append to the main container
+        botUiContainer.appendChild(movementContainer);
     }
-    currentDirection = null;
-}
-
-// Handle key claim check - prevent false stuck key detection
-function handleKeyClaim(event) {
-    if (movementActive) {
-        // Claim keys if our addon is using them
-        event.detail.claimed = true;
+    
+    // Log the addition
+    if (typeof logActivity === 'function') {
+        logActivity("Random Movement UI added");
+    } else {
+        console.log("Random Movement UI added");
     }
 }
 
-// Cleanup function for addon
-function cleanupMovementAddon() {
-    if (moveTimeout) {
-        clearTimeout(moveTimeout);
-        moveTimeout = null;
+// Update movement status display
+function rm_updateStatus() {
+    const movementStatus = document.getElementById('movement-status');
+    if (movementStatus) {
+        movementStatus.textContent = rm_firstScriptActive ? 'ON' : 'OFF';
+        movementStatus.style.color = rm_firstScriptActive ? '#4CAF50' : '#F44336';
     }
 }
 
-// Toggle movement on Z key press
-function handleMovementToggle(event) {
-    if (event.key === "z" || event.key === "Z") {
-        movementActive = !movementActive;
-        updateStatus('movement-status', movementActive);
+// Flash effect for visual feedback
+function rm_flashStatus(color = '#FFD700', duration = 100) {
+    const element = document.getElementById('movement-status');
+    if (element) {
+        const originalBackground = element.style.backgroundColor;
+        element.style.backgroundColor = color;
+        setTimeout(() => {
+            element.style.backgroundColor = originalBackground;
+        }, duration);
+    }
+}
 
-        if (movementActive) {
-            logActivity("Movement with Bombs activated");
-            moveCharacter(); // Start movement loop
-        } else {
-            logActivity("Movement with Bombs deactivated");
-            // Stop all movement and clear direction when disabled
-            if (moveTimeout) {
-                clearTimeout(moveTimeout);
-                moveTimeout = null;
-            }
-            
-            if (currentDirection) {
-                simulateKeyUp(currentDirection);
-                currentDirection = null;
-                updateDirectionIndicator(null);
+// Function to simulate key press down, with integration to main script if available
+function rm_simulateKeyDown(direction) {
+    if (typeof direction === 'number') {
+        // Handle single key code
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction }));
+        
+        // Integrate with main script's active keys tracking if available
+        if (typeof window.activeKeys !== 'undefined') {
+            window.activeKeys.add(direction);
+            if (typeof window.updateActiveKeysDisplay === 'function') {
+                window.updateActiveKeysDisplay();
             }
         }
+        return;
+    }
+    
+    if (direction.keys) {
+        // Handle multiple keys
+        direction.keys.forEach(keyCode => {
+            document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+            
+            // Integrate with main script's active keys tracking if available
+            if (typeof window.activeKeys !== 'undefined') {
+                window.activeKeys.add(keyCode);
+            }
+        });
+    } else {
+        // Handle single key in direction object
+        document.dispatchEvent(new KeyboardEvent("keydown", { 
+            keyCode: direction.keyCode,
+            key: direction.key 
+        }));
+        
+        // Integrate with main script's active keys tracking if available
+        if (typeof window.activeKeys !== 'undefined') {
+            window.activeKeys.add(direction.keyCode);
+        }
+    }
+    
+    // Update display if available
+    if (typeof window.updateActiveKeysDisplay === 'function') {
+        window.updateActiveKeysDisplay();
+    }
+    
+    // Update direction indicator if available
+    if (typeof window.updateDirectionIndicator === 'function') {
+        window.updateDirectionIndicator(direction);
     }
 }
 
-// Helper functions for random movement
-function getRandomDirection() {
-    const directions = [ee.right, ee.down, ee.left, ee.up, ee.upLeft, ee.upRight, ee.downLeft, ee.downRight];
+// Function to simulate key release, with integration to main script if available
+function rm_simulateKeyUp(direction) {
+    if (typeof direction === 'number') {
+        // Handle single key code
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction }));
+        
+        // Integrate with main script's active keys tracking if available
+        if (typeof window.activeKeys !== 'undefined') {
+            window.activeKeys.delete(direction);
+            if (typeof window.updateActiveKeysDisplay === 'function') {
+                window.updateActiveKeysDisplay();
+            }
+        }
+        return;
+    }
+    
+    if (direction.keys) {
+        // Handle multiple keys
+        direction.keys.forEach(keyCode => {
+            document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+            
+            // Integrate with main script's active keys tracking if available
+            if (typeof window.activeKeys !== 'undefined') {
+                window.activeKeys.delete(keyCode);
+            }
+        });
+    } else {
+        // Handle single key in direction object
+        document.dispatchEvent(new KeyboardEvent("keyup", { 
+            keyCode: direction.keyCode,
+            key: direction.key 
+        }));
+        
+        // Integrate with main script's active keys tracking if available
+        if (typeof window.activeKeys !== 'undefined') {
+            window.activeKeys.delete(direction.keyCode);
+        }
+    }
+    
+    // Update display if available
+    if (typeof window.updateActiveKeysDisplay === 'function') {
+        window.updateActiveKeysDisplay();
+    }
+    
+    // Update direction indicator if available
+    if (typeof window.updateDirectionIndicator === 'function') {
+        window.updateDirectionIndicator(null);
+    }
+}
+
+// Get random direction
+function rm_getRandomDirection() {
+    const directions = [
+        rm_ee.right, rm_ee.down, rm_ee.left, rm_ee.up, 
+        rm_ee.upLeft, rm_ee.upRight, rm_ee.downLeft, rm_ee.downRight
+    ];
     return directions[Math.floor(Math.random() * directions.length)];
 }
 
-function getRandomDelay(min, max) {
+// Get random delay
+function rm_getRandomDelay(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function getRandomPause(min, max) {
+// Get random pause
+function rm_getRandomPause(min, max) {
     return Math.random() * (max - min) + min;
 }
 
-// Function to simulate placing a bomb (pressing "K")
-function placeBomb() {
-    if (!movementActive) return;
+// Function to place a bomb (press 'K')
+function rm_placeBomb() {
+    if (!rm_firstScriptActive) return;
     
+    // Press K
     var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "k" });
     document.dispatchEvent(bombKeyEvent);
-    activeKeys.add(75);
-    updateActiveKeysDisplay();
     
+    // Update activeKeys if available
+    if (typeof window.activeKeys !== 'undefined') {
+        window.activeKeys.add(75);
+        if (typeof window.updateActiveKeysDisplay === 'function') {
+            window.updateActiveKeysDisplay();
+        }
+    }
+    
+    // Release K after short delay
     setTimeout(() => {
         var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75, key: "k" });
         document.dispatchEvent(bombKeyReleaseEvent);
-        activeKeys.delete(75);
-        updateActiveKeysDisplay();
+        
+        // Update activeKeys if available
+        if (typeof window.activeKeys !== 'undefined') {
+            window.activeKeys.delete(75);
+            if (typeof window.updateActiveKeysDisplay === 'function') {
+                window.updateActiveKeysDisplay();
+            }
+        }
     }, 100);
     
-    // Visual feedback - but only occasionally to reduce flickering
-    if (Math.random() < 0.1) { // Only flash for 10% of bombs
-        flashButtonStatus('movement-status');
+    // Visual feedback - occasionally to reduce flickering
+    if (Math.random() < 0.1) { // 10% chance to flash
+        rm_flashStatus('#FFD700');
     }
 }
 
-// Function to simulate random direction presses (W, A, S, D) for 50ms during pause
-function randomDirectionPress() {
-    if (!movementActive) return;
+// Function to simulate random direction presses during pauses
+function rm_randomDirectionPress() {
+    if (!rm_firstScriptActive) return;
     
-    const directions = [ee.up, ee.left, ee.down, ee.right];
+    const directions = [rm_ee.up, rm_ee.left, rm_ee.down, rm_ee.right];
     const direction = directions[Math.floor(Math.random() * directions.length)];
     
-    // Simulate pressing a random direction key for 50ms
-    simulateKeyDown(direction);
+    // Press random direction key for 50ms
+    rm_simulateKeyDown(direction);
     setTimeout(() => {
-        simulateKeyUp(direction); // Stop the key press after 50ms
+        rm_simulateKeyUp(direction);
     }, 50);
 }
 
-// Main movement function
-function moveCharacter() {
-    if (!movementActive) return;
+// Main function to move character in random directions
+function rm_moveCharacter() {
+    if (!rm_firstScriptActive) return;
     
-    const direction = getRandomDirection();
-    const delay = getRandomDelay(900, 1500); // Longer motion time
-    const pauseTime = getRandomPause(125, 1000);
+    const direction = rm_getRandomDirection();
+    const delay = rm_getRandomDelay(900, 1500); // Movement duration
+    const pauseTime = rm_getRandomPause(125, 1000); // Pause duration
     
-    // If there's an ongoing movement, stop it before starting a new one
-    if (moveTimeout) {
-        clearTimeout(moveTimeout); // Clear the previous movement timeout
+    // Clear any existing movement timeout
+    if (rm_moveTimeout) {
+        clearTimeout(rm_moveTimeout);
     }
     
-    // Always release all direction keys before changing direction to prevent stuck keys
-    if (currentDirection) {
-        simulateKeyUp(currentDirection);
+    // Release any current direction keys
+    if (rm_currentDirection) {
+        rm_simulateKeyUp(rm_currentDirection);
     }
     
-    // Place a bomb before changing direction
-    placeBomb();
+    // Place bomb before moving
+    rm_placeBomb();
     
-    // Start the new movement direction after bomb placement
-    currentDirection = direction;
+    // Set the new direction
+    rm_currentDirection = direction;
     
-    // Update the direction indicator in UI
-    updateDirectionIndicator(direction);
-    
+    // Start moving after short delay for bomb placement
     setTimeout(() => {
-        simulateKeyDown(direction);
-        moveTimeout = setTimeout(() => {
-            simulateKeyUp(direction); // Stop the current movement after delay
-            currentDirection = null;
+        rm_simulateKeyDown(direction);
+        
+        rm_moveTimeout = setTimeout(() => {
+            rm_simulateKeyUp(direction); // Stop current movement
+            rm_currentDirection = null;
             
-            // Simulate random direction press during the pause (50ms)
-            randomDirectionPress();
+            // Random direction press during pause
+            rm_randomDirectionPress();
             
-            // Set timer for next movement
-            moveTimeout = setTimeout(moveCharacter, pauseTime);
+            // Schedule next movement
+            rm_moveTimeout = setTimeout(rm_moveCharacter, pauseTime);
         }, delay);
-    }, 100); // Wait 100ms for bomb placement before moving
+    }, 100);
 }
 
-// Initialize the addon when the core framework is ready
-document.addEventListener('gamebot-initialized', initMovementAddon);
+// Toggle random movement with Z key
+document.addEventListener("keydown", (event) => {
+    if (event.key === "z" || event.key === "Z") {
+        rm_firstScriptActive = !rm_firstScriptActive;
+        rm_updateStatus();
+        
+        if (rm_firstScriptActive) {
+            if (typeof logActivity === 'function') {
+                logActivity("Random movement with bombs enabled");
+            } else {
+                console.log("Random movement with bombs enabled");
+            }
+            rm_moveCharacter(); // Start movement
+        } else {
+            if (typeof logActivity === 'function') {
+                logActivity("Random movement with bombs disabled");
+            } else {
+                console.log("Random movement with bombs disabled");
+            }
+            
+            // Stop all movement
+            if (rm_moveTimeout) {
+                clearTimeout(rm_moveTimeout);
+                rm_moveTimeout = null;
+            }
+            
+            // Release current direction keys
+            if (rm_currentDirection) {
+                rm_simulateKeyUp(rm_currentDirection);
+                rm_currentDirection = null;
+                
+                // Update direction indicator if available
+                if (typeof window.updateDirectionIndicator === 'function') {
+                    window.updateDirectionIndicator(null);
+                }
+            }
+        }
+    }
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    if (rm_moveTimeout) {
+        clearTimeout(rm_moveTimeout);
+    }
+    
+    if (rm_currentDirection) {
+        rm_simulateKeyUp(rm_currentDirection);
+    }
+});
+
+// Initialize
+rm_createUI();
+
+// Extend the fixGameBot function if it exists
+if (typeof window.fixGameBot !== 'undefined') {
+    const originalFixGameBot = window.fixGameBot;
+    window.fixGameBot = function() {
+        // Call the original function
+        const result = originalFixGameBot();
+        
+        // Re-add our UI
+        rm_createUI();
+        
+        // Restart movement if active
+        if (rm_firstScriptActive) {
+            // First clear any existing movement
+            if (rm_moveTimeout) {
+                clearTimeout(rm_moveTimeout);
+            }
+            if (rm_currentDirection) {
+                rm_simulateKeyUp(rm_currentDirection);
+                rm_currentDirection = null;
+            }
+            
+            // Then restart
+            rm_moveCharacter();
+        }
+        
+        return result + " Random Movement restored.";
+    };
+} else {
+    // Create a new fixGameBot function if it doesn't exist
+    window.fixGameBot = function() {
+        rm_createUI();
+        return "Random Movement restored.";
+    };
+}
