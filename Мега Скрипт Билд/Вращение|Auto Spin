@@ -6,84 +6,7 @@ let rotationAddon_inProgress = false;
 let rotationAddon_interval = null;
 let rotationAddon_active = false;
 
-// Helper functions at module level
-function rotationAddon_updateRotationStatus(active) {
-    const status = document.getElementById('rotation-status');
-    if (status) {
-        status.textContent = active ? 'ON' : 'OFF';
-        status.style.backgroundColor = active ? '#4CAF50' : '#F44336';
-    }
-}
-
-function rotationAddon_integrateRotationControls() {
-    // Remove existing indicator if it exists
-    const existing = document.getElementById('rotation-indicator');
-    if (existing) existing.remove();
-    
-    const container = document.createElement('div');
-    container.id = 'rotation-indicator';
-    container.style.cssText = `
-        position: fixed;
-        top: 15px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 8px 15px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-family: Arial, sans-serif;
-        font-weight: 500;
-        z-index: 9999;
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
-        display: flex;
-        align-items: center;
-        transition: background-color 0.3s ease;
-    `;
-    
-    const label = document.createElement('span');
-    label.textContent = 'Режим вращения: ';
-    label.style.marginRight = '5px';
-    
-    const status = document.createElement('span');
-    status.id = 'rotation-status';
-    status.textContent = rotationAddon_active ? 'ON' : 'OFF';
-    status.style.cssText = `
-        font-weight: bold;
-        padding: 2px 8px;
-        border-radius: 12px;
-        background-color: ${rotationAddon_active ? '#4CAF50' : '#F44336'};
-        transition: background-color 0.3s ease;
-    `;
-    
-    // Add keyboard shortcut hint
-    const shortcutHint = document.createElement('span');
-    shortcutHint.textContent = ' [N]';
-    shortcutHint.style.cssText = `
-        opacity: 0.7;
-        font-size: 12px;
-        margin-left: 8px;
-    `;
-    
-    container.appendChild(label);
-    container.appendChild(status);
-    container.appendChild(shortcutHint);
-    document.body.appendChild(container);
-    
-    // Auto-hide after 3 seconds, show on hover
-    setTimeout(() => {
-        container.style.opacity = '0.6';
-    }, 3000);
-    
-    container.addEventListener('mouseenter', () => {
-        container.style.opacity = '1';
-    });
-    
-    container.addEventListener('mouseleave', () => {
-        container.style.opacity = '0.6';
-    });
-}
-
+// Remove all visual indicator related functions and calls
 function rotationAddon_performRotation() {
     if (!rotationAddon_active) return;
     
@@ -131,9 +54,6 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
         // Add visualization for rotation state in the main UI
         logActivity("Rotation addon initialized - use 'N' key to toggle");
         
-        // Create rotation indicator UI element
-        rotationAddon_integrateRotationControls();
-        
         // Set the initial active state
         rotationAddon_active = this.active;
         
@@ -145,10 +65,6 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
     cleanup: function() {
         // Clear any ongoing rotation
         rotationAddon_stopRotation();
-        
-        // Remove rotation indicator if it exists
-        const indicator = document.getElementById('rotation-indicator');
-        if (indicator) indicator.remove();
         
         logActivity("Rotation addon cleanup complete");
     },
@@ -162,17 +78,6 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
             rotationAddon_active = this.active;
             updateStatus('rotationAddon', this.active);
             
-            // Make the indicator fully visible when toggling
-            const indicator = document.getElementById('rotation-indicator');
-            if (indicator) {
-                indicator.style.opacity = '1';
-                // Reset the fade timeout
-                clearTimeout(indicator.fadeTimeout);
-                indicator.fadeTimeout = setTimeout(() => {
-                    indicator.style.opacity = '0.6';
-                }, 3000);
-            }
-            
             // Start or stop rotation based on active state
             if (rotationAddon_active) {
                 rotationAddon_performRotation();
@@ -181,9 +86,6 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
                 rotationAddon_stopRotation();
                 logActivity("Rotation mode deactivated");
             }
-            
-            // Update the standalone indicator
-            rotationAddon_updateRotationStatus(rotationAddon_active);
         }
     },
     
