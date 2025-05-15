@@ -46,7 +46,7 @@ function rotationAddon_stopRotation() {
 
 // Register the rotation addon with the bot framework
 window.gameBotAddonManager.registerFeature('rotationAddon', {
-    label: 'Режим Вращения',
+    label: 'Режим Вращения(N)',
     initialActive: false,
     
     // Initialize the addon
