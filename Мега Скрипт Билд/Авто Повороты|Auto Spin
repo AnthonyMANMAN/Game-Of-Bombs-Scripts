@@ -1,0 +1,197 @@
+// Rotation Addon for Game Bot Framework
+// This addon adds rotation functionality to the base bot framework
+
+// Create module-level variables outside the addon object to solve 'this' context issues
+let rotationAddon_inProgress = false;
+let rotationAddon_interval = null;
+let rotationAddon_active = false;
+
+// Helper functions at module level
+function rotationAddon_updateRotationStatus(active) {
+    const status = document.getElementById('rotation-status');
+    if (status) {
+        status.textContent = active ? 'ON' : 'OFF';
+        status.style.backgroundColor = active ? '#4CAF50' : '#F44336';
+    }
+}
+
+function rotationAddon_integrateRotationControls() {
+    // Remove existing indicator if it exists
+    const existing = document.getElementById('rotation-indicator');
+    if (existing) existing.remove();
+    
+    const container = document.createElement('div');
+    container.id = 'rotation-indicator';
+    container.style.cssText = `
+        position: fixed;
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-family: Arial, sans-serif;
+        font-weight: 500;
+        z-index: 9999;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        transition: background-color 0.3s ease;
+    `;
+    
+    const label = document.createElement('span');
+    label.textContent = 'Режим вращения: ';
+    label.style.marginRight = '5px';
+    
+    const status = document.createElement('span');
+    status.id = 'rotation-status';
+    status.textContent = rotationAddon_active ? 'ON' : 'OFF';
+    status.style.cssText = `
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background-color: ${rotationAddon_active ? '#4CAF50' : '#F44336'};
+        transition: background-color 0.3s ease;
+    `;
+    
+    // Add keyboard shortcut hint
+    const shortcutHint = document.createElement('span');
+    shortcutHint.textContent = ' [N]';
+    shortcutHint.style.cssText = `
+        opacity: 0.7;
+        font-size: 12px;
+        margin-left: 8px;
+    `;
+    
+    container.appendChild(label);
+    container.appendChild(status);
+    container.appendChild(shortcutHint);
+    document.body.appendChild(container);
+    
+    // Auto-hide after 3 seconds, show on hover
+    setTimeout(() => {
+        container.style.opacity = '0.6';
+    }, 3000);
+    
+    container.addEventListener('mouseenter', () => {
+        container.style.opacity = '1';
+    });
+    
+    container.addEventListener('mouseleave', () => {
+        container.style.opacity = '0.6';
+    });
+}
+
+function rotationAddon_performRotation() {
+    if (!rotationAddon_active) return;
+    
+    // Only start if not already in progress
+    if (rotationAddon_inProgress) return;
+    
+    rotationAddon_inProgress = true;
+    
+    let currentStep = 0;
+    // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
+    const sequenceKeys = [38, 37, 40, 39, 40, 37];
+    
+    rotationAddon_interval = setInterval(() => {
+        // Use the framework's key simulation functions
+        simulateKeyDown(sequenceKeys[currentStep]);
+        
+        setTimeout(() => {
+            simulateKeyUp(sequenceKeys[currentStep]);
+            currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
+        }, 5);
+    }, 100);
+}
+
+function rotationAddon_stopRotation() {
+    if (rotationAddon_interval) {
+        clearInterval(rotationAddon_interval);
+        rotationAddon_interval = null;
+    }
+    
+    rotationAddon_inProgress = false;
+    
+    // Release all arrow keys if they're being held
+    [37, 38, 39, 40].forEach(keyCode => {
+        simulateKeyUp(keyCode);
+    });
+}
+
+// Register the rotation addon with the bot framework
+window.gameBotAddonManager.registerFeature('rotationAddon', {
+    label: 'Режим Вращения',
+    initialActive: false,
+    
+    // Initialize the addon
+    initialize: function() {
+        // Add visualization for rotation state in the main UI
+        logActivity("Rotation addon initialized - use 'N' key to toggle");
+        
+        // Create rotation indicator UI element
+        rotationAddon_integrateRotationControls();
+        
+        // Set the initial active state
+        rotationAddon_active = this.active;
+        
+        // Initial UI status update
+        updateStatus('rotationAddon', this.active);
+    },
+    
+    // Cleanup when the addon is disabled
+    cleanup: function() {
+        // Clear any ongoing rotation
+        rotationAddon_stopRotation();
+        
+        // Remove rotation indicator if it exists
+        const indicator = document.getElementById('rotation-indicator');
+        if (indicator) indicator.remove();
+        
+        logActivity("Rotation addon cleanup complete");
+    },
+    
+    // Handle keydown events
+    onKeyDown: function(event) {
+        const key = event.key.toLowerCase();
+        // Toggle rotation mode with N key
+        if (key === 'n') {
+            this.active = !this.active;
+            rotationAddon_active = this.active;
+            updateStatus('rotationAddon', this.active);
+            
+            // Make the indicator fully visible when toggling
+            const indicator = document.getElementById('rotation-indicator');
+            if (indicator) {
+                indicator.style.opacity = '1';
+                // Reset the fade timeout
+                clearTimeout(indicator.fadeTimeout);
+                indicator.fadeTimeout = setTimeout(() => {
+                    indicator.style.opacity = '0.6';
+                }, 3000);
+            }
+            
+            // Start or stop rotation based on active state
+            if (rotationAddon_active) {
+                rotationAddon_performRotation();
+                logActivity("Rotation mode activated - continuous rotation until toggled off");
+            } else {
+                rotationAddon_stopRotation();
+                logActivity("Rotation mode deactivated");
+            }
+            
+            // Update the standalone indicator
+            rotationAddon_updateRotationStatus(rotationAddon_active);
+        }
+    },
+    
+    // Placeholder for onKeyUp - not used in this addon but required by framework
+    onKeyUp: function(event) {
+        // No special handling needed for keyup events
+    }
+});
+
+// Log that the addon was loaded
+logActivity("Rotation addon loaded - Press 'N' to toggle continuous rotation mode");
