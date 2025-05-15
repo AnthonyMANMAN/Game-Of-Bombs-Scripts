@@ -60,8 +60,6 @@ function createVisualUI() {
         z-index: 9999;
         user-select: none;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-        max-height: 80vh;
-        overflow-y: auto;
     `;
 
     // Create header
@@ -77,52 +75,95 @@ function createVisualUI() {
     `;
     uiContainer.appendChild(header);
 
-    // Create add-ons section
-    const addonsSection = document.createElement('div');
-    addonsSection.id = 'addons-section';
-    addonsSection.style.cssText = `
-        margin-top: 5px;
-        margin-bottom: 10px;
-    `;
-    
-    const addonsHeader = document.createElement('div');
-    addonsHeader.textContent = 'Add-ons:';
-    addonsHeader.style.cssText = `
-        font-size: 14px;
-        font-weight: bold;
-        margin-bottom: 5px;
-        padding-bottom: 3px;
-        border-bottom: 1px dashed #555;
-    `;
-    addonsSection.appendChild(addonsHeader);
-    
-    // Create placeholder for add-ons
-    const addonsContainer = document.createElement('div');
-    addonsContainer.id = 'addons-container';
-    addonsSection.appendChild(addonsContainer);
-    uiContainer.appendChild(addonsSection);
-
-    // Add emergency key release button
-    const emergencyButton = document.createElement('button');
-    emergencyButton.textContent = 'Release All Keys';
-    emergencyButton.style.cssText = `
-        background-color: #d9534f;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 5px 10px;
+    // Create direction indicator
+    const directionContainer = document.createElement('div');
+    directionContainer.id = 'direction-container';
+    directionContainer.style.cssText = `
         margin-top: 10px;
-        cursor: pointer;
-        width: 100%;
-        font-weight: bold;
+        padding-top: 10px;
+        border-top: 1px solid #555;
     `;
-    emergencyButton.addEventListener('click', () => {
-        releaseAllKeysEmergency();
-        logActivity('Emergency key release triggered!');
-    });
-    uiContainer.appendChild(emergencyButton);
 
-    // Add activity log (moved to the bottom)
+    const directionLabel = document.createElement('div');
+    directionLabel.textContent = 'Current Direction:';
+    directionLabel.style.marginBottom = '5px';
+    directionContainer.appendChild(directionLabel);
+
+    const directionIndicator = document.createElement('div');
+    directionIndicator.id = 'direction-indicator';
+    directionIndicator.style.cssText = `
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        width: 90px;
+        height: 90px;
+        margin: 0 auto;
+    `;
+
+    // Create 3x3 grid for direction indicator
+    for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.style.cssText = `
+            width: 30px;
+            height: 30px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+        `;
+        
+        // Center cell is different
+        if (i === 4) {
+            cell.style.backgroundColor = '#444';
+            cell.textContent = '⚪';
+        } else {
+            cell.style.border = '1px solid #333';
+        }
+        
+        // Assign IDs to the cells that represent directions
+        if (i === 0) cell.id = 'dir-up-left';
+        if (i === 1) cell.id = 'dir-up';
+        if (i === 2) cell.id = 'dir-up-right';
+        if (i === 3) cell.id = 'dir-left';
+        if (i === 5) cell.id = 'dir-right';
+        if (i === 6) cell.id = 'dir-down-left';
+        if (i === 7) cell.id = 'dir-down';
+        if (i === 8) cell.id = 'dir-down-right';
+        
+        directionIndicator.appendChild(cell);
+    }
+    
+    directionContainer.appendChild(directionIndicator);
+    uiContainer.appendChild(directionContainer);
+
+    // Add active keys display (to help debug stuck keys)
+    const keysContainer = document.createElement('div');
+    keysContainer.style.cssText = `
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #555;
+    `;
+
+    const keysLabel = document.createElement('div');
+    keysLabel.textContent = 'Active Keys:';
+    keysLabel.style.marginBottom = '5px';
+    keysContainer.appendChild(keysLabel);
+
+    const keysDisplay = document.createElement('div');
+    keysDisplay.id = 'active-keys-display';
+    keysDisplay.style.cssText = `
+        font-size: 12px;
+        font-family: monospace;
+        padding: 4px;
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 4px;
+        min-height: 20px;
+    `;
+    keysContainer.appendChild(keysDisplay);
+    uiContainer.appendChild(keysContainer);
+
+    // Add activity log
     const logContainer = document.createElement('div');
     logContainer.style.cssText = `
         margin-top: 10px;
@@ -146,6 +187,26 @@ function createVisualUI() {
     logContainer.appendChild(logContent);
     uiContainer.appendChild(logContainer);
 
+    // Add emergency key release button
+    const emergencyButton = document.createElement('button');
+    emergencyButton.textContent = 'Release All Keys';
+    emergencyButton.style.cssText = `
+        background-color: #d9534f;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 10px;
+        margin-top: 10px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+    `;
+    emergencyButton.addEventListener('click', () => {
+        releaseAllKeysEmergency();
+        logActivity('Emergency key release triggered!');
+    });
+    uiContainer.appendChild(emergencyButton);
+
     // Add minimize/maximize button
     const toggleButton = document.createElement('button');
     toggleButton.textContent = '−';
@@ -167,16 +228,19 @@ function createVisualUI() {
 
     // Store references to content elements for minimize/maximize
     const contentElements = [
-        addonsSection,
+        document.getElementById('direction-container'),
+        keysContainer,
         logContainer,
         emergencyButton
     ];
     
     toggleButton.addEventListener('click', () => {
         minimized = !minimized;
-        contentElements.forEach(el => {
+        const elementsToToggle = document.querySelectorAll('#bot-ui-container > div:not(:first-child)');
+        elementsToToggle.forEach(el => {
             el.style.display = minimized ? 'none' : 'block';
         });
+        emergencyButton.style.display = minimized ? 'none' : 'block';
         toggleButton.textContent = minimized ? '+' : '−';
     });
     
@@ -192,6 +256,20 @@ function updateStatus(id, active, text = null) {
     if (element) {
         element.textContent = text || (active ? 'ON' : 'OFF');
         element.style.color = active ? '#4CAF50' : '#F44336';
+    }
+}
+
+// Update active keys display
+function updateActiveKeysDisplay() {
+    const keysDisplay = document.getElementById('active-keys-display');
+    if (keysDisplay) {
+        if (activeKeys.size === 0) {
+            keysDisplay.textContent = 'None';
+            keysDisplay.style.color = '#CCC';
+        } else {
+            keysDisplay.textContent = Array.from(activeKeys).map(key => KEY_MAP[key] || key).join(', ');
+            keysDisplay.style.color = '#FFD700'; // Gold color when keys are active
+        }
     }
 }
 
@@ -229,10 +307,39 @@ function logActivity(message) {
     console.log(message); // Still log to console as well
 }
 
-// Update direction indicator - keep function but make it do nothing
+// Update direction indicator
 function updateDirectionIndicator(direction) {
-    // This function is now a no-op (does nothing) but kept for compatibility
-    return;
+    // Reset all direction cells
+    ['dir-up', 'dir-down', 'dir-left', 'dir-right', 
+     'dir-up-left', 'dir-up-right', 'dir-down-left', 'dir-down-right'].forEach(id => {
+        const cell = document.getElementById(id);
+        if (cell) {
+            cell.style.backgroundColor = '';
+            cell.textContent = '';
+        }
+    });
+    
+    // Set active direction
+    if (direction) {
+        let dirId = null;
+        
+        if (direction === ee.up) dirId = 'dir-up';
+        else if (direction === ee.down) dirId = 'dir-down';
+        else if (direction === ee.left) dirId = 'dir-left';
+        else if (direction === ee.right) dirId = 'dir-right';
+        else if (direction === ee.upLeft) dirId = 'dir-up-left';
+        else if (direction === ee.upRight) dirId = 'dir-up-right';
+        else if (direction === ee.downLeft) dirId = 'dir-down-left';
+        else if (direction === ee.downRight) dirId = 'dir-down-right';
+        
+        if (dirId) {
+            const cell = document.getElementById(dirId);
+            if (cell) {
+                cell.style.backgroundColor = '#4CAF50';
+                cell.textContent = '🔥';
+            }
+        }
+    }
 }
 
 // Enhanced key simulation functions that track key state
@@ -241,6 +348,7 @@ function simulateKeyDown(direction) {
         // Handle single keyCode input
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction }));
         activeKeys.add(direction); // Add to active keys set
+        updateActiveKeysDisplay();
         return;
     }
     
@@ -253,6 +361,7 @@ function simulateKeyDown(direction) {
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction.keyCode, key: direction.key }));
         activeKeys.add(direction.keyCode); // Add to active keys set
     }
+    updateActiveKeysDisplay();
 }
 
 function simulateKeyUp(direction) {
@@ -260,6 +369,7 @@ function simulateKeyUp(direction) {
         // Handle single keyCode input
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction }));
         activeKeys.delete(direction); // Remove from active keys
+        updateActiveKeysDisplay();
         return;
     }
     
@@ -272,6 +382,7 @@ function simulateKeyUp(direction) {
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction.keyCode, key: direction.key }));
         activeKeys.delete(direction.keyCode); // Remove from active keys
     }
+    updateActiveKeysDisplay();
 }
 
 // Emergency function to release ALL keys (for stuck keys)
@@ -288,6 +399,7 @@ function releaseAllKeysEmergency() {
     
     // Clear the active keys set
     activeKeys.clear();
+    updateActiveKeysDisplay();
     
     // Reset any active directions or states
     updateDirectionIndicator(null);
@@ -308,11 +420,14 @@ function releaseAllKeysEmergency() {
 
 // Function to add feature display to the UI
 function addFeatureToUI(id, label, initialActive) {
-    const addonsContainer = document.getElementById('addons-container');
-    if (!addonsContainer) return false; // UI not initialized yet
+    const uiContainer = document.getElementById('bot-ui-container');
+    if (!uiContainer) return false; // UI not initialized yet
     
     // Check if feature already exists
     if (document.getElementById(id)) return false;
+    
+    // Where to insert the new feature - right after the header
+    const header = uiContainer.querySelector('div:first-child');
     
     // Create feature container
     const featureContainer = document.createElement('div');
@@ -321,9 +436,6 @@ function addFeatureToUI(id, label, initialActive) {
         justify-content: space-between;
         margin-bottom: 8px;
         align-items: center;
-        padding: 4px 6px;
-        background-color: rgba(50, 50, 50, 0.3);
-        border-radius: 4px;
     `;
 
     const featureLabel = document.createElement('span');
@@ -344,36 +456,25 @@ function addFeatureToUI(id, label, initialActive) {
     featureContainer.appendChild(featureLabel);
     featureContainer.appendChild(status);
     
-    // Add to addons container
-    addonsContainer.appendChild(featureContainer);
-    
-    // Update UI visuals to show add-ons section
-    const addonsSection = document.getElementById('addons-section');
-    if (addonsSection) {
-        addonsSection.style.display = 'block';
+    // Insert after header
+    if (header && header.nextSibling) {
+        uiContainer.insertBefore(featureContainer, header.nextSibling);
+    } else {
+        uiContainer.appendChild(featureContainer);
     }
     
     return true;
 }
 
-// Initialize addon manager with support for up to 10 add-ons
+// Initialize addon manager
 window.gameBotAddonManager = {
     // Feature registry
     features: {},
-    maxAddons: 10,
-    currentAddons: 0,
     
     // Function to register a new feature/addon
     registerFeature: function(id, options) {
         if (this.features[id]) {
             console.warn(`Feature ${id} is already registered`);
-            return false;
-        }
-        
-        // Check if we've reached the maximum number of add-ons
-        if (this.currentAddons >= this.maxAddons) {
-            console.error(`Maximum number of add-ons (${this.maxAddons}) reached. Cannot register ${id}`);
-            logActivity(`Failed to register ${id}: Max add-ons limit reached`);
             return false;
         }
         
@@ -395,70 +496,12 @@ window.gameBotAddonManager = {
         
         // Initialize UI for the feature
         addFeatureToUI(id, this.features[id].label, this.features[id].active);
-        this.currentAddons++;
         
         // Initialize the feature
         this.features[id].initialize();
         
-        logActivity(`Add-on "${id}" registered successfully`);
+        console.log(`Feature ${id} registered successfully`);
         return true;
-    },
-    
-    // Function to unregister a feature/addon
-    unregisterFeature: function(id) {
-        if (!this.features[id]) {
-            console.warn(`Feature ${id} is not registered`);
-            return false;
-        }
-        
-        // Call cleanup function
-        try {
-            this.features[id].cleanup();
-        } catch (e) {
-            console.error(`Error during cleanup of ${id}:`, e);
-        }
-        
-        // Remove from features registry
-        delete this.features[id];
-        this.currentAddons--;
-        
-        // Remove from UI
-        const element = document.getElementById(id);
-        if (element && element.parentElement) {
-            element.parentElement.remove();
-        }
-        
-        // Update cleanup functions array
-        if (window.gameBotCleanupFunctions) {
-            window.gameBotCleanupFunctions = window.gameBotCleanupFunctions.filter(fn => 
-                fn !== this.features[id].cleanup
-            );
-        }
-        
-        logActivity(`Add-on "${id}" unregistered`);
-        return true;
-    },
-    
-    // Enable/disable a feature
-    toggleFeature: function(id, forceState = null) {
-        if (!this.features[id]) {
-            console.warn(`Feature ${id} is not registered`);
-            return false;
-        }
-        
-        const newState = forceState !== null ? forceState : !this.features[id].active;
-        this.features[id].active = newState;
-        
-        // Update UI
-        updateStatus(id, newState);
-        
-        logActivity(`Add-on "${id}" ${newState ? 'enabled' : 'disabled'}`);
-        return true;
-    },
-    
-    // Get number of available addon slots
-    getAvailableSlots: function() {
-        return this.maxAddons - this.currentAddons;
     }
 };
 
@@ -467,9 +510,7 @@ document.addEventListener("keydown", (event) => {
     // Call registered feature keydown handlers
     for (const id in window.gameBotAddonManager.features) {
         try {
-            if (window.gameBotAddonManager.features[id].active) {
-                window.gameBotAddonManager.features[id].onKeyDown(event);
-            }
+            window.gameBotAddonManager.features[id].onKeyDown(event);
         } catch (e) {
             console.error(`Error in ${id} keydown handler:`, e);
         }
@@ -480,9 +521,7 @@ document.addEventListener("keyup", (event) => {
     // Call registered feature keyup handlers
     for (const id in window.gameBotAddonManager.features) {
         try {
-            if (window.gameBotAddonManager.features[id].active) {
-                window.gameBotAddonManager.features[id].onKeyUp(event);
-            }
+            window.gameBotAddonManager.features[id].onKeyUp(event);
         } catch (e) {
             console.error(`Error in ${id} keyup handler:`, e);
         }
@@ -499,9 +538,12 @@ document.addEventListener("visibilitychange", () => {
         });
         
         // Also ensure the emergency button stays hidden
-        const emergencyBtn = document.querySelector('#bot-ui-container > button');
+        const emergencyBtn = document.querySelector('#bot-ui-container > button:not(:last-child)');
         if (emergencyBtn) emergencyBtn.style.display = 'none';
     }
+    
+    // Also ensure active key display is up to date
+    updateActiveKeysDisplay();
 });
 
 // Handle any cleanup needed when the window is closing
@@ -531,7 +573,10 @@ window.fixGameBot = function() {
         }
     }
     
-    logActivity("Game bot fixed and restarted!");
+    // Update active keys display
+    updateActiveKeysDisplay();
+    
+    console.log("Game bot fixed and restarted!");
     return "Game bot UI and functionality restored.";
 };
 
@@ -541,52 +586,12 @@ setInterval(() => {
     // something might be wrong - check and possibly release them
     if (activeKeys.size > 0) {
         logActivity("Periodic key check - ensuring no stuck keys");
+        
+        // For now, just update the display to ensure it's accurate
+        updateActiveKeysDisplay();
     }
 }, 5000); // Check every 5 seconds
 
-// Helper function to create an example add-on template
-window.createAddonTemplate = function() {
-    console.log(`
-// Example Add-on Template
-// Copy this template to create your own add-on
-
-// Register your add-on with the bot
-window.gameBotAddonManager.registerFeature("your-addon-id", {
-    label: "Your Add-on Name", // Display name in UI
-    initialActive: false, // Start enabled or disabled
-    
-    // Called when the add-on is first registered
-    initialize: function() {
-        console.log("Your add-on initialized");
-        // Setup your add-on here
-    },
-    
-    // Called when the add-on is unregistered or during emergency cleanup
-    cleanup: function() {
-        console.log("Your add-on cleanup");
-        // Clean up any intervals, event listeners, etc.
-    },
-    
-    // Handle key down events (only called when add-on is active)
-    onKeyDown: function(event) {
-        // Respond to key press events
-        if (event.keyCode === 84) { // T key
-            console.log("T key pressed");
-        }
-    },
-    
-    // Handle key up events (only called when add-on is active)
-    onKeyUp: function(event) {
-        // Respond to key release events
-        if (event.keyCode === 84) { // T key
-            console.log("T key released");
-        }
-    }
-});
-`);
-    return "Example add-on template logged to console. Check your browser's developer console (F12)";
-};
-
 // Initialize the script with UI
 createVisualUI();
-logActivity("Base Game Bot Framework initialized with support for 10 add-ons");
+logActivity("Base Game Bot Framework initialized");
