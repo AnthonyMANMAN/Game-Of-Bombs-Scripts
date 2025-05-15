@@ -7,83 +7,7 @@ let crossMovement_isRunning = false;
 let crossMovement_loopTimer = null;
 let crossMovement_enabled = false;
 
-// Helper functions at module level
-function crossMovement_updateStatusDisplay(enabled) {
-    const statusElement = document.getElementById('cross-movement-status');
-    if (statusElement) {
-        statusElement.textContent = enabled ? 'ON' : 'OFF';
-        statusElement.style.backgroundColor = enabled ? '#4CAF50' : '#F44336';
-    }
-}
-
-function crossMovement_createControlInterface() {
-    // Remove existing indicator if it exists
-    const existingElement = document.getElementById('cross-movement-indicator');
-    if (existingElement) existingElement.remove();
-    
-    const uiContainer = document.createElement('div');
-    uiContainer.id = 'cross-movement-indicator';
-    uiContainer.style.cssText = `
-        position: fixed;
-        top: 55px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 8px 15px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-family: Arial, sans-serif;
-        font-weight: 500;
-        z-index: 9999;
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
-        display: flex;
-        align-items: center;
-        transition: background-color 0.3s ease;
-    `;
-    
-    const labelText = document.createElement('span');
-    labelText.textContent = 'Двиг Крестом: ';
-    labelText.style.marginRight = '5px';
-    
-    const statusDisplay = document.createElement('span');
-    statusDisplay.id = 'cross-movement-status';
-    statusDisplay.textContent = crossMovement_enabled ? 'ON' : 'OFF';
-    statusDisplay.style.cssText = `
-        font-weight: bold;
-        padding: 2px 8px;
-        border-radius: 12px;
-        background-color: ${crossMovement_enabled ? '#4CAF50' : '#F44336'};
-        transition: background-color 0.3s ease;
-    `;
-    
-    // Add keyboard shortcut hint
-    const keyboardHint = document.createElement('span');
-    keyboardHint.textContent = ' [M]';
-    keyboardHint.style.cssText = `
-        opacity: 0.7;
-        font-size: 12px;
-        margin-left: 8px;
-    `;
-    
-    uiContainer.appendChild(labelText);
-    uiContainer.appendChild(statusDisplay);
-    uiContainer.appendChild(keyboardHint);
-    document.body.appendChild(uiContainer);
-    
-    // Auto-hide after 3 seconds, show on hover
-    setTimeout(() => {
-        uiContainer.style.opacity = '0.6';
-    }, 3000);
-    
-    uiContainer.addEventListener('mouseenter', () => {
-        uiContainer.style.opacity = '1';
-    });
-    
-    uiContainer.addEventListener('mouseleave', () => {
-        uiContainer.style.opacity = '0.6';
-    });
-}
+// Helper functions at module level - status display function removed
 
 function crossMovement_startMovementPattern() {
     if (!crossMovement_enabled) return;
@@ -130,21 +54,18 @@ function crossMovement_stopMovementPattern() {
 
 // Register the cross movement addon with the bot framework
 window.gameBotAddonManager.registerFeature('crossMovementAddon', {
-    label: 'Двиг Крестом',
+    label: 'Двиг Крестом(M)',
     initialActive: false,
     
     // Initialize the addon
     initialize: function() {
-        // Add visualization for movement state in the main UI
+        // Simple log initialization, removed UI creation
         logActivity("Modified cross movement addon initialized - use 'M' key to toggle");
-        
-        // Create movement indicator UI element
-        crossMovement_createControlInterface();
         
         // Set the initial active state
         crossMovement_enabled = this.active;
         
-        // Initial UI status update
+        // Initial UI status update in framework
         updateStatus('crossMovementAddon', this.active);
     },
     
@@ -152,10 +73,6 @@ window.gameBotAddonManager.registerFeature('crossMovementAddon', {
     cleanup: function() {
         // Clear any ongoing movement pattern
         crossMovement_stopMovementPattern();
-        
-        // Remove movement indicator if it exists
-        const indicator = document.getElementById('cross-movement-indicator');
-        if (indicator) indicator.remove();
         
         logActivity("Modified cross movement addon cleanup complete");
     },
@@ -169,17 +86,6 @@ window.gameBotAddonManager.registerFeature('crossMovementAddon', {
             crossMovement_enabled = this.active;
             updateStatus('crossMovementAddon', this.active);
             
-            // Make the indicator fully visible when toggling
-            const indicator = document.getElementById('cross-movement-indicator');
-            if (indicator) {
-                indicator.style.opacity = '1';
-                // Reset the fade timeout
-                clearTimeout(indicator.fadeTimeout);
-                indicator.fadeTimeout = setTimeout(() => {
-                    indicator.style.opacity = '0.6';
-                }, 3000);
-            }
-            
             // Start or stop movement pattern based on active state
             if (crossMovement_enabled) {
                 crossMovement_startMovementPattern();
@@ -188,9 +94,6 @@ window.gameBotAddonManager.registerFeature('crossMovementAddon', {
                 crossMovement_stopMovementPattern();
                 logActivity("Modified movement mode deactivated");
             }
-            
-            // Update the standalone indicator
-            crossMovement_updateStatusDisplay(crossMovement_enabled);
         }
     },
     
