@@ -1,0 +1,89 @@
+// Spam Key Rotation Addon
+// This addon provides functionality to automatically rotate through keys 1-4
+// Toggles with the B key
+
+(function() {
+    // State variables for the spam feature
+    let spamActive = false;
+    let spamInterval = null;
+    const SPAM_DELAY = 50; // ms between key presses
+    const SPAM_KEYS = [49, 50, 51, 52]; // Key codes for 1, 2, 3, 4
+    
+    // Simulate key press (down and up events in sequence)
+    function simulateKeyPress(keyCode) {
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    }
+    
+    // Start spamming keys 1-4
+    function startSpamming() {
+        let index = 0;
+        spamInterval = setInterval(() => {
+            simulateKeyPress(SPAM_KEYS[index]);
+            index = (index + 1) % SPAM_KEYS.length;
+        }, SPAM_DELAY);
+        logActivity("Spam mode activated - cycling keys 1-4");
+    }
+    
+    // Stop spamming
+    function stopSpamming() {
+        if (spamInterval) {
+            clearInterval(spamInterval);
+            spamInterval = null;
+            logActivity("Spam mode deactivated");
+        }
+    }
+    
+    // Toggle spam mode with B key
+    function handleSpamHotkey(event) {
+        if (event.key.toLowerCase() === 'b') {
+            spamActive = !spamActive;
+            
+            // Update UI
+            updateStatus('spam-feature-status', spamActive);
+            flashButtonStatus('spam-feature-status', spamActive ? '#4CAF50' : '#F44336', 300);
+            
+            // Start or stop the spamming
+            if (spamActive) {
+                startSpamming();
+            } else {
+                stopSpamming();
+            }
+        }
+    }
+    
+    // Helper function to log activity (reuses the base framework function)
+    function logActivity(message) {
+        const logElement = document.getElementById('bot-log');
+        if (logElement) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.textContent = `[${timestamp}] ${message}`;
+            logElement.prepend(logItem);
+            
+            // Limit number of log items
+            if (logElement.children.length > 10) {
+                logElement.removeChild(logElement.lastChild);
+            }
+        }
+        console.log(message); // Still log to console as well
+    }
+    
+    // Register feature with the addon manager
+    window.gameBotAddonManager.registerFeature('spam-feature', {
+        label: 'Спам Перками (B)',
+        initialActive: false,
+        
+        // Initialize the feature
+        initialize: function() {
+            document.addEventListener("keydown", handleSpamHotkey);
+            logActivity("Spam Mode addon initialized - Press B to toggle");
+        },
+        
+        // Cleanup function
+        cleanup: function() {
+            document.removeEventListener("keydown", handleSpamHotkey);
+            stopSpamming();
+        }
+    });
+})();
