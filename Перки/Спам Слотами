@@ -12,7 +12,7 @@ function integrateSpamControls() {
     container.style.cssText = `
         position: fixed;
         top: 10px;
-        left: 50%;
+        left: 60%;
         transform: translateX(-50%);
         background: rgba(0, 0, 0, 0.6);
         color: white;
