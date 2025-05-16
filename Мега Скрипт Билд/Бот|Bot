@@ -1,4 +1,4 @@
-// Random Movement with Bombs Addon
+// Random Movement with Bombs Addon - English (WASD) & Russian (ЦФЫВ) Layout Support
 // This addon makes the character move in random directions and place bombs
 
 // Global variables for random movement
@@ -6,16 +6,31 @@ let rm_firstScriptActive = false;
 let rm_moveTimeout = null;
 let rm_currentDirection = null;
 
-// Define key codes
+// Define key codes for both English and Russian layouts
 const rm_ee = {
-    up: { keyCode: 87, key: "w" },
-    left: { keyCode: 65, key: "a" },
-    down: { keyCode: 83, key: "s" },
-    right: { keyCode: 68, key: "d" },
-    upLeft: { keys: [87, 65] },
-    upRight: { keys: [87, 68] },
-    downLeft: { keys: [83, 65] },
-    downRight: { keys: [83, 68] }
+    // English WASD
+    up: { keyCode: 87, key: "w" },            // W
+    left: { keyCode: 65, key: "a" },          // A
+    down: { keyCode: 83, key: "s" },          // S
+    right: { keyCode: 68, key: "d" },         // D
+    
+    // Russian ЦФЫВ (same physical keys on keyboard)
+    upRu: { keyCode: 87, key: "ц" },          // Ц (W key position)
+    leftRu: { keyCode: 65, key: "ф" },        // Ф (A key position)
+    downRu: { keyCode: 83, key: "ы" },        // Ы (S key position)
+    rightRu: { keyCode: 68, key: "в" },       // В (D key position)
+    
+    // Diagonals - English
+    upLeft: { keys: [87, 65] },               // W+A
+    upRight: { keys: [87, 68] },              // W+D
+    downLeft: { keys: [83, 65] },             // S+A
+    downRight: { keys: [83, 68] },            // S+D
+    
+    // Diagonals - Russian (same keyCodes, different key values)
+    upLeftRu: { keys: [87, 65] },             // Ц+Ф
+    upRightRu: { keys: [87, 68] },            // Ц+В
+    downLeftRu: { keys: [83, 65] },           // Ы+Ф
+    downRightRu: { keys: [83, 68] }           // Ы+В
 };
 
 // Create UI for this functionality
@@ -44,7 +59,7 @@ function rm_createUI() {
     `;
     
     const movementLabel = document.createElement('span');
-    movementLabel.textContent = 'Бот с Бомбами (Z)';
+    movementLabel.textContent = 'Бот с Бомбами (Z/Я)';
     
     const movementStatus = document.createElement('span');
     movementStatus.id = 'movement-status';
@@ -72,9 +87,9 @@ function rm_createUI() {
     
     // Log the addition
     if (typeof logActivity === 'function') {
-        logActivity("Random Movement UI added");
+        logActivity("Random Movement UI added (EN/RU support)");
     } else {
-        console.log("Random Movement UI added");
+        console.log("Random Movement UI added (EN/RU support)");
     }
 }
 
@@ -218,12 +233,12 @@ function rm_getRandomPause(min, max) {
     return Math.random() * (max - min) + min;
 }
 
-// Function to place a bomb (press 'K')
+// Function to place a bomb (press 'K' or 'Л')
 function rm_placeBomb() {
     if (!rm_firstScriptActive) return;
     
-    // Press K
-    var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75, key: "k" });
+    // For both English and Russian layouts, K key has the same keyCode
+    var bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75 });
     document.dispatchEvent(bombKeyEvent);
     
     // Update activeKeys if available
@@ -236,7 +251,7 @@ function rm_placeBomb() {
     
     // Release K after short delay
     setTimeout(() => {
-        var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75, key: "k" });
+        var bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75 });
         document.dispatchEvent(bombKeyReleaseEvent);
         
         // Update activeKeys if available
@@ -309,9 +324,41 @@ function rm_moveCharacter() {
     }, 100);
 }
 
-// Toggle random movement with Z key
+// Detect keyboard layout - This is just an approximation, as there's no perfect way to detect layout
+let rm_isRussianLayout = false;
+
+// Function to check if the keyboard layout is Russian
+function rm_checkKeyboardLayout() {
+    // A simple way to check is to create a hidden input, focus it, and check some keyboard events
+    const testInput = document.createElement('input');
+    testInput.style.position = 'absolute';
+    testInput.style.opacity = '0';
+    testInput.style.pointerEvents = 'none';
+    document.body.appendChild(testInput);
+    
+    // Try to detect based on system locale
+    const lang = navigator.language || navigator.userLanguage;
+    if (lang && lang.toLowerCase().startsWith('ru')) {
+        rm_isRussianLayout = true;
+    }
+    
+    // Cleanup
+    document.body.removeChild(testInput);
+    
+    if (typeof logActivity === 'function') {
+        logActivity(`Keyboard layout detected: ${rm_isRussianLayout ? 'Russian' : 'English/Other'}`);
+    } else {
+        console.log(`Keyboard layout detected: ${rm_isRussianLayout ? 'Russian' : 'English/Other'}`);
+    }
+}
+
+// Try to detect keyboard layout on init
+rm_checkKeyboardLayout();
+
+// Toggle random movement with both Z key (English) and Я key (Russian)
 document.addEventListener("keydown", (event) => {
-    if (event.key === "z" || event.key === "Z") {
+    // Z key in English layout or Я key in Russian layout (both same physical key)
+    if (event.key === "z" || event.key === "Z" || event.key === "я" || event.key === "Я") {
         rm_firstScriptActive = !rm_firstScriptActive;
         rm_updateStatus();
         
