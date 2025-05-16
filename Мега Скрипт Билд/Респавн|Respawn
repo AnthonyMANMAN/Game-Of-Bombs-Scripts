@@ -1,8 +1,9 @@
 // Auto Respawn Addon
-// This addon automatically clicks the respawn button and presses R key after respawning
+// This addon automatically clicks the respawn button and can optionally press R key after respawning
 
 // Global variables for the auto respawn functionality
 let ar_secondScriptActive = false; // Auto-respawn disabled by default
+let ar_pressRAfterRespawn = false; // R key press after respawn disabled by default
 let ar_scoreBoardInterval = null;
 let ar_respawnTimer = null;
 
@@ -32,7 +33,8 @@ function ar_createUI() {
     `;
     
     const respawnLabel = document.createElement('span');
-    respawnLabel.textContent = 'Респавн с тыквой (X)';
+    respawnLabel.textContent = 'Респавн с тыквой (X) (T ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
+    respawnLabel.id = 'respawn-label';
     
     const respawnStatus = document.createElement('span');
     respawnStatus.id = 'respawn-status';
@@ -71,6 +73,12 @@ function ar_updateStatus() {
     if (respawnStatus) {
         respawnStatus.textContent = ar_secondScriptActive ? 'ON' : 'OFF';
         respawnStatus.style.color = ar_secondScriptActive ? '#4CAF50' : '#F44336';
+    }
+    
+    // Update the label to show R key press status
+    const respawnLabel = document.getElementById('respawn-label');
+    if (respawnLabel) {
+        respawnLabel.textContent = 'Респавн с тыквой (X) (T ' + (ar_pressRAfterRespawn ? 'Y' : 'N') + ')';
     }
 }
 
@@ -164,22 +172,24 @@ function ar_startAutoRespawn() {
             // Make sure all keys are released first
             ar_releaseAllKeys();
             
-            // Set timer to press R after respawn
-            ar_respawnTimer = setTimeout(() => {
-                if (typeof logActivity === 'function') {
-                    logActivity("Нажата клавиша R");
-                } else {
-                    console.log("Нажата клавиша R");
-                }
-                
-                // Simulate R keypress
-                ar_simulateKeyDown(82); // R key
-                
-                // Release R key after a short delay
-                setTimeout(() => {
-                    ar_simulateKeyUp(82);
-                }, 50);
-            }, 1000); // 1 second after respawn
+            // Set timer to press R after respawn if enabled
+            if (ar_pressRAfterRespawn) {
+                ar_respawnTimer = setTimeout(() => {
+                    if (typeof logActivity === 'function') {
+                        logActivity("Нажата клавиша R");
+                    } else {
+                        console.log("Нажата клавиша R");
+                    }
+                    
+                    // Simulate R keypress
+                    ar_simulateKeyDown(82); // R key
+                    
+                    // Release R key after a short delay
+                    setTimeout(() => {
+                        ar_simulateKeyUp(82);
+                    }, 50);
+                }, 1000); // 1 second after respawn
+            }
         }
     }, 100);
 }
@@ -197,7 +207,7 @@ function ar_stopAutoRespawn() {
     }
 }
 
-// Toggle auto respawn with X key
+// Key event listeners
 document.addEventListener("keydown", (event) => {
     // Toggle auto respawn with X key
     if (event.key === "x" || event.key === "X") {
@@ -214,6 +224,18 @@ document.addEventListener("keydown", (event) => {
             ar_startAutoRespawn();
         } else {
             ar_stopAutoRespawn();
+        }
+    }
+    
+    // Toggle R key press after respawn with T key
+    if (event.key === "t" || event.key === "T") {
+        ar_pressRAfterRespawn = !ar_pressRAfterRespawn;
+        ar_updateStatus();
+        
+        if (typeof logActivity === 'function') {
+            logActivity(`R key press after respawn ${ar_pressRAfterRespawn ? 'enabled' : 'disabled'}`);
+        } else {
+            console.log(`R key press after respawn ${ar_pressRAfterRespawn ? 'enabled' : 'disabled'}`);
         }
     }
 });
