@@ -1,19 +1,18 @@
-// Spam Key Rotation Addon
-// This addon automatically cycles keys 1-4 repeatedly when toggled on by pressing B
-
+// Spam Key Rotation Addon with Russian Keyboard Support
+// This addon automatically cycles keys 1-4 repeatedly when toggled on by pressing И (Cyrillic 'B')
 (function() {
     // State variables for the spam feature
     let spamActive = false;
     let spamInterval = null;
     const SPAM_DELAY = 50; // ms between key presses
     const SPAM_KEYS = [49, 50, 51, 52]; // Key codes for 1, 2, 3, 4
-
+    
     // Simulate key press (keydown + keyup)
     function simulateKeyPress(keyCode) {
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
     }
-
+    
     // Start spamming keys 1-4
     function startSpamming() {
         if (spamInterval) return; // Don't start if already running
@@ -23,33 +22,33 @@
             simulateKeyPress(SPAM_KEYS[index]);
             index = (index + 1) % SPAM_KEYS.length;
         }, SPAM_DELAY);
-        logActivity("Spam mode activated - cycling keys 1-4");
+        logActivity("Спам режим активирован - цикл клавиш 1-4");
     }
-
+    
     // Stop spamming keys
     function stopSpamming() {
         if (spamInterval) {
             clearInterval(spamInterval);
             spamInterval = null;
-            logActivity("Spam mode deactivated");
+            logActivity("Спам режим деактивирован");
         }
     }
-
+    
     // Initialize function for the addon
     function initialize() {
-        logActivity("Spam Key Rotation initialized");
+        logActivity("Спам Перками инициализирован");
         // Start in deactivated state
         updateStatus('spam-status', spamActive);
     }
-
+    
     // Cleanup function
     function cleanup() {
         stopSpamming();
         spamActive = false;
         updateStatus('spam-status', false);
-        logActivity("Spam Key Rotation cleaned up");
+        logActivity("Спам Перками отключен");
     }
-
+    
     // Toggle spam mode
     function toggleSpamMode() {
         spamActive = !spamActive;
@@ -62,17 +61,18 @@
             stopSpamming();
         }
     }
-
-    // Handle keydown events
+    
+    // Handle keydown events - support both Latin 'B' and Cyrillic 'И' (which is on the same key as 'B')
     function onKeyDown(event) {
-        if (event.key.toLowerCase() === 'b') {
+        // Check for both Latin 'b' and Cyrillic 'и' (Russian B key)
+        if (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') {
             toggleSpamMode();
         }
     }
-
+    
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('spam-status', {
-        label: 'Спам Перками (B)',
+        label: 'Спам Перками (И)',
         initialActive: spamActive,
         initialize: initialize,
         cleanup: cleanup,
