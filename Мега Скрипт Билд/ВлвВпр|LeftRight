@@ -1,5 +1,6 @@
 // Auto-Respawn Addon for Game Bot Framework
 // This addon adds auto-respawn functionality to the base bot framework
+// Now supporting both English and Russian keyboard layouts
 
 // Create module-level variables outside the addon object to solve 'this' context issues
 let autoRespawn_active = false;
@@ -90,13 +91,13 @@ function autoRespawn_stopChecking() {
 
 // Register the auto-respawn addon with the bot framework
 window.gameBotAddonManager.registerFeature('autoRespawnAddon', {
-    label: 'Движение(V)',
+    label: 'Движение(V/М)',
     initialActive: false, // Start inactive by default
     
     // Initialize the addon
     initialize: function() {
         // Add visualization for auto-respawn state in the main UI
-        logActivity("Auto-respawn addon initialized - use 'R' key to toggle");
+        logActivity("Auto-respawn addon initialized - use 'V' (English) or 'М' (Russian) key to toggle");
         
         // Set the initial active state
         autoRespawn_active = this.active;
@@ -121,8 +122,8 @@ window.gameBotAddonManager.registerFeature('autoRespawnAddon', {
     // Handle keydown events
     onKeyDown: function(event) {
         const key = event.key.toLowerCase();
-        // Toggle auto-respawn mode with R key
-        if (key === 'v') {
+        // Toggle auto-respawn mode with V key (English) or м key (Russian)
+        if (key === 'v' || key === 'м') {
             this.active = !this.active;
             autoRespawn_active = this.active;
             updateStatus('autoRespawnAddon', this.active);
@@ -145,4 +146,4 @@ window.gameBotAddonManager.registerFeature('autoRespawnAddon', {
 });
 
 // Log that the addon was loaded
-logActivity("Auto-respawn addon loaded - Press 'R' to toggle auto-respawn mode");
+logActivity("Auto-respawn addon loaded - Press 'V' (English) or 'М' (Russian) to toggle auto-respawn mode");
