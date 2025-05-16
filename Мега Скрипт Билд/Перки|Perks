@@ -16,6 +16,8 @@
 
     // Start spamming keys 1-4
     function startSpamming() {
+        if (spamInterval) return; // Don't start if already running
+        
         let index = 0;
         spamInterval = setInterval(() => {
             simulateKeyPress(SPAM_KEYS[index]);
@@ -33,120 +35,47 @@
         }
     }
 
-    // Create UI elements for spam feature
-    function createSpamUI() {
-        const botUiContainer = document.getElementById('bot-ui-container');
-        if (!botUiContainer) {
-            console.log("Main bot UI not found. Spam UI will retry in 1 second.");
-            setTimeout(createSpamUI, 1000);
-            return;
-        }
-
-        // Remove existing spam controls if any (avoid duplicates)
-        const existingControl = document.getElementById('spam-status');
-        if (existingControl && existingControl.parentElement) {
-            existingControl.parentElement.remove();
-        }
-
-        // Container for the spam status
-        const spamContainer = document.createElement('div');
-        spamContainer.style.cssText = `
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            align-items: center;
-        `;
-
-        // Label for the toggle info
-        const spamLabel = document.createElement('span');
-        spamLabel.textContent = 'Спам Перками (B)';
-
-        // Status indicator with color and background
-        const spamStatus = document.createElement('span');
-        spamStatus.id = 'spam-status';
-        spamStatus.textContent = spamActive ? 'ON' : 'OFF';
-        spamStatus.style.cssText = `
-            font-weight: bold;
-            color: ${spamActive ? '#4CAF50' : '#F44336'};
-            background-color: rgba(0, 0, 0, 0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-        `;
-
-        spamContainer.appendChild(spamLabel);
-        spamContainer.appendChild(spamStatus);
-
-        // Insert after the first control or append if none
-        const firstControl = botUiContainer.querySelector('div > div:not(:first-child)');
-        if (firstControl) {
-            firstControl.insertAdjacentElement('afterend', spamContainer);
-        } else {
-            botUiContainer.appendChild(spamContainer);
-        }
-
-        if (typeof logActivity === 'function') {
-            logActivity("Spam Key Rotation UI added");
-        } else {
-            console.log("Spam Key Rotation UI added");
-        }
-    }
-
-    // Update UI status text and colors
-    function updateSpamStatus() {
-        const statusEl = document.getElementById('spam-status');
-        if (!statusEl) return;
-        statusEl.textContent = spamActive ? 'ON' : 'OFF';
-        statusEl.style.color = spamActive ? '#4CAF50' : '#F44336';
-    }
-
-    // Toggle spam mode on B key press
-    function handleSpamToggle(event) {
-        if (event.key.toLowerCase() === 'b') {
-            spamActive = !spamActive;
-            updateSpamStatus();
-
-            if (typeof logActivity === 'function') {
-                logActivity(`Spam Key Rotation ${spamActive ? 'enabled' : 'disabled'}`);
-            } else {
-                console.log(`Spam Key Rotation ${spamActive ? 'enabled' : 'disabled'}`);
-            }
-
-            if (spamActive) {
-                startSpamming();
-            } else {
-                stopSpamming();
-            }
-        }
-    }
-
-    // Initialize UI and event listener
+    // Initialize function for the addon
     function initialize() {
-        createSpamUI();
-        updateSpamStatus();
-        document.addEventListener("keydown", handleSpamToggle);
+        logActivity("Spam Key Rotation initialized");
+        // Start in deactivated state
+        updateStatus('spam-status', spamActive);
     }
 
-    // Cleanup function (optional)
+    // Cleanup function
     function cleanup() {
-        document.removeEventListener("keydown", handleSpamToggle);
         stopSpamming();
-        updateSpamStatus();
+        spamActive = false;
+        updateStatus('spam-status', false);
+        logActivity("Spam Key Rotation cleaned up");
     }
 
-    // If your bot uses a registerFeature pattern, register here
-    if (window.gameBotAddonManager && typeof window.gameBotAddonManager.registerFeature === 'function') {
-        window.gameBotAddonManager.registerFeature('spam-feature', {
-            label: 'Спам Перками (B)',
-            initialActive: false,
-            initialize: initialize,
-            cleanup: cleanup
-        });
-    } else {
-        // Otherwise just initialize right away
-        initialize();
+    // Toggle spam mode
+    function toggleSpamMode() {
+        spamActive = !spamActive;
+        updateStatus('spam-status', spamActive);
+        // Removed flashButtonStatus to avoid yellow flash
+        
+        if (spamActive) {
+            startSpamming();
+        } else {
+            stopSpamming();
+        }
     }
 
-    // Optional: cleanup on page unload
-    window.addEventListener('beforeunload', cleanup);
+    // Handle keydown events
+    function onKeyDown(event) {
+        if (event.key.toLowerCase() === 'b') {
+            toggleSpamMode();
+        }
+    }
 
+    // Register the feature with the addon manager
+    window.gameBotAddonManager.registerFeature('spam-status', {
+        label: 'Спам Перками (B)',
+        initialActive: spamActive,
+        initialize: initialize,
+        cleanup: cleanup,
+        onKeyDown: onKeyDown
+    });
 })();
