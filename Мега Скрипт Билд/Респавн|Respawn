@@ -78,7 +78,7 @@ function ar_updateStatus() {
     // Update the label to show R key press status
     const respawnLabel = document.getElementById('respawn-label');
     if (respawnLabel) {
-        respawnLabel.textContent = 'Респавн с тыквой (X) (T ' + (ar_pressRAfterRespawn ? 'Y' : 'N') + ')';
+        respawnLabel.textContent = 'Респавн с тыквой (X) (T ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
     }
 }
 
