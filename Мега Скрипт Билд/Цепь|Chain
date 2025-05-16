@@ -1,6 +1,7 @@
 /**
  * Auto Chain Addon - Rapidly places bombs when activated
  * This addon properly integrates with the Game Bot Framework using the addon manager
+ * Modified to support both English and Russian keyboard layouts
  */
 
 // Create module-level variables outside the addon object to solve 'this' context issues
@@ -33,7 +34,7 @@ function autoChain_createUI() {
     `;
     
     const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (C)';
+    autoChainLabel.textContent = 'Цепь (C/С)'; // Added Cyrillic 'С' option
     
     const autoChainStatus = document.createElement('span');
     autoChainStatus.id = 'auto-chain-status';
@@ -129,8 +130,6 @@ function autoChain_startSpamming() {
                 }
             }
             
-            // Removed yellow background flash for visual feedback
-            
             // Release K key immediately for rapid spam
             setTimeout(() => {
                 document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: 75, key: "k" }));
@@ -161,9 +160,11 @@ function autoChain_stopSpamming() {
     }
 }
 
-// Toggle Auto Chain with C key
+// Toggle Auto Chain with both English 'C' and Russian 'С' keys
 document.addEventListener("keydown", (event) => {
-    if (event.key === "c" || event.key === "C") {
+    // Check for both English 'c' and Russian 'с' (Cyrillic)
+    // The Russian 'с' has Unicode: U+0441
+    if (event.key === "c" || event.key === "C" || event.key === "с" || event.key === "С") {
         autoChain_active = !autoChain_active;
         autoChain_updateStatus();
         
@@ -223,4 +224,4 @@ if (typeof window.fixGameBot !== 'undefined') {
 }
 
 // Log that the script has loaded
-console.log('[Auto Chain Addon] Loaded successfully!');
+console.log('[Auto Chain Addon] Loaded successfully with Russian keyboard support!');
