@@ -1,5 +1,6 @@
 // Auto Respawn Addon
 // This addon automatically clicks the respawn button and can optionally press R key after respawning
+// Supports both Latin and Cyrillic keyboard layouts
 
 // Global variables for the auto respawn functionality
 let ar_secondScriptActive = false; // Auto-respawn disabled by default
@@ -33,7 +34,7 @@ function ar_createUI() {
     `;
     
     const respawnLabel = document.createElement('span');
-    respawnLabel.textContent = 'Респавн с тыквой (X) (T ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
+    respawnLabel.textContent = 'Респавн с тыквой (Ч/X) (Е/T ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
     respawnLabel.id = 'respawn-label';
     
     const respawnStatus = document.createElement('span');
@@ -78,7 +79,7 @@ function ar_updateStatus() {
     // Update the label to show R key press status
     const respawnLabel = document.getElementById('respawn-label');
     if (respawnLabel) {
-        respawnLabel.textContent = 'Респавн с тыквой (X) (T ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
+        respawnLabel.textContent = 'Респавн с тыквой (Ч/X) Tыкв(Е) ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
     }
 }
 
@@ -209,8 +210,8 @@ function ar_stopAutoRespawn() {
 
 // Key event listeners
 document.addEventListener("keydown", (event) => {
-    // Toggle auto respawn with X key
-    if (event.key === "x" || event.key === "X") {
+    // Toggle auto respawn with X key (Latin 'x' or Cyrillic 'ч')
+    if (event.key === "x" || event.key === "X" || event.key === "ч" || event.key === "Ч") {
         ar_secondScriptActive = !ar_secondScriptActive;
         ar_updateStatus();
         
@@ -227,8 +228,8 @@ document.addEventListener("keydown", (event) => {
         }
     }
     
-    // Toggle R key press after respawn with T key
-    if (event.key === "t" || event.key === "T") {
+    // Toggle R key press after respawn with T key (Latin 't' or Cyrillic 'е')
+    if (event.key === "t" || event.key === "T" || event.key === "е" || event.key === "Е") {
         ar_pressRAfterRespawn = !ar_pressRAfterRespawn;
         ar_updateStatus();
         
