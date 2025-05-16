@@ -1,0 +1,314 @@
+/**
+ * Combined Addons for Game Bot Framework
+ * This script combines Auto Chain, Rotation, and Spam Key Rotation functionality
+ * into a single addon that properly integrates with the Game Bot Framework
+ */
+
+// ========== AUTO CHAIN ADDON SECTION ==========
+// Module-level variables for Auto Chain feature
+let autoChain_active = false;
+let autoChain_interval = null;
+
+// ========== ROTATION ADDON SECTION ==========
+// Module-level variables for Rotation feature
+let rotationAddon_inProgress = false;
+let rotationAddon_interval = null;
+let rotationAddon_active = false;
+
+// ========== SPAM KEY ROTATION ADDON SECTION ==========
+// Module-level variables for Spam Key Rotation feature
+let spamActive = false;
+let spamInterval = null;
+const SPAM_DELAY = 50; // ms between key presses
+const SPAM_KEYS = [49, 50, 51, 52]; // Key codes for 1, 2, 3, 4
+
+// ========== COMBINED ADDONS INITIALIZATION ==========
+(function initializeCombinedAddons() {
+    // Make sure the base framework is loaded first
+    if (!window.gameBotAddonManager) {
+        console.log("Game Bot Framework not found. Retrying in 1 second...");
+        setTimeout(initializeCombinedAddons, 1000);
+        return;
+    }
+
+    // ===== AUTO CHAIN FEATURE =====
+    // Register Auto Chain feature with the addon manager
+    window.gameBotAddonManager.registerFeature('auto-chain-status', {
+        label: 'Цепь (C)',
+        initialActive: autoChain_active,
+        
+        // Initialize the Auto Chain feature
+        initialize: function() {
+            autoChain_active = this.active;
+            if (autoChain_active) {
+                autoChain_startSpamming();
+            }
+            logActivity("Auto Chain addon initialized - use 'C' key to toggle");
+        },
+        
+        // Cleanup when the Auto Chain is disabled
+        cleanup: function() {
+            autoChain_stopSpamming();
+            logActivity("Auto Chain addon cleanup complete");
+        },
+        
+        // Handle keydown events for Auto Chain
+        onKeyDown: function(event) {
+            if (event.key === "c" || event.key === "C") {
+                autoChain_active = !autoChain_active;
+                this.active = autoChain_active;
+                updateStatus('auto-chain-status', autoChain_active);
+                
+                if (autoChain_active) {
+                    logActivity("Auto Chain enabled");
+                    autoChain_startSpamming();
+                } else {
+                    logActivity("Auto Chain disabled");
+                    autoChain_stopSpamming();
+                }
+            }
+        },
+        
+        // Required by framework but not used for this feature
+        onKeyUp: function(event) {
+            // No special handling needed for keyup events
+        }
+    });
+
+    // ===== ROTATION FEATURE =====
+    // Register Rotation addon with the addon manager
+    window.gameBotAddonManager.registerFeature('rotationAddon', {
+        label: 'Режим Вращения (N)',
+        initialActive: rotationAddon_active,
+        
+        // Initialize the Rotation addon
+        initialize: function() {
+            rotationAddon_active = this.active;
+            if (rotationAddon_active) {
+                rotationAddon_performRotation();
+            }
+            logActivity("Rotation addon initialized - use 'N' key to toggle");
+        },
+        
+        // Cleanup when the Rotation addon is disabled
+        cleanup: function() {
+            rotationAddon_stopRotation();
+            logActivity("Rotation addon cleanup complete");
+        },
+        
+        // Handle keydown events for Rotation
+        onKeyDown: function(event) {
+            const key = event.key.toLowerCase();
+            // Toggle rotation mode with N key
+            if (key === 'n') {
+                rotationAddon_active = !rotationAddon_active;
+                this.active = rotationAddon_active;
+                updateStatus('rotationAddon', rotationAddon_active);
+                
+                // Start or stop rotation based on active state
+                if (rotationAddon_active) {
+                    rotationAddon_performRotation();
+                    logActivity("Rotation mode activated - continuous rotation until toggled off");
+                } else {
+                    rotationAddon_stopRotation();
+                    logActivity("Rotation mode deactivated");
+                }
+            }
+        },
+        
+        // Required by framework but not used for this feature
+        onKeyUp: function(event) {
+            // No special handling needed for keyup events
+        }
+    });
+
+    // ===== SPAM KEY ROTATION FEATURE =====
+    // Register Spam Key Rotation feature with the addon manager
+    window.gameBotAddonManager.registerFeature('spam-status', {
+        label: 'Спам Перками (B)',
+        initialActive: spamActive,
+        
+        // Initialize the Spam Key Rotation feature
+        initialize: function() {
+            spamActive = this.active;
+            if (spamActive) {
+                startSpamming();
+            }
+            logActivity("Spam Key Rotation initialized - use 'B' key to toggle");
+        },
+        
+        // Cleanup when the Spam Key Rotation is disabled
+        cleanup: function() {
+            stopSpamming();
+            spamActive = false;
+            logActivity("Spam Key Rotation cleaned up");
+        },
+        
+        // Handle keydown events for Spam Key Rotation
+        onKeyDown: function(event) {
+            if (event.key.toLowerCase() === 'b') {
+                spamActive = !spamActive;
+                this.active = spamActive;
+                updateStatus('spam-status', spamActive);
+                
+                if (spamActive) {
+                    startSpamming();
+                } else {
+                    stopSpamming();
+                }
+            }
+        },
+        
+        // Required by framework but not used for this feature
+        onKeyUp: function(event) {
+            // No special handling needed for keyup events
+        }
+    });
+
+    // Log that all addons have been loaded
+    logActivity("Combined addons loaded successfully");
+})();
+
+// ========== AUTO CHAIN FUNCTIONS ==========
+// Function to start the auto chain bomb spam
+function autoChain_startSpamming() {
+    // Stop any existing interval first
+    autoChain_stopSpamming();
+    
+    // Start new interval
+    autoChain_interval = setInterval(() => {
+        if (autoChain_active) {
+            // Simulate K keypress (place bomb) as fast as possible
+            document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: 75, key: "k" }));
+            
+            // Update activeKeys if available
+            if (typeof window.activeKeys !== 'undefined') {
+                window.activeKeys.add(75);
+                if (typeof window.updateActiveKeysDisplay === 'function') {
+                    window.updateActiveKeysDisplay();
+                }
+            }
+            
+            // Release K key immediately for rapid spam
+            setTimeout(() => {
+                document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: 75, key: "k" }));
+                
+                // Update activeKeys if available
+                if (typeof window.activeKeys !== 'undefined') {
+                    window.activeKeys.delete(75);
+                    if (typeof window.updateActiveKeysDisplay === 'function') {
+                        window.updateActiveKeysDisplay();
+                    }
+                }
+            }, 10);
+        }
+    }, 20); // 20ms interval for very fast bomb spam
+}
+
+// Function to stop the auto chain bomb spam
+function autoChain_stopSpamming() {
+    if (autoChain_interval) {
+        clearInterval(autoChain_interval);
+        autoChain_interval = null;
+    }
+}
+
+// ========== ROTATION FUNCTIONS ==========
+// Function to perform rotation movement pattern
+function rotationAddon_performRotation() {
+    if (!rotationAddon_active) return;
+    
+    // Only start if not already in progress
+    if (rotationAddon_inProgress) return;
+    
+    rotationAddon_inProgress = true;
+    
+    let currentStep = 0;
+    // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
+    const sequenceKeys = [38, 37, 40, 39, 40, 37];
+    
+    rotationAddon_interval = setInterval(() => {
+        // Use the framework's key simulation functions
+        simulateKeyDown(sequenceKeys[currentStep]);
+        
+        setTimeout(() => {
+            simulateKeyUp(sequenceKeys[currentStep]);
+            currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
+        }, 5);
+    }, 100);
+}
+
+// Function to stop rotation
+function rotationAddon_stopRotation() {
+    if (rotationAddon_interval) {
+        clearInterval(rotationAddon_interval);
+        rotationAddon_interval = null;
+    }
+    
+    rotationAddon_inProgress = false;
+    
+    // Release all arrow keys if they're being held
+    [37, 38, 39, 40].forEach(keyCode => {
+        simulateKeyUp(keyCode);
+    });
+}
+
+// ========== SPAM KEY ROTATION FUNCTIONS ==========
+// Simulate key press (keydown + keyup)
+function simulateKeyPress(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+}
+
+// Start spamming keys 1-4
+function startSpamming() {
+    if (spamInterval) return; // Don't start if already running
+    
+    let index = 0;
+    spamInterval = setInterval(() => {
+        simulateKeyPress(SPAM_KEYS[index]);
+        index = (index + 1) % SPAM_KEYS.length;
+    }, SPAM_DELAY);
+    logActivity("Spam mode activated - cycling keys 1-4");
+}
+
+// Stop spamming keys
+function stopSpamming() {
+    if (spamInterval) {
+        clearInterval(spamInterval);
+        spamInterval = null;
+        logActivity("Spam mode deactivated");
+    }
+}
+
+// ========== EXTENDED FIX FUNCTION ==========
+// Extend the fixGameBot function to restore all addons
+(function() {
+    // Store the original fixGameBot function if it exists
+    const originalFixGameBot = window.fixGameBot || function() {
+        return "Game bot fixed.";
+    };
+    
+    // Override with our extended version
+    window.fixGameBot = function() {
+        // Call the original function
+        const result = originalFixGameBot();
+        
+        // Restore all addons
+        for (const id in window.gameBotAddonManager.features) {
+            const feature = window.gameBotAddonManager.features[id];
+            try {
+                // Re-initialize the feature
+                feature.initialize();
+            } catch (e) {
+                console.error(`Error reinitializing ${id}:`, e);
+            }
+        }
+        
+        logActivity("All addons restored successfully");
+        return result + " All addons restored.";
+    };
+})();
+
+// Log that the script has loaded
+console.log('[Combined Addons] Loaded successfully!');
