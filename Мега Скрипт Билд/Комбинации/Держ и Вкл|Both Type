@@ -47,7 +47,7 @@ const keyboardMappings = {
     
     // Configurable Key Spam toggle
     'b': ['b', 'B', 'и', 'И'], // B/И
-};
+
     
     // For arrow keys we don't need mappings as they're the same on any layout
 };
