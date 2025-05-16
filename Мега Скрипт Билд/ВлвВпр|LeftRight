@@ -1,0 +1,148 @@
+// Auto-Respawn Addon for Game Bot Framework
+// This addon adds auto-respawn functionality to the base bot framework
+
+// Create module-level variables outside the addon object to solve 'this' context issues
+let autoRespawn_active = false;
+let autoRespawn_checkInterval = null;
+let autoRespawn_respawnTimer = null;
+let autoRespawn_movementTimer = null;
+
+// Function to check for respawn button and handle respawning
+function autoRespawn_checkForRespawn() {
+    const scoreboard = document.getElementById("scoreboard-new");
+    
+    // Skip if scoreboard is not visible
+    if (scoreboard && scoreboard.offsetParent === null) {
+        return;
+    }
+    
+    // Find respawn button if it exists
+    const respawnButton = [...document.getElementsByTagName("button")]
+        .filter(b => b.innerText.indexOf("Respawn [Space]") === 0)[0];
+    
+    if (respawnButton) {
+        // Clear any existing timers
+        if (autoRespawn_respawnTimer) clearTimeout(autoRespawn_respawnTimer);
+        if (autoRespawn_movementTimer) clearTimeout(autoRespawn_movementTimer);
+        
+        // Click the respawn button
+        respawnButton.click();
+        logActivity("Auto-respawn clicked respawn button");
+        
+        // Set timer for movement sequence
+        autoRespawn_respawnTimer = setTimeout(() => {
+            logActivity("Executing post-respawn movement sequence");
+            
+            // Simulate left keypress
+            simulateKeyDown(37); // Left arrow
+            
+            // Release left key after 50ms
+            setTimeout(() => {
+                simulateKeyUp(37); // Left arrow
+                
+                // Simulate right keypress after left completes
+                setTimeout(() => {
+                    simulateKeyDown(39); // Right arrow
+                    
+                    // Release right key after 50ms
+                    setTimeout(() => {
+                        simulateKeyUp(39); // Right arrow
+                    }, 50);
+                }, 50);
+            }, 50);
+        }, 3000); // 3 seconds after respawn
+    }
+}
+
+// Function to start the auto-respawn check interval
+function autoRespawn_startChecking() {
+    // Stop any existing interval first
+    autoRespawn_stopChecking();
+    
+    // Start new interval
+    autoRespawn_checkInterval = setInterval(() => {
+        if (autoRespawn_active) {
+            autoRespawn_checkForRespawn();
+        }
+    }, 100);
+    
+    logActivity("Auto-respawn checker started");
+}
+
+// Function to stop the auto-respawn check interval
+function autoRespawn_stopChecking() {
+    if (autoRespawn_checkInterval) {
+        clearInterval(autoRespawn_checkInterval);
+        autoRespawn_checkInterval = null;
+    }
+    
+    // Clear any pending timers
+    if (autoRespawn_respawnTimer) {
+        clearTimeout(autoRespawn_respawnTimer);
+        autoRespawn_respawnTimer = null;
+    }
+    
+    if (autoRespawn_movementTimer) {
+        clearTimeout(autoRespawn_movementTimer);
+        autoRespawn_movementTimer = null;
+    }
+}
+
+// Register the auto-respawn addon with the bot framework
+window.gameBotAddonManager.registerFeature('autoRespawnAddon', {
+    label: 'Движение(V)',
+    initialActive: false, // Start inactive by default
+    
+    // Initialize the addon
+    initialize: function() {
+        // Add visualization for auto-respawn state in the main UI
+        logActivity("Auto-respawn addon initialized - use 'R' key to toggle");
+        
+        // Set the initial active state
+        autoRespawn_active = this.active;
+        
+        // Start checking for respawn if initially active
+        if (autoRespawn_active) {
+            autoRespawn_startChecking();
+        }
+        
+        // Initial UI status update
+        updateStatus('autoRespawnAddon', this.active);
+    },
+    
+    // Cleanup when the addon is disabled
+    cleanup: function() {
+        // Stop any ongoing checks
+        autoRespawn_stopChecking();
+        
+        logActivity("Auto-respawn addon cleanup complete");
+    },
+    
+    // Handle keydown events
+    onKeyDown: function(event) {
+        const key = event.key.toLowerCase();
+        // Toggle auto-respawn mode with R key
+        if (key === 'v') {
+            this.active = !this.active;
+            autoRespawn_active = this.active;
+            updateStatus('autoRespawnAddon', this.active);
+            
+            // Start or stop auto-respawn based on active state
+            if (autoRespawn_active) {
+                autoRespawn_startChecking();
+                logActivity("Auto-respawn activated");
+            } else {
+                autoRespawn_stopChecking();
+                logActivity("Auto-respawn deactivated");
+            }
+        }
+    },
+    
+    // Placeholder for onKeyUp - not used in this addon but required by framework
+    onKeyUp: function(event) {
+        // No special handling needed for keyup events
+    }
+});
+
+// Log that the addon was loaded
+logActivity("Auto-respawn addon loaded - Press 'R' to toggle auto-respawn mode");
