@@ -75,94 +75,6 @@ function createVisualUI() {
     `;
     uiContainer.appendChild(header);
 
-    // Create direction indicator
-    const directionContainer = document.createElement('div');
-    directionContainer.id = 'direction-container';
-    directionContainer.style.cssText = `
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #555;
-    `;
-
-    const directionLabel = document.createElement('div');
-    directionLabel.textContent = 'Current Direction:';
-    directionLabel.style.marginBottom = '5px';
-    directionContainer.appendChild(directionLabel);
-
-    const directionIndicator = document.createElement('div');
-    directionIndicator.id = 'direction-indicator';
-    directionIndicator.style.cssText = `
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        grid-template-rows: repeat(3, 1fr);
-        width: 90px;
-        height: 90px;
-        margin: 0 auto;
-    `;
-
-    // Create 3x3 grid for direction indicator
-    for (let i = 0; i < 9; i++) {
-        const cell = document.createElement('div');
-        cell.style.cssText = `
-            width: 30px;
-            height: 30px;
-            box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.2s ease;
-        `;
-        
-        // Center cell is different
-        if (i === 4) {
-            cell.style.backgroundColor = '#444';
-            cell.textContent = '⚪';
-        } else {
-            cell.style.border = '1px solid #333';
-        }
-        
-        // Assign IDs to the cells that represent directions
-        if (i === 0) cell.id = 'dir-up-left';
-        if (i === 1) cell.id = 'dir-up';
-        if (i === 2) cell.id = 'dir-up-right';
-        if (i === 3) cell.id = 'dir-left';
-        if (i === 5) cell.id = 'dir-right';
-        if (i === 6) cell.id = 'dir-down-left';
-        if (i === 7) cell.id = 'dir-down';
-        if (i === 8) cell.id = 'dir-down-right';
-        
-        directionIndicator.appendChild(cell);
-    }
-    
-    directionContainer.appendChild(directionIndicator);
-    uiContainer.appendChild(directionContainer);
-
-    // Add active keys display (to help debug stuck keys)
-    const keysContainer = document.createElement('div');
-    keysContainer.style.cssText = `
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #555;
-    `;
-
-    const keysLabel = document.createElement('div');
-    keysLabel.textContent = 'Active Keys:';
-    keysLabel.style.marginBottom = '5px';
-    keysContainer.appendChild(keysLabel);
-
-    const keysDisplay = document.createElement('div');
-    keysDisplay.id = 'active-keys-display';
-    keysDisplay.style.cssText = `
-        font-size: 12px;
-        font-family: monospace;
-        padding: 4px;
-        background-color: rgba(0, 0, 0, 0.3);
-        border-radius: 4px;
-        min-height: 20px;
-    `;
-    keysContainer.appendChild(keysDisplay);
-    uiContainer.appendChild(keysContainer);
-
     // Add activity log
     const logContainer = document.createElement('div');
     logContainer.style.cssText = `
@@ -228,8 +140,6 @@ function createVisualUI() {
 
     // Store references to content elements for minimize/maximize
     const contentElements = [
-        document.getElementById('direction-container'),
-        keysContainer,
         logContainer,
         emergencyButton
     ];
@@ -256,20 +166,6 @@ function updateStatus(id, active, text = null) {
     if (element) {
         element.textContent = text || (active ? 'ON' : 'OFF');
         element.style.color = active ? '#4CAF50' : '#F44336';
-    }
-}
-
-// Update active keys display
-function updateActiveKeysDisplay() {
-    const keysDisplay = document.getElementById('active-keys-display');
-    if (keysDisplay) {
-        if (activeKeys.size === 0) {
-            keysDisplay.textContent = 'None';
-            keysDisplay.style.color = '#CCC';
-        } else {
-            keysDisplay.textContent = Array.from(activeKeys).map(key => KEY_MAP[key] || key).join(', ');
-            keysDisplay.style.color = '#FFD700'; // Gold color when keys are active
-        }
     }
 }
 
@@ -307,48 +203,12 @@ function logActivity(message) {
     console.log(message); // Still log to console as well
 }
 
-// Update direction indicator
-function updateDirectionIndicator(direction) {
-    // Reset all direction cells
-    ['dir-up', 'dir-down', 'dir-left', 'dir-right', 
-     'dir-up-left', 'dir-up-right', 'dir-down-left', 'dir-down-right'].forEach(id => {
-        const cell = document.getElementById(id);
-        if (cell) {
-            cell.style.backgroundColor = '';
-            cell.textContent = '';
-        }
-    });
-    
-    // Set active direction
-    if (direction) {
-        let dirId = null;
-        
-        if (direction === ee.up) dirId = 'dir-up';
-        else if (direction === ee.down) dirId = 'dir-down';
-        else if (direction === ee.left) dirId = 'dir-left';
-        else if (direction === ee.right) dirId = 'dir-right';
-        else if (direction === ee.upLeft) dirId = 'dir-up-left';
-        else if (direction === ee.upRight) dirId = 'dir-up-right';
-        else if (direction === ee.downLeft) dirId = 'dir-down-left';
-        else if (direction === ee.downRight) dirId = 'dir-down-right';
-        
-        if (dirId) {
-            const cell = document.getElementById(dirId);
-            if (cell) {
-                cell.style.backgroundColor = '#4CAF50';
-                cell.textContent = '🔥';
-            }
-        }
-    }
-}
-
 // Enhanced key simulation functions that track key state
 function simulateKeyDown(direction) {
     if (typeof direction === 'number') {
         // Handle single keyCode input
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction }));
         activeKeys.add(direction); // Add to active keys set
-        updateActiveKeysDisplay();
         return;
     }
     
@@ -361,7 +221,6 @@ function simulateKeyDown(direction) {
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction.keyCode, key: direction.key }));
         activeKeys.add(direction.keyCode); // Add to active keys set
     }
-    updateActiveKeysDisplay();
 }
 
 function simulateKeyUp(direction) {
@@ -369,7 +228,6 @@ function simulateKeyUp(direction) {
         // Handle single keyCode input
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction }));
         activeKeys.delete(direction); // Remove from active keys
-        updateActiveKeysDisplay();
         return;
     }
     
@@ -382,7 +240,6 @@ function simulateKeyUp(direction) {
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction.keyCode, key: direction.key }));
         activeKeys.delete(direction.keyCode); // Remove from active keys
     }
-    updateActiveKeysDisplay();
 }
 
 // Emergency function to release ALL keys (for stuck keys)
@@ -399,10 +256,6 @@ function releaseAllKeysEmergency() {
     
     // Clear the active keys set
     activeKeys.clear();
-    updateActiveKeysDisplay();
-    
-    // Reset any active directions or states
-    updateDirectionIndicator(null);
     
     logActivity("All keys released - reset complete");
     
@@ -541,9 +394,6 @@ document.addEventListener("visibilitychange", () => {
         const emergencyBtn = document.querySelector('#bot-ui-container > button:not(:last-child)');
         if (emergencyBtn) emergencyBtn.style.display = 'none';
     }
-    
-    // Also ensure active key display is up to date
-    updateActiveKeysDisplay();
 });
 
 // Handle any cleanup needed when the window is closing
@@ -573,9 +423,6 @@ window.fixGameBot = function() {
         }
     }
     
-    // Update active keys display
-    updateActiveKeysDisplay();
-    
     console.log("Game bot fixed and restarted!");
     return "Game bot UI and functionality restored.";
 };
@@ -586,9 +433,6 @@ setInterval(() => {
     // something might be wrong - check and possibly release them
     if (activeKeys.size > 0) {
         logActivity("Periodic key check - ensuring no stuck keys");
-        
-        // For now, just update the display to ensure it's accurate
-        updateActiveKeysDisplay();
     }
 }, 5000); // Check every 5 seconds
 
