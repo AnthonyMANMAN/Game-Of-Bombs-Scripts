@@ -1,14 +1,39 @@
 // Cross Movement Addon for Game Bot Framework
 // This addon adds modified movement pattern functionality to the base bot framework
 // Pattern: up-down twice, then left-right twice
+// Supports both English and Russian keyboard layouts
 
 // Create module-level variables outside the addon object to solve 'this' context issues
 let crossMovement_isRunning = false;
 let crossMovement_loopTimer = null;
 let crossMovement_enabled = false;
 
-// Helper functions at module level - status display function removed
+// Keyboard mapping for both layouts
+const keyMappings = {
+    // English WASD keys to arrow key codes
+    'w': 38, // Up
+    's': 40, // Down
+    'a': 37, // Left
+    'd': 39, // Right
+    
+    // Russian layout equivalents (Cyrillic)
+    'ц': 38, // Up (Russian 'ц' is in same position as 'w')
+    'ы': 40, // Down (Russian 'ы' is in same position as 's')
+    'ф': 37, // Left (Russian 'ф' is in same position as 'a')
+    'в': 39, // Right (Russian 'в' is in same position as 'd')
+    
+    // Direct arrow key codes (work in both layouts)
+    'arrowup': 38,
+    'arrowdown': 40,
+    'arrowleft': 37,
+    'arrowright': 39,
+    
+    // Toggle key (both layouts)
+    'm': 'toggle',
+    'ь': 'toggle' // Russian 'ь' is in same position as 'm'
+};
 
+// Helper functions at module level
 function crossMovement_startMovementPattern() {
     if (!crossMovement_enabled) return;
     
@@ -19,7 +44,6 @@ function crossMovement_startMovementPattern() {
     
     let stepIndex = 0;
     // Modified sequence: Up-Down-Up-Down-Left-Right-Left-Right
-    // W(up), S(down), A(left), D(right) to arrow key codes
     const movementSequence = [
         38, 40,  // Up, Down (first time)
         38, 40,  // Up, Down (second time)
@@ -54,13 +78,12 @@ function crossMovement_stopMovementPattern() {
 
 // Register the cross movement addon with the bot framework
 window.gameBotAddonManager.registerFeature('crossMovementAddon', {
-    label: 'Двиг Крестом(M)',
+    label: 'Двиг Крестом(M/Ь)',  // Updated label to show both English and Russian toggle keys
     initialActive: false,
     
     // Initialize the addon
     initialize: function() {
-        // Simple log initialization, removed UI creation
-        logActivity("Modified cross movement addon initialized - use 'M' key to toggle");
+        logActivity("Modified cross movement addon initialized - use 'M' key (English) or 'Ь' key (Russian) to toggle");
         
         // Set the initial active state
         crossMovement_enabled = this.active;
@@ -80,8 +103,10 @@ window.gameBotAddonManager.registerFeature('crossMovementAddon', {
     // Handle keydown events
     onKeyDown: function(event) {
         const key = event.key.toLowerCase();
-        // Toggle cross movement mode with M key
-        if (key === 'm') {
+        const mappedKey = keyMappings[key];
+        
+        // Toggle cross movement mode with M key (or Russian equivalent)
+        if (mappedKey === 'toggle') {
             this.active = !this.active;
             crossMovement_enabled = this.active;
             updateStatus('crossMovementAddon', this.active);
@@ -104,4 +129,4 @@ window.gameBotAddonManager.registerFeature('crossMovementAddon', {
 });
 
 // Log that the addon was loaded
-logActivity("Modified cross movement addon loaded - Press 'M' to toggle up-down twice, left-right twice pattern");
+logActivity("Modified cross movement addon loaded - Press 'M' (English) or 'Ь' (Russian) to toggle up-down twice, left-right twice pattern");
