@@ -2300,7 +2300,7 @@ function autoChain_createUI() {
     `;
     
     const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (Держите C)';
+    autoChainLabel.textContent = 'Цепь (J/О)';
     
     const autoChainStatus = document.createElement('span');
     autoChainStatus.id = 'auto-chain-status';
@@ -2428,7 +2428,7 @@ function autoChain_stopSpamming() {
 
 // Activate Auto Chain when C key is pressed down
 document.addEventListener("keydown", (event) => {
-   if ((event.key === "c" || event.key === "C" || event.key === "с" || event.key === "С") && !autoChain_active) {
+   if ((event.key === "j" || event.key === "J" || event.key === "о" || event.key === "О") && !autoChain_active) {
         autoChain_active = true;
         autoChain_updateStatus();
         autoChain_flashStatus();
@@ -2445,7 +2445,7 @@ document.addEventListener("keydown", (event) => {
 
 // Deactivate Auto Chain when C key is released
 document.addEventListener("keyup", (event) => {
-    if (event.key === "c" || event.key === "C" || event.key === "с" || event.key === "С") {
+    if (event.key === "j" || event.key === "J" || event.key === "о" || event.key === "О") {
         autoChain_active = false;
         autoChain_updateStatus();
         
