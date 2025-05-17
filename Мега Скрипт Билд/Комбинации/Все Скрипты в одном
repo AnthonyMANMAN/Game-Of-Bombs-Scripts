@@ -2266,9 +2266,8 @@ if (typeof window.fixGameBot !== 'undefined') {
     });
 })();
 /**
- * Auto Chain Addon - Rapidly places bombs when activated
+ * Auto Chain Addon - Rapidly places bombs when C key is held down
  * This addon properly integrates with the Game Bot Framework using the addon manager
- * Modified to support both English and Russian keyboard layouts
  */
 
 // Create module-level variables outside the addon object to solve 'this' context issues
@@ -2301,7 +2300,7 @@ function autoChain_createUI() {
     `;
     
     const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (C/С)'; // Added Cyrillic 'С' option
+    autoChainLabel.textContent = 'Цепь (Держите C)';
     
     const autoChainStatus = document.createElement('span');
     autoChainStatus.id = 'auto-chain-status';
@@ -2427,29 +2426,36 @@ function autoChain_stopSpamming() {
     }
 }
 
-// Toggle Auto Chain with both English 'C' and Russian 'С' keys
+// Activate Auto Chain when C key is pressed down
 document.addEventListener("keydown", (event) => {
-    // Check for both English 'c' and Russian 'с' (Cyrillic)
-    // The Russian 'с' has Unicode: U+0441
+   if ((event.key === "c" || event.key === "C" || event.key === "с" || event.key === "С") && !autoChain_active) {
+        autoChain_active = true;
+        autoChain_updateStatus();
+        autoChain_flashStatus();
+        
+        if (typeof logActivity === 'function') {
+            logActivity("Auto Chain activated (holding)");
+        } else {
+            console.log("Auto Chain activated (holding)");
+        }
+        
+        autoChain_startSpamming(); // Start bombing
+    }
+});
+
+// Deactivate Auto Chain when C key is released
+document.addEventListener("keyup", (event) => {
     if (event.key === "c" || event.key === "C" || event.key === "с" || event.key === "С") {
-        autoChain_active = !autoChain_active;
+        autoChain_active = false;
         autoChain_updateStatus();
         
-        if (autoChain_active) {
-            if (typeof logActivity === 'function') {
-                logActivity("Auto Chain enabled");
-            } else {
-                console.log("Auto Chain enabled");
-            }
-            autoChain_startSpamming(); // Start bombing
+        if (typeof logActivity === 'function') {
+            logActivity("Auto Chain deactivated (released)");
         } else {
-            if (typeof logActivity === 'function') {
-                logActivity("Auto Chain disabled");
-            } else {
-                console.log("Auto Chain disabled");
-            }
-            autoChain_stopSpamming(); // Stop bombing
+            console.log("Auto Chain deactivated (released)");
         }
+        
+        autoChain_stopSpamming(); // Stop bombing
     }
 });
 
@@ -2471,15 +2477,6 @@ if (typeof window.fixGameBot !== 'undefined') {
         // Re-add our UI
         autoChain_createUI();
         
-        // Restart auto chain if active
-        if (autoChain_active) {
-            // First clear any existing interval
-            autoChain_stopSpamming();
-            
-            // Then restart
-            autoChain_startSpamming();
-        }
-        
         return result + " Auto Chain restored.";
     };
 } else {
@@ -2491,7 +2488,7 @@ if (typeof window.fixGameBot !== 'undefined') {
 }
 
 // Log that the script has loaded
-console.log('[Auto Chain Addon] Loaded successfully with Russian keyboard support!');
+console.log('[Auto Chain Addon - Hold Version] Loaded successfully!');
 // Chat Mode Addon
 // This addon prevents keyboard shortcuts from toggling bot features when you're in chat
 
