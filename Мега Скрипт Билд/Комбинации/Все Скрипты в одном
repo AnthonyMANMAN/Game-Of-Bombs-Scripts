@@ -1285,7 +1285,7 @@ function autoRespawn_stopChecking() {
 
 // Register the auto-respawn addon with the bot framework
 window.gameBotAddonManager.registerFeature('autoRespawnAddon', {
-    label: 'Движение(V/М)',
+    label: 'Движение (V/М)',
     initialActive: false, // Start inactive by default
     
     // Initialize the addon
@@ -1403,7 +1403,7 @@ function rotationAddon_stopRotation() {
 
 // Register the rotation addon with the bot framework
 window.gameBotAddonManager.registerFeature('rotationAddon', {
-    label: 'Режим Вращения(N/Т)',
+    label: 'Режим Вращения (N/Т)',
     initialActive: false,
     
     // Initialize the addon
@@ -2497,7 +2497,7 @@ let chatModeActive = false;
 
 // Register the Chat Mode feature with the addon manager
 window.gameBotAddonManager.registerFeature("chatMode", {
-    label: "Режим Чата",
+    label: "Режим Чата (F8)",
     initialActive: false,
     
     // Initialize the feature
@@ -2623,7 +2623,8 @@ const ALLOWED_KEYCODES = [
     68,   // D key
     75,   // K key
     73,   // I key
-    81    // Q key
+    81,   // Q key
+    32    //Space key
 ];
 
 // Add our own handlers that run first
