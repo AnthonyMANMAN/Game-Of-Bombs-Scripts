@@ -5,9 +5,9 @@
     // Track visibility state
     let uiVisible = true;
     
-    // Register keyboard shortcut (Alt+R to hide/show UI)
-    const TOGGLE_KEY = 82; // R key
-    // Russian keyboard layout equivalent for R is 'К' (Cyrillic Ka) which has same keyCode
+    // Register keyboard shortcut (Alt+L to hide/show UI)
+    const TOGGLE_KEY = 76; // L key
+    // Russian keyboard layout equivalent for L is 'Д' (Cyrillic De) which has same keyCode
     
     // Create a floating indicator that appears briefly when UI is hidden
     function createHiddenIndicator() {
@@ -18,7 +18,7 @@
         
         const indicator = document.createElement('div');
         indicator.id = 'ui-hidden-indicator';
-        indicator.textContent = 'Интерфейс скрыт (Нажмите Alt+R чтобы показать)';
+        indicator.textContent = 'Интерфейс скрыт (Нажмите Alt+L чтобы показать)';
         indicator.style.cssText = `
             position: fixed;
             bottom: 10px;
@@ -78,7 +78,7 @@
         if (uiVisible) {
             logActivity('Интерфейс восстановлен');
         } else {
-            logActivity('Интерфейс скрыт (Alt+R(K) чтобы показать)');
+            logActivity('Интерфейс скрыт (Alt+L чтобы показать)');
         }
     }
     
@@ -88,7 +88,7 @@
         createHiddenIndicator();
         
         // Log initialization
-        logActivity('Управление видимостью интерфейса (Alt+R(K))');
+        logActivity('Управление видимостью интерфейса (Alt+L)');
     }
     
     // Clean up when addon is disabled
@@ -127,7 +127,7 @@
     
     // Register the addon with the framework
     window.gameBotAddonManager.registerFeature('uiVisibility', {
-        label: 'Управление видимостью (Alt+R(K))',
+        label: 'Управление видимостью (Alt+L)',
         initialActive: true,
         initialize: initialize,
         cleanup: cleanup,
