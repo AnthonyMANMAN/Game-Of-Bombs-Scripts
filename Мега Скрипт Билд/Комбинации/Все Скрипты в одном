@@ -2266,118 +2266,215 @@ if (typeof window.fixGameBot !== 'undefined') {
     });
 })();
 /**
- * Auto Chain Addon - Rapidly places bombs when activated
- * This addon properly integrates with the Game Bot Framework using the addon manager
- * Modified to support both English and Russian keyboard layouts
+ * Combined Addons for Game Bot Framework
+ * This script combines Auto Chain, Rotation, and Spam Key Rotation functionality
+ * into a single addon that properly integrates with the Game Bot Framework
+ * 
+ * MODIFIED: Auto Chain now works as "hold to activate" instead of a toggle
+ * FIXED: Bug where holding J while Auto Chain is active would cause conflicts
  */
 
-// Create module-level variables outside the addon object to solve 'this' context issues
+// ========== AUTO CHAIN ADDON SECTION ==========
+// Module-level variables for Auto Chain feature
 let autoChain_active = false;
 let autoChain_interval = null;
+let autoChain_holdActive = false; // For hold-to-activate mode with J key
 
-// Create UI for this functionality
-function autoChain_createUI() {
-    // Check if main UI container exists
-    const botUiContainer = document.getElementById('bot-ui-container');
-    if (!botUiContainer) {
-        console.log("Main bot UI not found. Auto Chain will retry in 1 second.");
-        setTimeout(autoChain_createUI, 1000);
+// ========== ROTATION ADDON SECTION ==========
+// Module-level variables for Rotation feature
+let rotationAddon_inProgress = false;
+let rotationAddon_interval = null;
+let rotationAddon_active = false;
+
+// ========== SPAM KEY ROTATION ADDON SECTION ==========
+// Module-level variables for Spam Key Rotation feature
+let spamActive = false;
+let spamInterval = null;
+const SPAM_DELAY = 50; // ms between key presses
+const SPAM_KEYS = [49, 50, 51, 52]; // Key codes for 1, 2, 3, 4
+
+// ========== COMBINED ADDONS INITIALIZATION ==========
+(function initializeCombinedAddons() {
+    // Make sure the base framework is loaded first
+    if (!window.gameBotAddonManager) {
+        console.log("Game Bot Framework not found. Retrying in 1 second...");
+        setTimeout(initializeCombinedAddons, 1000);
         return;
     }
-    
-    // Remove any existing controls to prevent duplicates
-    const existingControl = document.getElementById('auto-chain-status');
-    if (existingControl && existingControl.parentElement) {
-        existingControl.parentElement.remove();
-    }
-    
-    // Create container
-    const autoChainContainer = document.createElement('div');
-    autoChainContainer.style.cssText = `
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 8px;
-        align-items: center;
-    `;
-    
-    const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (C/С)'; // Added Cyrillic 'С' option
-    
-    const autoChainStatus = document.createElement('span');
-    autoChainStatus.id = 'auto-chain-status';
-    autoChainStatus.textContent = autoChain_active ? 'ON' : 'OFF';
-    autoChainStatus.style.cssText = `
-        font-weight: bold;
-        color: ${autoChain_active ? '#4CAF50' : '#F44336'};
-        background-color: rgba(0, 0, 0, 0.3);
-        padding: 2px 6px;
-        border-radius: 4px;
-        transition: background-color 0.2s ease;
-    `;
-    
-    autoChainContainer.appendChild(autoChainLabel);
-    autoChainContainer.appendChild(autoChainStatus);
-    
-    // Find the movement UI to insert after it
-    const movementStatusElement = document.getElementById('movement-status');
-    let referenceNode = null;
-    
-    if (movementStatusElement) {
-        // Find the parent div containing the movement status
-        referenceNode = movementStatusElement.parentElement;
-        if (referenceNode && referenceNode.nextSibling) {
-            // Insert after the movement container
-            botUiContainer.insertBefore(autoChainContainer, referenceNode.nextSibling);
-        } else {
-            // Fallback: insert after header
-            const header = botUiContainer.querySelector('div:first-child');
-            if (header && header.nextSibling) {
-                botUiContainer.insertBefore(autoChainContainer, header.nextSibling);
-            } else {
-                // Last resort: append to container
-                botUiContainer.appendChild(autoChainContainer);
+
+    // ===== AUTO CHAIN FEATURE =====
+    // Register Auto Chain feature with the addon manager
+    window.gameBotAddonManager.registerFeature('auto-chain-status', {
+        label: 'Цепь C(Вкл)/J(Держ)',
+        initialActive: false,
+        
+        // Initialize the Auto Chain feature
+        initialize: function() {
+            autoChain_active = false;
+            autoChain_holdActive = false;
+            logActivity("Auto Chain addon initialized - use 'C' to toggle or hold 'J' to activate");
+        },
+        
+        // Cleanup when the Auto Chain is disabled
+        cleanup: function() {
+            autoChain_stopSpamming();
+            logActivity("Auto Chain addon cleanup complete");
+        },
+        
+        // Handle keydown events for Auto Chain
+        onKeyDown: function(event) {
+            // Toggle with C key
+            if (event.key === "c" || event.key === "C") {
+                autoChain_active = !autoChain_active;
+                this.active = autoChain_active || autoChain_holdActive;
+                updateStatus('auto-chain-status', autoChain_active || autoChain_holdActive);
+                
+                if (autoChain_active) {
+                    logActivity("Auto Chain enabled (toggle mode)");
+                    // Only start spamming if not already spamming from hold mode
+                    if (!autoChain_holdActive) {
+                        autoChain_startSpamming();
+                    }
+                } else {
+                    logActivity("Auto Chain disabled (toggle mode)");
+                    // Only stop spamming if hold mode is also inactive
+                    if (!autoChain_holdActive) {
+                        autoChain_stopSpamming();
+                    }
+                }
+            }
+            
+            // Hold-to-activate with J key
+            if (event.key === "j" || event.key === "J") {
+                // Only set holdActive if it wasn't already true
+                if (!autoChain_holdActive) {
+                    autoChain_holdActive = true;
+                    this.active = true;
+                    updateStatus('auto-chain-status', true);
+                    logActivity("Auto Chain enabled (hold mode)");
+                    
+                    // Only start spamming if it's not already running from toggle mode
+                    if (!autoChain_interval) {
+                        autoChain_startSpamming();
+                    }
+                }
+            }
+        },
+        
+        // Handle keyup events for Auto Chain
+        onKeyUp: function(event) {
+            // Release for J key (hold mode)
+            if (event.key === "j" || event.key === "J") {
+                // Only update if holdActive was true
+                if (autoChain_holdActive) {
+                    autoChain_holdActive = false;
+                    // Only update active status and stop spamming if toggle mode is also inactive
+                    if (!autoChain_active) {
+                        this.active = false;
+                        updateStatus('auto-chain-status', false);
+                        autoChain_stopSpamming();
+                        logActivity("Auto Chain disabled (hold mode released)");
+                    }
+                }
             }
         }
-    } else {
-        // Movement UI not found, insert after header
-        const header = botUiContainer.querySelector('div:first-child');
-        if (header && header.nextSibling) {
-            botUiContainer.insertBefore(autoChainContainer, header.nextSibling);
-        } else {
-            // Fallback: append to container
-            botUiContainer.appendChild(autoChainContainer);
+    });
+
+    // ===== ROTATION FEATURE =====
+    // Register Rotation addon with the addon manager
+    window.gameBotAddonManager.registerFeature('rotationAddon', {
+        label: 'Режим Вращения (N)',
+        initialActive: rotationAddon_active,
+        
+        // Initialize the Rotation addon
+        initialize: function() {
+            rotationAddon_active = this.active;
+            if (rotationAddon_active) {
+                rotationAddon_performRotation();
+            }
+            logActivity("Rotation addon initialized - use 'N' key to toggle");
+        },
+        
+        // Cleanup when the Rotation addon is disabled
+        cleanup: function() {
+            rotationAddon_stopRotation();
+            logActivity("Rotation addon cleanup complete");
+        },
+        
+        // Handle keydown events for Rotation
+        onKeyDown: function(event) {
+            const key = event.key.toLowerCase();
+            // Toggle rotation mode with N key
+            if (key === 'n') {
+                rotationAddon_active = !rotationAddon_active;
+                this.active = rotationAddon_active;
+                updateStatus('rotationAddon', rotationAddon_active);
+                
+                // Start or stop rotation based on active state
+                if (rotationAddon_active) {
+                    rotationAddon_performRotation();
+                    logActivity("Rotation mode activated - continuous rotation until toggled off");
+                } else {
+                    rotationAddon_stopRotation();
+                    logActivity("Rotation mode deactivated");
+                }
+            }
+        },
+        
+        // Required by framework but not used for this feature
+        onKeyUp: function(event) {
+            // No special handling needed for keyup events
         }
-    }
-    
-    // Log the addition
-    if (typeof logActivity === 'function') {
-        logActivity("Auto Chain UI added");
-    } else {
-        console.log("Auto Chain UI added");
-    }
-}
+    });
 
-// Update auto chain status display
-function autoChain_updateStatus() {
-    const autoChainStatus = document.getElementById('auto-chain-status');
-    if (autoChainStatus) {
-        autoChainStatus.textContent = autoChain_active ? 'ON' : 'OFF';
-        autoChainStatus.style.color = autoChain_active ? '#4CAF50' : '#F44336';
-    }
-}
+    // ===== SPAM KEY ROTATION FEATURE =====
+    // Register Spam Key Rotation feature with the addon manager
+    window.gameBotAddonManager.registerFeature('spam-status', {
+        label: 'Спам Перками (B)',
+        initialActive: spamActive,
+        
+        // Initialize the Spam Key Rotation feature
+        initialize: function() {
+            spamActive = this.active;
+            if (spamActive) {
+                startSpamming();
+            }
+            logActivity("Spam Key Rotation initialized - use 'B' key to toggle");
+        },
+        
+        // Cleanup when the Spam Key Rotation is disabled
+        cleanup: function() {
+            stopSpamming();
+            spamActive = false;
+            logActivity("Spam Key Rotation cleaned up");
+        },
+        
+        // Handle keydown events for Spam Key Rotation
+        onKeyDown: function(event) {
+            if (event.key.toLowerCase() === 'b') {
+                spamActive = !spamActive;
+                this.active = spamActive;
+                updateStatus('spam-status', spamActive);
+                
+                if (spamActive) {
+                    startSpamming();
+                } else {
+                    stopSpamming();
+                }
+            }
+        },
+        
+        // Required by framework but not used for this feature
+        onKeyUp: function(event) {
+            // No special handling needed for keyup events
+        }
+    });
 
-// Flash effect for visual feedback - text color only, no background
-function autoChain_flashStatus(duration = 100) {
-    const element = document.getElementById('auto-chain-status');
-    if (element) {
-        const originalColor = element.style.color;
-        element.style.color = '#FFFFFF';
-        setTimeout(() => {
-            element.style.color = originalColor;
-        }, duration);
-    }
-}
+    // Log that all addons have been loaded
+    logActivity("Combined addons loaded successfully");
+})();
 
+// ========== AUTO CHAIN FUNCTIONS ==========
 // Function to start the auto chain bomb spam
 function autoChain_startSpamming() {
     // Stop any existing interval first
@@ -2385,7 +2482,7 @@ function autoChain_startSpamming() {
     
     // Start new interval
     autoChain_interval = setInterval(() => {
-        if (autoChain_active) {
+        if (autoChain_active || autoChain_holdActive) {
             // Simulate K keypress (place bomb) as fast as possible
             document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: 75, key: "k" }));
             
@@ -2411,12 +2508,6 @@ function autoChain_startSpamming() {
             }, 10);
         }
     }, 20); // 20ms interval for very fast bomb spam
-    
-    if (typeof logActivity === 'function') {
-        logActivity("Auto Chain spam started");
-    } else {
-        console.log("Auto Chain spam started");
-    }
 }
 
 // Function to stop the auto chain bomb spam
@@ -2427,71 +2518,129 @@ function autoChain_stopSpamming() {
     }
 }
 
-// Toggle Auto Chain with both English 'C' and Russian 'С' keys
-document.addEventListener("keydown", (event) => {
-    // Check for both English 'c' and Russian 'с' (Cyrillic)
-    // The Russian 'с' has Unicode: U+0441
-    if (event.key === "c" || event.key === "C" || event.key === "с" || event.key === "С") {
-        autoChain_active = !autoChain_active;
-        autoChain_updateStatus();
+// ========== ROTATION FUNCTIONS ==========
+// Function to perform rotation movement pattern
+function rotationAddon_performRotation() {
+    if (!rotationAddon_active) return;
+    
+    // Only start if not already in progress
+    if (rotationAddon_inProgress) return;
+    
+    rotationAddon_inProgress = true;
+    
+    let currentStep = 0;
+    // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
+    const sequenceKeys = [38, 37, 40, 39, 40, 37];
+    
+    rotationAddon_interval = setInterval(() => {
+        // Use the framework's key simulation functions
+        simulateKeyDown(sequenceKeys[currentStep]);
         
-        if (autoChain_active) {
-            if (typeof logActivity === 'function') {
-                logActivity("Auto Chain enabled");
-            } else {
-                console.log("Auto Chain enabled");
-            }
-            autoChain_startSpamming(); // Start bombing
-        } else {
-            if (typeof logActivity === 'function') {
-                logActivity("Auto Chain disabled");
-            } else {
-                console.log("Auto Chain disabled");
-            }
-            autoChain_stopSpamming(); // Stop bombing
-        }
+        setTimeout(() => {
+            simulateKeyUp(sequenceKeys[currentStep]);
+            currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
+        }, 5);
+    }, 100);
+}
+
+// Function to stop rotation
+function rotationAddon_stopRotation() {
+    if (rotationAddon_interval) {
+        clearInterval(rotationAddon_interval);
+        rotationAddon_interval = null;
     }
-});
+    
+    rotationAddon_inProgress = false;
+    
+    // Release all arrow keys if they're being held
+    [37, 38, 39, 40].forEach(keyCode => {
+        simulateKeyUp(keyCode);
+    });
+}
 
-// Clean up on page unload
-window.addEventListener('beforeunload', () => {
-    autoChain_stopSpamming();
-});
+// ========== SPAM KEY ROTATION FUNCTIONS ==========
+// Simulate key press (keydown + keyup)
+function simulateKeyPress(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+}
 
-// Initialize
-autoChain_createUI();
+// Start spamming keys 1-4
+function startSpamming() {
+    if (spamInterval) return; // Don't start if already running
+    
+    let index = 0;
+    spamInterval = setInterval(() => {
+        simulateKeyPress(SPAM_KEYS[index]);
+        index = (index + 1) % SPAM_KEYS.length;
+    }, SPAM_DELAY);
+    logActivity("Spam mode activated - cycling keys 1-4");
+}
 
-// Extend the fixGameBot function if it exists
-if (typeof window.fixGameBot !== 'undefined') {
-    const originalFixGameBot = window.fixGameBot;
+// Stop spamming keys
+function stopSpamming() {
+    if (spamInterval) {
+        clearInterval(spamInterval);
+        spamInterval = null;
+        logActivity("Spam mode deactivated");
+    }
+}
+
+// ========== EXTENDED FIX FUNCTION ==========
+// Extend the fixGameBot function to restore all addons
+(function() {
+    // Store the original fixGameBot function if it exists
+    const originalFixGameBot = window.fixGameBot || function() {
+        return "Game bot fixed.";
+    };
+    
+    // Override with our extended version
     window.fixGameBot = function() {
         // Call the original function
         const result = originalFixGameBot();
         
-        // Re-add our UI
-        autoChain_createUI();
-        
-        // Restart auto chain if active
-        if (autoChain_active) {
-            // First clear any existing interval
-            autoChain_stopSpamming();
-            
-            // Then restart
-            autoChain_startSpamming();
+        // Restore all addons
+        for (const id in window.gameBotAddonManager.features) {
+            const feature = window.gameBotAddonManager.features[id];
+            try {
+                // Re-initialize the feature
+                feature.initialize();
+            } catch (e) {
+                console.error(`Error reinitializing ${id}:`, e);
+            }
         }
         
-        return result + " Auto Chain restored.";
+        logActivity("All addons restored successfully");
+        return result + " All addons restored.";
     };
-} else {
-    // Create a new fixGameBot function if it doesn't exist
-    window.fixGameBot = function() {
-        autoChain_createUI();
-        return "Auto Chain restored.";
-    };
+})();
+
+// Function to simulate key down (helper)
+function simulateKeyDown(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+    // Update activeKeys if available
+    if (typeof window.activeKeys !== 'undefined') {
+        window.activeKeys.add(keyCode);
+        if (typeof window.updateActiveKeysDisplay === 'function') {
+            window.updateActiveKeysDisplay();
+        }
+    }
+}
+
+// Function to simulate key up (helper)
+function simulateKeyUp(keyCode) {
+    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    // Update activeKeys if available
+    if (typeof window.activeKeys !== 'undefined') {
+        window.activeKeys.delete(keyCode);
+        if (typeof window.updateActiveKeysDisplay === 'function') {
+            window.updateActiveKeysDisplay();
+        }
+    }
 }
 
 // Log that the script has loaded
-console.log('[Auto Chain Addon] Loaded successfully with Russian keyboard support!');
+console.log('[Combined Addons] Loaded successfully!');
 // Chat Mode Addon
 // This addon prevents keyboard shortcuts from toggling bot features when you're in chat
 
