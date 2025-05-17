@@ -2258,7 +2258,7 @@ if (typeof window.fixGameBot !== 'undefined') {
     
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('spam-status', {
-        label: 'Key Spam (B/И)',
+        label: 'Спам Перками (B/И)',
         initialActive: spamActive,
         initialize: initialize,
         cleanup: cleanup,
