@@ -1,0 +1,305 @@
+// K Hold Timer Addon with Russian UI
+// This addon automatically holds the K key for exactly 3.875 seconds when toggled with H/Р key
+(function() {
+    // State variables for the K hold feature
+    let holdActive = false;
+    let holdTimeout = null;
+    let progressInterval = null;
+    const HOLD_DURATION = 3875; // Duration in milliseconds
+    let timeRemaining = 0;
+    let progressBarVisible = true; // Toggle for progress bar visibility
+    let isToggling = false; // Flag to prevent duplicate toggling
+    
+    // Create progress bar UI with Russian text
+    function createProgressUI() {
+        const uiContainer = document.getElementById('bot-ui-container');
+        if (!uiContainer) return;
+        
+        // Create progress panel
+        const progressPanel = document.createElement('div');
+        progressPanel.id = 'k-hold-progress-panel';
+        progressPanel.style.cssText = `
+            display: none;
+            background-color: rgba(30, 30, 30, 0.95);
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        `;
+        
+        // Create progress bar container
+        const progressContainer = document.createElement('div');
+        progressContainer.style.cssText = `
+            width: 100%;
+            height: 20px;
+            background-color: #333;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        `;
+        
+        // Create progress bar
+        const progressBar = document.createElement('div');
+        progressBar.id = 'k-hold-progress-bar';
+        progressBar.style.cssText = `
+            height: 100%;
+            width: 0%;
+            background-color: #4CAF50;
+            transition: width 0.1s linear;
+        `;
+        
+        progressContainer.appendChild(progressBar);
+        
+        // Create time display with Russian text
+        const timeDisplay = document.createElement('div');
+        timeDisplay.id = 'k-hold-time-display';
+        timeDisplay.style.cssText = `
+            text-align: center;
+            font-family: monospace;
+            margin-bottom: 10px;
+        `;
+        timeDisplay.textContent = 'Готов - 3.875 секунд';
+        
+        // Add toggle button for progress bar visibility with Russian text
+        const toggleVisibilityButton = document.createElement('button');
+        toggleVisibilityButton.textContent = 'Скрыть прогресс';
+        toggleVisibilityButton.style.cssText = `
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        `;
+        
+        toggleVisibilityButton.addEventListener('click', () => {
+            progressBarVisible = !progressBarVisible;
+            progressContainer.style.display = progressBarVisible ? 'block' : 'none';
+            timeDisplay.style.display = progressBarVisible ? 'block' : 'none';
+            toggleVisibilityButton.textContent = progressBarVisible ? 'Скрыть прогресс' : 'Показать прогресс';
+        });
+        
+        // Add close button with Russian text
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Закрыть';
+        closeButton.style.cssText = `
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            width: 100%;
+        `;
+        
+        closeButton.addEventListener('click', () => {
+            progressPanel.style.display = 'none';
+        });
+        
+        // Add all elements to the progress panel
+        progressPanel.appendChild(progressContainer);
+        progressPanel.appendChild(timeDisplay);
+        progressPanel.appendChild(toggleVisibilityButton);
+        progressPanel.appendChild(closeButton);
+        
+        // Add the progress panel to the UI container
+        uiContainer.appendChild(progressPanel);
+        
+        // Add config button to main UI
+        const holdConfigButton = document.createElement('button');
+        holdConfigButton.textContent = '📊';
+        holdConfigButton.style.cssText = `
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 6px;
+            margin-left: 5px;
+        `;
+        
+        holdConfigButton.addEventListener('click', () => {
+            progressPanel.style.display = progressPanel.style.display === 'none' ? 'block' : 'none';
+        });
+        
+        // Find the hold status element to place the config button next to it
+        const holdStatusElement = document.getElementById('k-hold-status');
+        if (holdStatusElement && holdStatusElement.parentNode) {
+            holdStatusElement.parentNode.appendChild(holdConfigButton);
+        }
+    }
+    
+    // Start holding K key
+    function startHolding() {
+        // Clear existing timers if any
+        stopHolding();
+        
+        // Simulate K keydown
+        simulateKeyDown(75); // 75 is keyCode for 'K'
+        logActivity("Удерживаю клавишу K на 3.875 секунд");
+        
+        // Set time remaining
+        timeRemaining = HOLD_DURATION;
+        
+        // Update progress bar
+        updateProgressBar(100);
+        
+        // Set timer to release key after exact duration
+        holdTimeout = setTimeout(() => {
+            simulateKeyUp(75);
+            logActivity("Клавиша K отпущена после 3.875 секунд");
+            
+            // Reset UI
+            holdActive = false;
+            updateStatus('k-hold-status', false);
+            
+            // Reset progress bar
+            updateProgressBar(0);
+            
+            // Clear interval
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            
+            const timeDisplay = document.getElementById('k-hold-time-display');
+            if (timeDisplay) {
+                timeDisplay.textContent = 'Готов - 3.875 секунд';
+            }
+            
+        }, HOLD_DURATION);
+        
+        // Start progress bar update interval
+        progressInterval = setInterval(() => {
+            // Decrease time remaining
+            timeRemaining -= 100; // Update every 100ms
+            
+            // Calculate percentage of time remaining
+            const percentRemaining = (timeRemaining / HOLD_DURATION) * 100;
+            
+            // Update progress bar
+            updateProgressBar(percentRemaining);
+            
+            // Update time display with Russian text
+            const timeDisplay = document.getElementById('k-hold-time-display');
+            if (timeDisplay) {
+                const secondsRemaining = (timeRemaining / 1000).toFixed(3);
+                timeDisplay.textContent = `Осталось: ${secondsRemaining}с`;
+            }
+            
+            // Stop updating if time is up
+            if (timeRemaining <= 0) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }, 100); // Update every 100ms for smooth animation
+    }
+    
+    // Stop holding K key
+    function stopHolding() {
+        // Clear timeout
+        if (holdTimeout) {
+            clearTimeout(holdTimeout);
+            holdTimeout = null;
+        }
+        
+        // Clear interval
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        
+        // Release K key
+        simulateKeyUp(75);
+        
+        // Reset progress bar
+        updateProgressBar(0);
+        
+        // Reset time display with Russian text
+        const timeDisplay = document.getElementById('k-hold-time-display');
+        if (timeDisplay) {
+            timeDisplay.textContent = 'Готов - 3.875 секунд';
+        }
+    }
+    
+    // Update progress bar UI
+    function updateProgressBar(percentage) {
+        const progressBar = document.getElementById('k-hold-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${percentage}%`;
+            
+            // Change color based on percentage
+            if (percentage > 60) {
+                progressBar.style.backgroundColor = '#4CAF50'; // Green
+            } else if (percentage > 30) {
+                progressBar.style.backgroundColor = '#FFC107'; // Yellow
+            } else {
+                progressBar.style.backgroundColor = '#F44336'; // Red
+            }
+        }
+    }
+    
+    // Initialize function for the addon
+    function initialize() {
+        // Create the progress UI
+        createProgressUI();
+        
+        // Start in deactivated state
+        updateStatus('k-hold-status', holdActive);
+        logActivity("Таймер удержания K инициализирован (Переключение клавишей H/Р)");
+    }
+    
+    // Cleanup function
+    function cleanup() {
+        stopHolding();
+        holdActive = false;
+        updateStatus('k-hold-status', false);
+        logActivity("Таймер удержания K отключен");
+        
+        // Remove progress panel if it exists
+        const progressPanel = document.getElementById('k-hold-progress-panel');
+        if (progressPanel) {
+            progressPanel.remove();
+        }
+    }
+    
+    // Toggle hold mode
+    function toggleHoldMode() {
+        if (!isToggling) {
+            isToggling = true;
+            
+            holdActive = !holdActive;
+            updateStatus('k-hold-status', holdActive);
+            
+            if (holdActive) {
+                startHolding();
+            } else {
+                stopHolding();
+                logActivity("Таймер удержания K деактивирован");
+            }
+            
+            setTimeout(() => {
+                isToggling = false;
+            }, 100);
+        }
+    }
+    
+    // Handle keydown events - support both Latin 'H' and Cyrillic 'Р' (Russian equivalent)
+    function onKeyDown(event) {
+        // Check for both Latin 'h' and Cyrillic 'р' (Russian H key equivalent)
+        if (event.key.toLowerCase() === 'h' || event.key === 'р' || event.key === 'Р') {
+            toggleHoldMode();
+        }
+    }
+    
+    // Register the feature with the addon manager
+    window.gameBotAddonManager.registerFeature('k-hold-status', {
+        label: 'Задержка бомб (H/Р)',
+        initialActive: holdActive,
+        initialize: initialize,
+        cleanup: cleanup,
+        onKeyDown: onKeyDown
+    });
+})();
