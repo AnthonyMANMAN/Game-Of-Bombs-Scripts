@@ -83,18 +83,6 @@ function ar_updateStatus() {
     }
 }
 
-// Flash effect for visual feedback
-function ar_flashStatus(color = '#FFD700', duration = 300) {
-    const element = document.getElementById('respawn-status');
-    if (element) {
-        const originalBackground = element.style.backgroundColor;
-        element.style.backgroundColor = color;
-        setTimeout(() => {
-            element.style.backgroundColor = originalBackground;
-        }, duration);
-    }
-}
-
 // Function to simulate key press down
 function ar_simulateKeyDown(keyCode) {
     document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
@@ -166,9 +154,6 @@ function ar_startAutoRespawn() {
             } else {
                 console.log("Автоматический респавн активирован");
             }
-            
-            // Visual feedback
-            ar_flashStatus('#FFD700', 300);
             
             // Make sure all keys are released first
             ar_releaseAllKeys();
