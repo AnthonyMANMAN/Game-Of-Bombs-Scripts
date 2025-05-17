@@ -3,9 +3,9 @@
  * This script combines the following addons that integrate with the Game Bot Framework:
  * 1. Auto Chain - Hold J/Й or toggle with C/С to automatically spam K/К key
  * 2. Rotation Mode - Toggle with N/Т to automatically rotate movement
- * 3. Configurable Key Spam - Advanced version with UI controls for keys 1-4
+ * 3. Enhanced Configurable Key Spam - Advanced version with UI controls for keys 1-4
  * 
- * Enhanced with Russian keyboard layout support
+ * Enhanced with Russian keyboard layout support (ЙЦУКЕН)
  */
 
 // ========== AUTO CHAIN ADDON SECTION ==========
@@ -47,9 +47,6 @@ const keyboardMappings = {
     
     // Configurable Key Spam toggle
     'b': ['b', 'B', 'и', 'И'], // B/И
-
-    
-    // For arrow keys we don't need mappings as they're the same on any layout
 };
 
 // Helper function to check if a key matches any variant
@@ -617,8 +614,25 @@ function loadSpamConfig() {
 // Simulate key press (keydown + keyup) for configurable spam
 function simulateConfigKeyPress(keyCode) {
     document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+    
+    // Update activeKeys if available
+    if (typeof window.activeKeys !== 'undefined') {
+        window.activeKeys.add(keyCode);
+        if (typeof window.updateActiveKeysDisplay === 'function') {
+            window.updateActiveKeysDisplay();
+        }
+    }
+    
     setTimeout(() => {
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+        
+        // Update activeKeys if available
+        if (typeof window.activeKeys !== 'undefined') {
+            window.activeKeys.delete(keyCode);
+            if (typeof window.updateActiveKeysDisplay === 'function') {
+                window.updateActiveKeysDisplay();
+            }
+        }
     }, 10); // Small delay between down and up
 }
 
@@ -698,6 +712,13 @@ function updateStatus(id, isActive) {
         window.updateFeatureStatus(id, isActive);
     } else {
         console.log(`[Status Update] ${id}: ${isActive ? 'active' : 'inactive'}`);
+        
+        // Fallback update if window function isn't available
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = isActive ? 'ON' : 'OFF';
+            element.style.color = isActive ? '#4CAF50' : '#F44336';
+        }
     }
 }
 
@@ -731,5 +752,4 @@ function updateStatus(id, isActive) {
 })();
 
 // Log that the script has loaded
-console.log('[Combined Addons] Loaded successfully with Russian keyboard support!');
-
+console.log('[Unified Game Bot Addons] Loaded successfully with Russian keyboard support!');
