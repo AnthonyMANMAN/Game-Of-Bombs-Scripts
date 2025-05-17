@@ -2616,7 +2616,14 @@ const ALLOWED_KEYCODES = [
     120,  // F9
     121,  // F10
     122,  // F11
-    123   // F12
+    123,  // F12
+    87,   // W key
+    65,   // A key
+    83,   // S key
+    68,   // D key
+    75,   // K key
+    73,   // I key
+    81    // Q key
 ];
 
 // Add our own handlers that run first
@@ -2716,6 +2723,8 @@ document.addEventListener('keydown', function(event) {
 // Add an indicator to the UI
 addFeatureToUI("chatMode", "Режим Чата", chatModeActive);
 
+// Initialize Chat Mode
+logActivity("Аддон Режима Чата готов - нажмите F8 или используйте кнопку для переключения");
 // UI Visibility Control Addon
 // This addon allows toggling visibility of all UI elements (base and addons)
 
