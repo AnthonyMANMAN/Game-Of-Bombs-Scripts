@@ -296,7 +296,7 @@
     
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('k-hold-status', {
-        label: 'Задержка бомб (H/Р)',
+        label: 'Задержка Бомб (H/Р)',
         initialActive: holdActive,
         initialize: initialize,
         cleanup: cleanup,
