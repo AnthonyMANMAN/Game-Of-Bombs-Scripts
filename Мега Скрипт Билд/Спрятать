@@ -18,7 +18,7 @@
         
         const indicator = document.createElement('div');
         indicator.id = 'ui-hidden-indicator';
-        indicator.textContent = 'Интерфейс скрыт (Нажмите Alt+L чтобы показать)';
+        indicator.textContent = 'Интерфейс скрыт (Нажмите Alt+L/Д чтобы показать)';
         indicator.style.cssText = `
             position: fixed;
             bottom: 10px;
@@ -78,7 +78,7 @@
         if (uiVisible) {
             logActivity('Интерфейс восстановлен');
         } else {
-            logActivity('Интерфейс скрыт (Alt+L чтобы показать)');
+            logActivity('Интерфейс скрыт (Alt+L/Д чтобы показать)');
         }
     }
     
@@ -88,7 +88,7 @@
         createHiddenIndicator();
         
         // Log initialization
-        logActivity('Управление видимостью интерфейса (Alt+L)');
+        logActivity('Управление видимостью интерфейса (Alt+L/Д)');
     }
     
     // Clean up when addon is disabled
