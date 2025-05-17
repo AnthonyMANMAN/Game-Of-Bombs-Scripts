@@ -34,7 +34,7 @@ function ar_createUI() {
     `;
     
     const respawnLabel = document.createElement('span');
-    respawnLabel.textContent = 'Респавн с тыквой (Ч/X) (Тыква(T/Е) ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
+    respawnLabel.textContent = 'Респавн (Ч/X) (Тыква(T/Е) ' + (ar_pressRAfterRespawn ? 'Д' : 'Н') + ')';
     respawnLabel.id = 'respawn-label';
     
     const respawnStatus = document.createElement('span');
