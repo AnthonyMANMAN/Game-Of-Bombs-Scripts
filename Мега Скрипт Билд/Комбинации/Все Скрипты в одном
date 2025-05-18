@@ -2746,7 +2746,7 @@ logActivity("Аддон Режима Чата готов - нажмите F8 и�
         
         const indicator = document.createElement('div');
         indicator.id = 'ui-hidden-indicator';
-        indicator.textContent = 'Интерфейс скрыт (Нажмите Alt+L чтобы показать)';
+        indicator.textContent = 'Интерфейс скрыт (Нажмите Alt+L(Д) чтобы показать)';
         indicator.style.cssText = `
             position: fixed;
             bottom: 10px;
@@ -2855,7 +2855,7 @@ logActivity("Аддон Режима Чата готов - нажмите F8 и�
     
     // Register the addon with the framework
     window.gameBotAddonManager.registerFeature('uiVisibility', {
-        label: 'Управление видимостью (Alt+L)',
+        label: 'Управление видимостью (Alt+L/Д)',
         initialActive: true,
         initialize: initialize,
         cleanup: cleanup,
