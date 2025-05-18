@@ -123,7 +123,7 @@ window.gameBotAddonManager.registerFeature('autoRespawnAddon', {
     onKeyDown: function(event) {
         const key = event.key.toLowerCase();
         // Toggle auto-respawn mode with V key (English) or м key (Russian)
-        if (key === 'v' || key === 'м') {
+        if (key === 'v' || key === 'V' || key === 'м' || key === 'М') {
             this.active = !this.active;
             autoRespawn_active = this.active;
             updateStatus('autoRespawnAddon', this.active);
