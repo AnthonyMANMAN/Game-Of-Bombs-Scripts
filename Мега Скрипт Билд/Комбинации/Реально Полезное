@@ -1651,6 +1651,10 @@ const ALLOWED_KEYCODES = [
     1067, // Ы (S equivalent)
     1042, // В (D equivalent)
     
+    // Adding I and K keys (commonly used for inventory and skills)
+    73,   // I key
+    75,   // K key
+    
     // Adding Space key
     32    // Space key
 ];
