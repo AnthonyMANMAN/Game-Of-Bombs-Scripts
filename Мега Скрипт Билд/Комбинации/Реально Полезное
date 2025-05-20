@@ -744,12 +744,14 @@ logActivity("Base Game Bot Framework initialized");
         onKeyDown: onKeyDown
     });
 })();
-// Rotation Addon for Game Bot Framework
+// Rotation Addon for Game Bot Framework - FIXED VERSION
 // This addon adds rotation functionality to the base bot framework with support for both QWERTY and Russian keyboard layouts
+
 // Create module-level variables outside the addon object to solve 'this' context issues
 let rotationAddon_inProgress = false;
 let rotationAddon_interval = null;
 let rotationAddon_active = false;
+let rotationAddon_lastToggleTime = 0; // Prevent double toggles
 
 // Key mapping for both layouts
 const KEY_MAPPINGS = {
@@ -776,15 +778,30 @@ function rotationAddon_performRotation() {
     // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
     const sequenceKeys = [38, 37, 40, 39, 40, 37];
     
+    // Clear any existing interval first (just to be safe)
+    if (rotationAddon_interval) {
+        clearInterval(rotationAddon_interval);
+    }
+    
+    // Start a new rotation interval
     rotationAddon_interval = setInterval(() => {
-        // Use the framework's key simulation functions
+        if (!rotationAddon_active) {
+            // If rotation was deactivated, stop the interval
+            rotationAddon_stopRotation();
+            return;
+        }
+        
+        // Simulate key press for current step
         simulateKeyDown(sequenceKeys[currentStep]);
         
         setTimeout(() => {
             simulateKeyUp(sequenceKeys[currentStep]);
             currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
-        }, 5);
-    }, 100);
+        }, 50); // Increased from 5ms to 50ms for more reliable key release
+    }, 150); // Increased from 100ms to 150ms for more reliable rotation
+    
+    // Log the start of rotation
+    logActivity("Rotation sequence started");
 }
 
 function rotationAddon_stopRotation() {
@@ -799,6 +816,9 @@ function rotationAddon_stopRotation() {
     [37, 38, 39, 40].forEach(keyCode => {
         simulateKeyUp(keyCode);
     });
+    
+    // Log the stop of rotation
+    logActivity("Rotation sequence stopped");
 }
 
 // Register the rotation addon with the bot framework
@@ -822,6 +842,7 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
     cleanup: function() {
         // Clear any ongoing rotation
         rotationAddon_stopRotation();
+        rotationAddon_active = false;
         
         logActivity("Rotation addon cleanup complete");
     },
@@ -832,6 +853,14 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
         
         // Toggle rotation mode with N key (or Russian equivalent 'т')
         if (key === 'n' || key === 'т') {
+            // Prevent rapid toggling
+            const now = Date.now();
+            if (now - rotationAddon_lastToggleTime < 500) {
+                return false; // Ignore toggle events that are too close together
+            }
+            rotationAddon_lastToggleTime = now;
+            
+            // Toggle state
             this.active = !this.active;
             rotationAddon_active = this.active;
             updateStatus('rotationAddon', this.active);
@@ -870,8 +899,7 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
 });
 
 // Log that the addon was loaded
-logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
-
+logActivity("Rotation addon fixed version loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
 // Configurable Key Spam Addon with Russian Keyboard Support
 // This addon automatically cycles through keys 1-4 when toggled on by pressing И/B
 (function() {
@@ -1272,31 +1300,38 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
 /**
  * Auto Chain Addon - Toggleable version that places bombs automatically when enabled
  * This addon properly integrates with the Game Bot Framework using the addon manager
+ * Version 1.1 - Non-conflicting implementation with improved isolation
  */
 
-// Create module-level variables outside the addon object to solve 'this' context issues
-let autoChain_active = false;
-let autoChain_interval = null;
-let autoChain_keyDown = false; // Track if toggle key is being held down
+// Wrap everything in an IIFE (Immediately Invoked Function Expression) to isolate variables
+(function() {
+// Use a unique namespace for all our variables to prevent conflicts
+const AC_NAMESPACE = {
+    active: false,
+    interval: null,
+    keyDown: false, // Track if toggle key is being held down
+    initialized: false
+};
 
 // Create UI for this functionality
-function autoChain_createUI() {
+function AC_createUI() {
     // Check if main UI container exists
     const botUiContainer = document.getElementById('bot-ui-container');
     if (!botUiContainer) {
         console.log("Main bot UI not found. Auto Chain will retry in 1 second.");
-        setTimeout(autoChain_createUI, 1000);
+        setTimeout(AC_createUI, 1000);
         return;
     }
     
     // Remove any existing controls to prevent duplicates
-    const existingControl = document.getElementById('auto-chain-status');
+    const existingControl = document.getElementById('ac-chain-status');
     if (existingControl && existingControl.parentElement) {
         existingControl.parentElement.remove();
     }
     
     // Create container
     const autoChainContainer = document.createElement('div');
+    autoChainContainer.id = 'ac-chain-container';
     autoChainContainer.style.cssText = `
         display: flex;
         justify-content: space-between;
@@ -1308,11 +1343,11 @@ function autoChain_createUI() {
     autoChainLabel.textContent = 'Цепь (J/О)'; // Russian 'O' corresponds to English 'J'
     
     const autoChainStatus = document.createElement('span');
-    autoChainStatus.id = 'auto-chain-status';
-    autoChainStatus.textContent = autoChain_active ? 'ON' : 'OFF';
+    autoChainStatus.id = 'ac-chain-status';
+    autoChainStatus.textContent = AC_NAMESPACE.active ? 'ON' : 'OFF';
     autoChainStatus.style.cssText = `
         font-weight: bold;
-        color: ${autoChain_active ? '#4CAF50' : '#F44336'};
+        color: ${AC_NAMESPACE.active ? '#4CAF50' : '#F44336'};
         background-color: rgba(0, 0, 0, 0.3);
         padding: 2px 6px;
         border-radius: 4px;
@@ -1362,17 +1397,17 @@ function autoChain_createUI() {
 }
 
 // Update auto chain status display
-function autoChain_updateStatus() {
-    const autoChainStatus = document.getElementById('auto-chain-status');
+function AC_updateStatus() {
+    const autoChainStatus = document.getElementById('ac-chain-status');
     if (autoChainStatus) {
-        autoChainStatus.textContent = autoChain_active ? 'ON' : 'OFF';
-        autoChainStatus.style.color = autoChain_active ? '#4CAF50' : '#F44336';
+        autoChainStatus.textContent = AC_NAMESPACE.active ? 'ON' : 'OFF';
+        autoChainStatus.style.color = AC_NAMESPACE.active ? '#4CAF50' : '#F44336';
     }
 }
 
 // Flash effect for visual feedback - text color only, no background
-function autoChain_flashStatus(duration = 100) {
-    const element = document.getElementById('auto-chain-status');
+function AC_flashStatus(duration = 100) {
+    const element = document.getElementById('ac-chain-status');
     if (element) {
         const originalColor = element.style.color;
         element.style.color = '#FFFFFF';
@@ -1383,13 +1418,13 @@ function autoChain_flashStatus(duration = 100) {
 }
 
 // Function to start the auto chain bomb spam
-function autoChain_startSpamming() {
+function AC_startSpamming() {
     // Stop any existing interval first
-    autoChain_stopSpamming();
+    AC_stopSpamming();
     
     // Start new interval
-    autoChain_interval = setInterval(() => {
-        if (autoChain_active) {
+    AC_NAMESPACE.interval = setInterval(() => {
+        if (AC_NAMESPACE.active) {
             // Simulate K keypress (place bomb) as fast as possible
             document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: 75, key: "k" }));
             
@@ -1424,10 +1459,10 @@ function autoChain_startSpamming() {
 }
 
 // Function to stop the auto chain bomb spam
-function autoChain_stopSpamming() {
-    if (autoChain_interval) {
-        clearInterval(autoChain_interval);
-        autoChain_interval = null;
+function AC_stopSpamming() {
+    if (AC_NAMESPACE.interval) {
+        clearInterval(AC_NAMESPACE.interval);
+        AC_NAMESPACE.interval = null;
         
         if (typeof logActivity === 'function') {
             logActivity("Auto Chain spam stopped");
@@ -1438,62 +1473,121 @@ function autoChain_stopSpamming() {
 }
 
 // Toggle Auto Chain state when key is pressed
-function autoChain_toggle() {
-    autoChain_active = !autoChain_active;
-    autoChain_updateStatus();
-    autoChain_flashStatus();
+function AC_toggle() {
+    AC_NAMESPACE.active = !AC_NAMESPACE.active;
+    AC_updateStatus();
+    AC_flashStatus();
     
-    if (autoChain_active) {
+    if (AC_NAMESPACE.active) {
         if (typeof logActivity === 'function') {
             logActivity("Auto Chain activated (toggled ON)");
         } else {
             console.log("Auto Chain activated (toggled ON)");
         }
-        autoChain_startSpamming(); // Start bombing
+        AC_startSpamming(); // Start bombing
     } else {
         if (typeof logActivity === 'function') {
             logActivity("Auto Chain deactivated (toggled OFF)");
         } else {
             console.log("Auto Chain deactivated (toggled OFF)");
         }
-        autoChain_stopSpamming(); // Stop bombing
+        AC_stopSpamming(); // Stop bombing
     }
 }
 
-// Fixed event listeners to prevent multiple toggles
-document.addEventListener("keydown", (event) => {
-    // Check for toggle keys
-    if ((event.key === "j" || event.key === "J" || 
-         event.key === "о" || event.key === "О") && !autoChain_keyDown) {
-        
-        // Set the key state to down to prevent multiple toggles
-        autoChain_keyDown = true;
-        
-        // Only toggle if not in an input field
-        if (document.activeElement.tagName !== "INPUT" && 
-            document.activeElement.tagName !== "TEXTAREA") {
-            autoChain_toggle();
-            event.preventDefault();
+// Setup event handling with namespaced event handler
+function AC_setupEventHandlers() {
+    // Remove any existing event handlers to prevent duplicates
+    AC_removeEventHandlers();
+    
+    // Create event handler functions with unique names for potential removal
+    AC_NAMESPACE.keydownHandler = function(event) {
+        // Check for toggle keys
+        if ((event.key === "j" || event.key === "J" || 
+             event.key === "о" || event.key === "О") && !AC_NAMESPACE.keyDown) {
+            
+            // Set the key state to down to prevent multiple toggles
+            AC_NAMESPACE.keyDown = true;
+            
+            // Only toggle if not in an input field
+            if (document.activeElement.tagName !== "INPUT" && 
+                document.activeElement.tagName !== "TEXTAREA") {
+                AC_toggle();
+                event.preventDefault();
+            }
         }
+    };
+    
+    AC_NAMESPACE.keyupHandler = function(event) {
+        if (event.key === "j" || event.key === "J" || 
+            event.key === "о" || event.key === "О") {
+            // Reset the key state when released
+            AC_NAMESPACE.keyDown = false;
+        }
+    };
+    
+    AC_NAMESPACE.unloadHandler = function() {
+        AC_stopSpamming();
+    };
+    
+    // Attach the event handlers with a low useCapture priority to avoid conflicts
+    document.addEventListener("keydown", AC_NAMESPACE.keydownHandler, false);
+    document.addEventListener("keyup", AC_NAMESPACE.keyupHandler, false);
+    window.addEventListener('beforeunload', AC_NAMESPACE.unloadHandler, false);
+}
+
+// Remove event handlers to prevent conflicts if the script is reloaded
+function AC_removeEventHandlers() {
+    if (AC_NAMESPACE.keydownHandler) {
+        document.removeEventListener("keydown", AC_NAMESPACE.keydownHandler, false);
     }
-});
-
-// Reset key state on keyup
-document.addEventListener("keyup", (event) => {
-    if (event.key === "j" || event.key === "J" || 
-        event.key === "о" || event.key === "О") {
-        // Reset the key state when released
-        autoChain_keyDown = false;
+    
+    if (AC_NAMESPACE.keyupHandler) {
+        document.removeEventListener("keyup", AC_NAMESPACE.keyupHandler, false);
     }
-});
+    
+    if (AC_NAMESPACE.unloadHandler) {
+        window.removeEventListener('beforeunload', AC_NAMESPACE.unloadHandler, false);
+    }
+}
 
-// Clean up on page unload
-window.addEventListener('beforeunload', () => {
-    autoChain_stopSpamming();
-});
+// Initialize the addon
+function AC_init() {
+    // Only initialize once
+    if (!AC_NAMESPACE.initialized) {
+        AC_createUI();
+        AC_setupEventHandlers();
+        AC_NAMESPACE.initialized = true;
+        
+        // Log initialization
+        console.log('[Auto Chain Addon - Non-conflicting Version] Initialized successfully!');
+    }
+}
 
-// Initialize
-autoChain_createUI();
+// Cleanup function for addon removal
+function AC_cleanup() {
+    AC_stopSpamming();
+    AC_removeEventHandlers();
+    
+    // Remove UI elements
+    const container = document.getElementById('ac-chain-container');
+    if (container) {
+        container.remove();
+    }
+    
+    // Reset namespace
+    AC_NAMESPACE.active = false;
+    AC_NAMESPACE.initialized = false;
+    
+    console.log('[Auto Chain Addon] Cleanup completed.');
+}
+
+// Global method to force cleanup and reinitialize
+window.AC_reset = function() {
+    AC_cleanup();
+    AC_init();
+    return "Auto Chain addon was reset.";
+};
 
 // Extend the fixGameBot function if it exists
 if (typeof window.fixGameBot !== 'undefined') {
@@ -1502,22 +1596,38 @@ if (typeof window.fixGameBot !== 'undefined') {
         // Call the original function
         const result = originalFixGameBot();
         
-        // Re-add our UI
-        autoChain_createUI();
+        // Re-initialize our addon
+        window.AC_reset();
         
         return result + " Auto Chain restored.";
     };
 } else {
     // Create a new fixGameBot function if it doesn't exist
     window.fixGameBot = function() {
-        autoChain_createUI();
+        window.AC_reset();
         return "Auto Chain restored.";
     };
 }
 
-// Log that the script has loaded
-console.log('[Auto Chain Addon - Toggle Version with Fix] Loaded successfully!');
+// Initialize on load
+AC_init();
 
+// Register with addon manager if it exists
+if (typeof window.addonManager !== 'undefined') {
+    window.addonManager.register({
+        name: "Auto Chain",
+        version: "1.1",
+        description: "Toggleable auto-bomb chain using J key",
+        author: "GameBot Community",
+        cleanup: AC_cleanup,
+        reset: window.AC_reset
+    });
+}
+
+})(); // End of IIFE - isolate all variables
+
+// Log that the script has loaded
+console.log('[Auto Chain Addon - Non-conflicting Version] Loaded successfully!');
 // Chat Mode Addon
 // This addon prevents keyboard shortcuts from toggling bot features when you're in chat
 
@@ -1659,7 +1769,7 @@ const ALLOWED_KEYCODES = [
     1060, // Ф (A equivalent)
     1067, // Ы (S equivalent)
     1042, // В (D equivalent)
-    1049, //
+
     
     // Adding I and K keys (commonly used for inventory and skills)
     73,   // I key
