@@ -744,14 +744,12 @@ logActivity("Base Game Bot Framework initialized");
         onKeyDown: onKeyDown
     });
 })();
-// Rotation Addon for Game Bot Framework - FIXED VERSION
+// Rotation Addon for Game Bot Framework
 // This addon adds rotation functionality to the base bot framework with support for both QWERTY and Russian keyboard layouts
-
 // Create module-level variables outside the addon object to solve 'this' context issues
 let rotationAddon_inProgress = false;
 let rotationAddon_interval = null;
 let rotationAddon_active = false;
-let rotationAddon_lastToggleTime = 0; // Prevent double toggles
 
 // Key mapping for both layouts
 const KEY_MAPPINGS = {
@@ -769,6 +767,8 @@ const KEY_MAPPINGS = {
 };
 
 function rotationAddon_performRotation() {
+    if (!rotationAddon_active) return;
+    
     // Only start if not already in progress
     if (rotationAddon_inProgress) return;
     
@@ -778,30 +778,15 @@ function rotationAddon_performRotation() {
     // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
     const sequenceKeys = [38, 37, 40, 39, 40, 37];
     
-    // Clear any existing interval first (just to be safe)
-    if (rotationAddon_interval) {
-        clearInterval(rotationAddon_interval);
-    }
-    
-    // Start a new rotation interval
     rotationAddon_interval = setInterval(() => {
-        if (!rotationAddon_active) {
-            // If rotation was deactivated, stop the interval
-            rotationAddon_stopRotation();
-            return;
-        }
-        
-        // Simulate key press for current step
+        // Use the framework's key simulation functions
         simulateKeyDown(sequenceKeys[currentStep]);
         
         setTimeout(() => {
             simulateKeyUp(sequenceKeys[currentStep]);
             currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
-        }, 50); // Increased from 5ms to 50ms for more reliable key release
-    }, 150); // Increased from 100ms to 150ms for more reliable rotation
-    
-    // Log the start of rotation
-    logActivity("Rotation sequence started");
+        }, 5);
+    }, 100);
 }
 
 function rotationAddon_stopRotation() {
@@ -816,9 +801,6 @@ function rotationAddon_stopRotation() {
     [37, 38, 39, 40].forEach(keyCode => {
         simulateKeyUp(keyCode);
     });
-    
-    // Log the stop of rotation
-    logActivity("Rotation sequence stopped");
 }
 
 // Register the rotation addon with the bot framework
@@ -842,7 +824,6 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
     cleanup: function() {
         // Clear any ongoing rotation
         rotationAddon_stopRotation();
-        rotationAddon_active = false;
         
         logActivity("Rotation addon cleanup complete");
     },
@@ -853,31 +834,18 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
         
         // Toggle rotation mode with N key (or Russian equivalent 'т')
         if (key === 'n' || key === 'т') {
-            // Prevent rapid toggling
-            const now = Date.now();
-            if (now - rotationAddon_lastToggleTime < 500) {
-                return false; // Ignore toggle events that are too close together
-            }
-            rotationAddon_lastToggleTime = now;
-            
-            // Toggle state
             this.active = !this.active;
             rotationAddon_active = this.active;
             updateStatus('rotationAddon', this.active);
             
             // Start or stop rotation based on active state
             if (rotationAddon_active) {
-                logActivity("Rotation mode activated - continuous rotation until toggled off");
-                // Start rotation immediately if active
                 rotationAddon_performRotation();
+                logActivity("Rotation mode activated - continuous rotation until toggled off");
             } else {
                 rotationAddon_stopRotation();
                 logActivity("Rotation mode deactivated");
             }
-            
-            // Prevent this keypress from being processed further
-            event.preventDefault();
-            return false;
         }
         
         // Handle manual movement with WASD or Russian equivalents
@@ -899,7 +867,8 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
 });
 
 // Log that the addon was loaded
-logActivity("Rotation addon fixed version loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
+logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
+
 // Configurable Key Spam Addon with Russian Keyboard Support
 // This addon automatically cycles through keys 1-4 when toggled on by pressing И/B
 (function() {
@@ -908,6 +877,10 @@ logActivity("Rotation addon fixed version loaded - Press 'N' (English) or 'Т' (
     let spamInterval = null;
     const DEFAULT_SPAM_DELAY = 50; // Default ms between key presses
     let currentSpamDelay = DEFAULT_SPAM_DELAY;
+    
+    // Add debounce mechanism to prevent accidental double toggles
+    let lastToggleTime = 0;
+    const TOGGLE_COOLDOWN = 300; // Minimum milliseconds between toggle actions
     
     // Keys to cycle through (restricted to 1,2,3,4 only)
     let spamKeys = [
@@ -1260,8 +1233,25 @@ logActivity("Rotation addon fixed version loaded - Press 'N' (English) or 'Т' (
         }
     }
     
-    // Toggle spam mode
+    // Toggle spam mode with debounce protection
     function toggleSpamMode(event) {
+        const now = Date.now();
+        
+        // Check if enough time has passed since last toggle
+        if (now - lastToggleTime < TOGGLE_COOLDOWN) {
+            logActivity("Toggle too soon, ignoring");
+            // Prevent default behavior and stop propagation
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            return;
+        }
+        
+        // Update last toggle time
+        lastToggleTime = now;
+        
+        // Toggle spam state
         spamActive = !spamActive;
         updateStatus('spam-status', spamActive);
         
@@ -1278,12 +1268,23 @@ logActivity("Rotation addon fixed version loaded - Press 'N' (English) or 'Т' (
         }
     }
     
+    // Create a state variable to track if key is currently down
+    let toggleKeyDown = false;
+    
     // Handle keydown events - support both Latin 'B' and Cyrillic 'И' (which is on the same key as 'B')
     function onKeyDown(event) {
         // Check for both Latin 'b' and Cyrillic 'и' (Russian B key)
-        if (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') {
+        if ((event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') && !toggleKeyDown) {
+            toggleKeyDown = true;
             toggleSpamMode(event);
             return false; // Prevent further processing
+        }
+    }
+    
+    // Add keyup handler to reset the key state
+    function onKeyUp(event) {  
+        if (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') {
+            toggleKeyDown = false;
         }
     }
     
@@ -1293,10 +1294,10 @@ logActivity("Rotation addon fixed version loaded - Press 'N' (English) or 'Т' (
         initialActive: spamActive,
         initialize: initialize,
         cleanup: cleanup,
-        onKeyDown: onKeyDown
+        onKeyDown: onKeyDown,
+        onKeyUp: onKeyUp // Add keyup handler
     });
 })();
-
 /**
  * Auto Chain Addon - Toggleable version that places bombs automatically when enabled
  * This addon properly integrates with the Game Bot Framework using the addon manager
