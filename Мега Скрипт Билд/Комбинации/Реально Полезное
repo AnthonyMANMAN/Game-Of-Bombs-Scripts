@@ -746,7 +746,6 @@ logActivity("Base Game Bot Framework initialized");
 })();
 // Rotation Addon for Game Bot Framework
 // This addon adds rotation functionality to the base bot framework with support for both QWERTY and Russian keyboard layouts
-
 // Create module-level variables outside the addon object to solve 'this' context issues
 let rotationAddon_inProgress = false;
 let rotationAddon_interval = null;
@@ -767,46 +766,6 @@ const KEY_MAPPINGS = {
     'в': 39  // Right arrow (Russian 'v' - position of 'd')
 };
 
-// Make sure these functions exist
-// If they don't exist in your framework, define them here
-if (typeof logActivity !== 'function') {
-    window.logActivity = function(message) {
-        console.log('[RotationAddon]', message);
-    };
-}
-
-if (typeof updateStatus !== 'function') {
-    window.updateStatus = function(addonName, isActive) {
-        console.log(`[Status Update] ${addonName}: ${isActive ? 'Active' : 'Inactive'}`);
-    };
-}
-
-if (typeof simulateKeyDown !== 'function') {
-    window.simulateKeyDown = function(keyCode) {
-        console.log(`[KeyDown] Simulating key press: ${keyCode}`);
-        // Implementation depends on your framework - this is a basic example
-        const event = new KeyboardEvent('keydown', {
-            bubbles: true,
-            cancelable: true,
-            keyCode: keyCode
-        });
-        document.dispatchEvent(event);
-    };
-}
-
-if (typeof simulateKeyUp !== 'function') {
-    window.simulateKeyUp = function(keyCode) {
-        console.log(`[KeyUp] Releasing key: ${keyCode}`);
-        // Implementation depends on your framework - this is a basic example
-        const event = new KeyboardEvent('keyup', {
-            bubbles: true,
-            cancelable: true,
-            keyCode: keyCode
-        });
-        document.dispatchEvent(event);
-    };
-}
-
 function rotationAddon_performRotation() {
     if (!rotationAddon_active) return;
     
@@ -814,7 +773,6 @@ function rotationAddon_performRotation() {
     if (rotationAddon_inProgress) return;
     
     rotationAddon_inProgress = true;
-    logActivity("Starting rotation sequence");
     
     let currentStep = 0;
     // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
@@ -827,20 +785,14 @@ function rotationAddon_performRotation() {
         setTimeout(() => {
             simulateKeyUp(sequenceKeys[currentStep]);
             currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
-            
-            // Debug log every few steps
-            if (currentStep === 0) {
-                logActivity("Rotation cycle complete, continuing...");
-            }
-        }, 5); // Increased delay between key up and down
-    }, 5); // Increased interval between steps
+        }, 5);
+    }, 100);
 }
 
 function rotationAddon_stopRotation() {
     if (rotationAddon_interval) {
         clearInterval(rotationAddon_interval);
         rotationAddon_interval = null;
-        logActivity("Rotation stopped - cleared interval");
     }
     
     rotationAddon_inProgress = false;
@@ -851,42 +803,10 @@ function rotationAddon_stopRotation() {
     });
 }
 
-// Create the addon manager if it doesn't exist
-if (!window.gameBotAddonManager) {
-    window.gameBotAddonManager = {
-        addons: {},
-        registerFeature: function(name, addon) {
-            this.addons[name] = addon;
-            if (typeof addon.initialize === 'function') {
-                addon.initialize();
-            }
-            console.log(`Addon "${name}" registered successfully`);
-        }
-    };
-    
-    // Set up global event listeners for key events
-    document.addEventListener('keydown', function(event) {
-        Object.values(window.gameBotAddonManager.addons).forEach(addon => {
-            if (typeof addon.onKeyDown === 'function') {
-                addon.onKeyDown(event);
-            }
-        });
-    });
-    
-    document.addEventListener('keyup', function(event) {
-        Object.values(window.gameBotAddonManager.addons).forEach(addon => {
-            if (typeof addon.onKeyUp === 'function') {
-                addon.onKeyUp(event);
-            }
-        });
-    });
-}
-
 // Register the rotation addon with the bot framework
 window.gameBotAddonManager.registerFeature('rotationAddon', {
     label: 'Режим Вращения(N/Т)',
     initialActive: false,
-    active: false, // Ensure the active property exists
     
     // Initialize the addon
     initialize: function() {
@@ -894,14 +814,10 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
         logActivity("Rotation addon initialized - use 'N' or 'Т' key to toggle");
         
         // Set the initial active state
-        rotationAddon_active = this.initialActive;
-        this.active = this.initialActive;
+        rotationAddon_active = this.active;
         
         // Initial UI status update
         updateStatus('rotationAddon', this.active);
-        
-        // Debug listener to confirm key detection
-        console.log("Rotation addon is listening for 'N' or 'Т' key presses");
     },
     
     // Cleanup when the addon is disabled
@@ -916,24 +832,19 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
     onKeyDown: function(event) {
         const key = event.key.toLowerCase();
         
-        // Log all key presses for debugging
-        console.log(`Key pressed: "${key}" (code: ${event.keyCode})`);
-        
         // Toggle rotation mode with N key (or Russian equivalent 'т')
         if (key === 'n' || key === 'т') {
-            console.log("Toggle key detected!");
             this.active = !this.active;
             rotationAddon_active = this.active;
-            
             updateStatus('rotationAddon', this.active);
             
             // Start or stop rotation based on active state
             if (rotationAddon_active) {
-                logActivity("Rotation mode activated - continuous rotation until toggled off");
                 rotationAddon_performRotation();
+                logActivity("Rotation mode activated - continuous rotation until toggled off");
             } else {
-                logActivity("Rotation mode deactivated");
                 rotationAddon_stopRotation();
+                logActivity("Rotation mode deactivated");
             }
         }
         
@@ -952,36 +863,11 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
         if (KEY_MAPPINGS[key]) {
             simulateKeyUp(KEY_MAPPINGS[key]);
         }
-    },
-    
-    // Manual toggle function that can be called if key events aren't working
-    toggle: function() {
-        this.active = !this.active;
-        rotationAddon_active = this.active;
-        updateStatus('rotationAddon', this.active);
-        
-        if (rotationAddon_active) {
-            logActivity("Rotation mode activated manually");
-            rotationAddon_performRotation();
-        } else {
-            logActivity("Rotation mode deactivated manually");
-            rotationAddon_stopRotation();
-        }
     }
 });
 
-// Add a direct toggle function to window for manual testing
-window.toggleRotation = function() {
-    if (window.gameBotAddonManager && window.gameBotAddonManager.addons.rotationAddon) {
-        window.gameBotAddonManager.addons.rotationAddon.toggle();
-        return "Rotation toggled manually";
-    }
-    return "Failed to toggle rotation - addon not found";
-};
-
 // Log that the addon was loaded
 logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
-console.log("You can also manually toggle rotation by typing 'toggleRotation()' in the browser console");
 // Configurable Key Spam Addon with Russian Keyboard Support
 // This addon automatically cycles through keys 1-4 when toggled on by pressing И/B
 (function() {
