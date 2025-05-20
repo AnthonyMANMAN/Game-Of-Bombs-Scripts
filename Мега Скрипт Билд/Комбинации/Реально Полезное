@@ -1772,7 +1772,7 @@ const ALLOWED_KEYCODES = [
 
     
     // Adding I and K keys (commonly used for inventory and skills)
-    73,   // I key
+
     75,   // K key
     
     // Adding Space key
