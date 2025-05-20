@@ -21,6 +21,8 @@ const KEY_MAPPINGS = {
 };
 
 function rotationAddon_performRotation() {
+    if (!rotationAddon_active) return;
+    
     // Only start if not already in progress
     if (rotationAddon_inProgress) return;
     
@@ -92,17 +94,12 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
             
             // Start or stop rotation based on active state
             if (rotationAddon_active) {
-                logActivity("Rotation mode activated - continuous rotation until toggled off");
-                // Start rotation immediately if active
                 rotationAddon_performRotation();
+                logActivity("Rotation mode activated - continuous rotation until toggled off");
             } else {
                 rotationAddon_stopRotation();
                 logActivity("Rotation mode deactivated");
             }
-            
-            // Prevent this keypress from being processed further
-            event.preventDefault();
-            return false;
         }
         
         // Handle manual movement with WASD or Russian equivalents
@@ -125,3 +122,4 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
 
 // Log that the addon was loaded
 logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
+
