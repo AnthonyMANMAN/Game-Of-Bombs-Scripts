@@ -751,6 +751,7 @@ logActivity("Base Game Bot Framework initialized");
 let rotationAddon_inProgress = false;
 let rotationAddon_interval = null;
 let rotationAddon_active = false;
+let rotationAddon_lastToggleTime = 0; // Add debounce tracking
 
 // Key mapping for both layouts
 const KEY_MAPPINGS = {
@@ -916,12 +917,21 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
     onKeyDown: function(event) {
         const key = event.key.toLowerCase();
         
-        // Log all key presses for debugging
+        // Debug log for key presses
         console.log(`Key pressed: "${key}" (code: ${event.keyCode})`);
         
         // Toggle rotation mode with N key (or Russian equivalent 'т')
         if (key === 'n' || key === 'т') {
+            // Implement debounce to prevent multiple rapid toggles
+            const currentTime = Date.now();
+            if (currentTime - rotationAddon_lastToggleTime < 500) {
+                console.log("Toggle ignored - too soon after last toggle");
+                return; // Ignore toggles that happen too quickly
+            }
+            
+            rotationAddon_lastToggleTime = currentTime;
             console.log("Toggle key detected!");
+            
             this.active = !this.active;
             rotationAddon_active = this.active;
             
@@ -935,6 +945,10 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
                 logActivity("Rotation mode deactivated");
                 rotationAddon_stopRotation();
             }
+            
+            // Prevent this keydown from propagating
+            event.preventDefault();
+            event.stopPropagation();
         }
         
         // Handle manual movement with WASD or Russian equivalents
@@ -956,6 +970,15 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
     
     // Manual toggle function that can be called if key events aren't working
     toggle: function() {
+        // Apply same debounce logic here
+        const currentTime = Date.now();
+        if (currentTime - rotationAddon_lastToggleTime < 500) {
+            console.log("Manual toggle ignored - too soon after last toggle");
+            return; // Ignore toggles that happen too quickly
+        }
+        
+        rotationAddon_lastToggleTime = currentTime;
+        
         this.active = !this.active;
         rotationAddon_active = this.active;
         updateStatus('rotationAddon', this.active);
