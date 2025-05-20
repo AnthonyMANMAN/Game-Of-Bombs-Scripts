@@ -832,8 +832,8 @@ function rotationAddon_performRotation() {
             if (currentStep === 0) {
                 logActivity("Rotation cycle complete, continuing...");
             }
-        }, 50); // Increased delay between key up and down
-    }, 150); // Increased interval between steps
+        }, 5); // Increased delay between key up and down
+    }, 5); // Increased interval between steps
 }
 
 function rotationAddon_stopRotation() {
