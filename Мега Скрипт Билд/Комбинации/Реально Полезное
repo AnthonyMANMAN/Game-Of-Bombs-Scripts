@@ -767,8 +767,6 @@ const KEY_MAPPINGS = {
 };
 
 function rotationAddon_performRotation() {
-    if (!rotationAddon_active) return;
-    
     // Only start if not already in progress
     if (rotationAddon_inProgress) return;
     
@@ -840,12 +838,17 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
             
             // Start or stop rotation based on active state
             if (rotationAddon_active) {
-                rotationAddon_performRotation();
                 logActivity("Rotation mode activated - continuous rotation until toggled off");
+                // Start rotation immediately if active
+                rotationAddon_performRotation();
             } else {
                 rotationAddon_stopRotation();
                 logActivity("Rotation mode deactivated");
             }
+            
+            // Prevent this keypress from being processed further
+            event.preventDefault();
+            return false;
         }
         
         // Handle manual movement with WASD or Russian equivalents
@@ -868,6 +871,7 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
 
 // Log that the addon was loaded
 logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
+
 // Configurable Key Spam Addon with Russian Keyboard Support
 // This addon automatically cycles through keys 1-4 when toggled on by pressing И/B
 (function() {
@@ -1229,7 +1233,7 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
     }
     
     // Toggle spam mode
-    function toggleSpamMode() {
+    function toggleSpamMode(event) {
         spamActive = !spamActive;
         updateStatus('spam-status', spamActive);
         
@@ -1238,13 +1242,20 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
         } else {
             stopSpamming();
         }
+        
+        // Prevent default behavior and stop propagation
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
     }
     
     // Handle keydown events - support both Latin 'B' and Cyrillic 'И' (which is on the same key as 'B')
     function onKeyDown(event) {
         // Check for both Latin 'b' and Cyrillic 'и' (Russian B key)
         if (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') {
-            toggleSpamMode();
+            toggleSpamMode(event);
+            return false; // Prevent further processing
         }
     }
     
@@ -1257,6 +1268,7 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
         onKeyDown: onKeyDown
     });
 })();
+
 /**
  * Auto Chain Addon - Toggleable version that places bombs automatically when enabled
  * This addon properly integrates with the Game Bot Framework using the addon manager
@@ -1292,7 +1304,7 @@ function autoChain_createUI() {
     `;
     
     const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (J/О)'; // Russian 'O' corresponds to English 'J'
+    autoChainLabel.textContent = 'Цепь (О)'; // Russian 'O' corresponds to English 'J'
     
     const autoChainStatus = document.createElement('span');
     autoChainStatus.id = 'auto-chain-status';
@@ -1625,7 +1637,22 @@ const ALLOWED_KEYCODES = [
     120,  // F9
     121,  // F10
     122,  // F11
-    123   // F12
+    123,  // F12
+    
+    // Adding WASD keys
+    87,   // W key
+    65,   // A key
+    83,   // S key
+    68,   // D key
+    
+    // Adding Russian WASD equivalent in ЙЦУКЕН layout
+    1062, // Ц (W equivalent)
+    1060, // Ф (A equivalent)
+    1067, // Ы (S equivalent)
+    1042, // В (D equivalent)
+    
+    // Adding Space key
+    32    // Space key
 ];
 
 // Add our own handlers that run first
