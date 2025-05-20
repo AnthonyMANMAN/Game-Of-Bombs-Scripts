@@ -1292,7 +1292,7 @@ function autoChain_createUI() {
     `;
     
     const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (О)'; // Russian 'O' corresponds to English 'J'
+    autoChainLabel.textContent = 'Цепь (J/О)'; // Russian 'O' corresponds to English 'J'
     
     const autoChainStatus = document.createElement('span');
     autoChainStatus.id = 'auto-chain-status';
