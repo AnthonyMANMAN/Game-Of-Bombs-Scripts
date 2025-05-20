@@ -125,7 +125,22 @@ const ALLOWED_KEYCODES = [
     120,  // F9
     121,  // F10
     122,  // F11
-    123   // F12
+    123,  // F12
+    
+    // Adding WASD keys
+    87,   // W key
+    65,   // A key
+    83,   // S key
+    68,   // D key
+    
+    // Adding Russian WASD equivalent in ЙЦУКЕН layout
+    1062, // Ц (W equivalent)
+    1060, // Ф (A equivalent)
+    1067, // Ы (S equivalent)
+    1042, // В (D equivalent)
+    
+    // Adding Space key
+    32    // Space key
 ];
 
 // Add our own handlers that run first
