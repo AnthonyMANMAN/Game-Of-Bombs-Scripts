@@ -482,8 +482,8 @@ let spamKeys = [
 const keyboardMappings = {
     // Auto Chain keys
     'c': ['c', 'C', 'с', 'С'], // C/С (English/Russian)
-    'j': ['j', 'J', 'о', 'О'], // J/О (correct mapping for ЙЦУКЕН)
-    'k': ['k', 'K', 'к', 'К'], // K/К
+    'j': ['j', 'J', 'й', 'Й'], // J/О (correct mapping for ЙЦУКЕН)
+    'k': ['k', 'K', 'л', 'Л'], // K/К
     
     // Rotation key
     'n': ['n', 'N', 'т', 'Т'], // N/Т
