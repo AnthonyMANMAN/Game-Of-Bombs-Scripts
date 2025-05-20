@@ -1,5 +1,5 @@
 /**
- * Auto Chain Addon - Rapidly places bombs when C key is held down
+ * Auto Chain Addon - Toggleable version that places bombs automatically when enabled
  * This addon properly integrates with the Game Bot Framework using the addon manager
  */
 
@@ -33,7 +33,7 @@ function autoChain_createUI() {
     `;
     
     const autoChainLabel = document.createElement('span');
-    autoChainLabel.textContent = 'Цепь (J/О)';
+    autoChainLabel.textContent = 'Цепь (О)'; // Russian 'O' corresponds to English 'J'
     
     const autoChainStatus = document.createElement('span');
     autoChainStatus.id = 'auto-chain-status';
@@ -156,39 +156,56 @@ function autoChain_stopSpamming() {
     if (autoChain_interval) {
         clearInterval(autoChain_interval);
         autoChain_interval = null;
+        
+        if (typeof logActivity === 'function') {
+            logActivity("Auto Chain spam stopped");
+        } else {
+            console.log("Auto Chain spam stopped");
+        }
     }
 }
 
-// Activate Auto Chain when C key is pressed down
-document.addEventListener("keydown", (event) => {
-   if ((event.key === "j" || event.key === "J" || event.key === "о" || event.key === "О") && !autoChain_active) {
-        autoChain_active = true;
-        autoChain_updateStatus();
-        autoChain_flashStatus();
-        
+// Toggle Auto Chain state when key is pressed
+function autoChain_toggle() {
+    autoChain_active = !autoChain_active;
+    autoChain_updateStatus();
+    autoChain_flashStatus();
+    
+    if (autoChain_active) {
         if (typeof logActivity === 'function') {
-            logActivity("Auto Chain activated (holding)");
+            logActivity("Auto Chain activated (toggled ON)");
         } else {
-            console.log("Auto Chain activated (holding)");
+            console.log("Auto Chain activated (toggled ON)");
         }
-        
         autoChain_startSpamming(); // Start bombing
-    }
-});
-
-// Deactivate Auto Chain when C key is released
-document.addEventListener("keyup", (event) => {
-    if (event.key === "j" || event.key === "J" || event.key === "о" || event.key === "О") {
-        autoChain_active = false;
-        autoChain_updateStatus();
-        
+    } else {
         if (typeof logActivity === 'function') {
-            logActivity("Auto Chain deactivated (released)");
+            logActivity("Auto Chain deactivated (toggled OFF)");
         } else {
-            console.log("Auto Chain deactivated (released)");
+            console.log("Auto Chain deactivated (toggled OFF)");
+        }
+        autoChain_stopSpamming(); // Stop bombing
+    }
+}
+
+// Listen for the O key in both Russian and English layouts
+document.addEventListener("keydown", (event) => {
+    // Check for 'o' key in English (which is 'о' in Russian layout)
+    // and for actual Russian 'о' key
+    if (event.key === "j" || event.key === "J" || // English layout
+        event.key === "о" || event.key === "О") { // Russian layout
+        
+        // Only toggle on initial press, ignore key repeat
+        if (!event.repeat) {
+            autoChain_toggle();
         }
         
-        autoChain_stopSpamming(); // Stop bombing
+        // Prevent default action to avoid text input when typing in chat
+        // Only if we're not in an input field
+        if (document.activeElement.tagName !== "INPUT" && 
+            document.activeElement.tagName !== "TEXTAREA") {
+            event.preventDefault();
+        }
     }
 });
 
@@ -221,4 +238,4 @@ if (typeof window.fixGameBot !== 'undefined') {
 }
 
 // Log that the script has loaded
-console.log('[Auto Chain Addon - Hold Version] Loaded successfully!');
+console.log('[Auto Chain Addon - Toggle Version] Loaded successfully!');
