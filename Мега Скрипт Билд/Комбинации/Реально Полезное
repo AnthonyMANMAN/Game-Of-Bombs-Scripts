@@ -1277,6 +1277,7 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
 // Create module-level variables outside the addon object to solve 'this' context issues
 let autoChain_active = false;
 let autoChain_interval = null;
+let autoChain_keyDown = false; // Track if toggle key is being held down
 
 // Create UI for this functionality
 function autoChain_createUI() {
@@ -1459,24 +1460,30 @@ function autoChain_toggle() {
     }
 }
 
-// Listen for the O key in both Russian and English layouts
+// Fixed event listeners to prevent multiple toggles
 document.addEventListener("keydown", (event) => {
-    // Check for 'o' key in English (which is 'о' in Russian layout)
-    // and for actual Russian 'о' key
-    if (event.key === "j" || event.key === "J" || // English layout
-        event.key === "о" || event.key === "О") { // Russian layout
+    // Check for toggle keys
+    if ((event.key === "j" || event.key === "J" || 
+         event.key === "о" || event.key === "О") && !autoChain_keyDown) {
         
-        // Only toggle on initial press, ignore key repeat
-        if (!event.repeat) {
-            autoChain_toggle();
-        }
+        // Set the key state to down to prevent multiple toggles
+        autoChain_keyDown = true;
         
-        // Prevent default action to avoid text input when typing in chat
-        // Only if we're not in an input field
+        // Only toggle if not in an input field
         if (document.activeElement.tagName !== "INPUT" && 
             document.activeElement.tagName !== "TEXTAREA") {
+            autoChain_toggle();
             event.preventDefault();
         }
+    }
+});
+
+// Reset key state on keyup
+document.addEventListener("keyup", (event) => {
+    if (event.key === "j" || event.key === "J" || 
+        event.key === "о" || event.key === "О") {
+        // Reset the key state when released
+        autoChain_keyDown = false;
     }
 });
 
@@ -1509,7 +1516,8 @@ if (typeof window.fixGameBot !== 'undefined') {
 }
 
 // Log that the script has loaded
-console.log('[Auto Chain Addon - Toggle Version] Loaded successfully!');
+console.log('[Auto Chain Addon - Toggle Version with Fix] Loaded successfully!');
+
 // Chat Mode Addon
 // This addon prevents keyboard shortcuts from toggling bot features when you're in chat
 
