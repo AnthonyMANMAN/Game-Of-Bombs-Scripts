@@ -1644,12 +1644,14 @@ const ALLOWED_KEYCODES = [
     65,   // A key
     83,   // S key
     68,   // D key
+    81, // Q key
     
     // Adding Russian WASD equivalent in ЙЦУКЕН layout
     1062, // Ц (W equivalent)
     1060, // Ф (A equivalent)
     1067, // Ы (S equivalent)
     1042, // В (D equivalent)
+    1049, //
     
     // Adding I and K keys (commonly used for inventory and skills)
     73,   // I key
