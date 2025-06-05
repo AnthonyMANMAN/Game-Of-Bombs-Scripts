@@ -99,7 +99,7 @@ function createVisualUI() {
         position: fixed;
         top: 5px;
         right: 90px;
-        width: 280px;
+        width: 240px;
         background: linear-gradient(145deg, rgba(20, 20, 30, 0.95), rgba(40, 40, 60, 0.95));
         color: #ffffff;
         padding: 0;
@@ -139,38 +139,7 @@ function createVisualUI() {
     `;
 
     // Add activity log with improved styling
-    const logContainer = document.createElement('div');
-    logContainer.style.cssText = `
-        margin-top: 16px;
-        background: rgba(0, 0, 0, 0.3);
-        border-radius: 12px;
-        padding: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    `;
-
-    const logLabel = document.createElement('div');
-    logLabel.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-            <div style="width: 6px; height: 6px; background: #2196F3; border-radius: 50%;"></div>
-            <span style="font-weight: 500; font-size: 13px; color: #B8BCC8;">Activity Log</span>
-        </div>
-    `;
-    logContainer.appendChild(logLabel);
-
-    const logContent = document.createElement('div');
-    logContent.id = 'bot-log';
-    logContent.style.cssText = `
-        font-size: 11px;
-        color: #9CA3AF;
-        max-height: 100px;
-        overflow-y: auto;
-        line-height: 1.4;
-    `;
-    logContent.classList.add('bot-ui-scroll');
-    logContainer.appendChild(logContent);
-    contentArea.appendChild(logContainer);
-
-    // Add emergency key release button with enhanced styling
+      // Add emergency key release button with enhanced styling
     const emergencyButton = document.createElement('button');
     emergencyButton.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
