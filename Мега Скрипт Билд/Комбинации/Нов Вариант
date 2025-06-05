@@ -97,8 +97,8 @@ function createVisualUI() {
     uiContainer.id = 'bot-ui-container';
     uiContainer.style.cssText = `
         position: fixed;
-        top: 20px;
-        right: 20px;
+        top: 5px;
+        right: 90px;
         width: 280px;
         background: linear-gradient(145deg, rgba(20, 20, 30, 0.95), rgba(40, 40, 60, 0.95));
         color: #ffffff;
