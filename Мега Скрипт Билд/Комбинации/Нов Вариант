@@ -1,0 +1,1685 @@
+// Base Script - Game Bot Framework
+// Core functionality for the game bot with enhanced UI and key tracking
+
+// Global variables for script control
+let active = true; // General toggle state for the bot
+let isToggling = false; // Flag to prevent duplicate toggling
+let lastFlashTime = 0; // Track the last time a button was flashed
+const FLASH_COOLDOWN = 300; // Minimum time between UI flashes in milliseconds
+let minimized = false; // Track UI state
+let activeKeys = new Set(); // Track currently pressed keys to prevent stuck keys
+
+// Key mapping for easy reference 
+const KEY_MAP = {
+    87: "W",
+    65: "A",
+    83: "S",
+    68: "D",
+    75: "K",
+    32: "Space",
+    82: "R",
+    37: "←",
+    38: "↑",
+    39: "→",
+    40: "↓"
+};
+
+// Define key codes
+const ee = {
+    up: { keyCode: 87, key: "w" },
+    left: { keyCode: 65, key: "a" },
+    down: { keyCode: 83, key: "s" },
+    right: { keyCode: 68, key: "d" },
+    upLeft: { keys: [87, 65] },
+    upRight: { keys: [87, 68] },
+    downLeft: { keys: [83, 65] },
+    downRight: { keys: [83, 68] }
+};
+
+// Create UI for visual feedback
+function createVisualUI() {
+    // Remove any existing UI first (prevents duplicates on re-initialization)
+    const existingUI = document.getElementById('bot-ui-container');
+    if (existingUI) {
+        existingUI.remove();
+    }
+
+    // Inject CSS styles for better animations and effects
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(76, 175, 80, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(76, 175, 80, 0.6); }
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+        }
+        
+        .bot-ui-glass {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .bot-ui-button-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .bot-ui-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .bot-ui-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        
+        .bot-ui-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+        
+        .bot-ui-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Create container for the UI
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'bot-ui-container';
+    uiContainer.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 280px;
+        background: linear-gradient(145deg, rgba(20, 20, 30, 0.95), rgba(40, 40, 60, 0.95));
+        color: #ffffff;
+        padding: 0;
+        border-radius: 16px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        z-index: 9999;
+        user-select: none;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        animation: slideIn 0.3s ease-out;
+        transition: all 0.3s ease;
+    `;
+    uiContainer.classList.add('bot-ui-glass');
+
+    // Create header with gradient background
+    const header = document.createElement('div');
+    header.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #4CAF50, #45a049); border-radius: 50%; animation: pulse 2s infinite;"></div>
+            <span style="font-weight: 600; font-size: 16px;">Бомбер Скрипты</span>
+        </div>
+    `;
+    header.style.cssText = `
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(56, 142, 60, 0.2));
+        padding: 16px 20px;
+        border-radius: 16px 16px 0 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+    `;
+    uiContainer.appendChild(header);
+
+    // Create content area
+    const contentArea = document.createElement('div');
+    contentArea.id = 'bot-content-area';
+    contentArea.style.cssText = `
+        padding: 16px 20px;
+    `;
+
+    // Add activity log with improved styling
+    const logContainer = document.createElement('div');
+    logContainer.style.cssText = `
+        margin-top: 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 12px;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+
+    const logLabel = document.createElement('div');
+    logLabel.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <div style="width: 6px; height: 6px; background: #2196F3; border-radius: 50%;"></div>
+            <span style="font-weight: 500; font-size: 13px; color: #B8BCC8;">Activity Log</span>
+        </div>
+    `;
+    logContainer.appendChild(logLabel);
+
+    const logContent = document.createElement('div');
+    logContent.id = 'bot-log';
+    logContent.style.cssText = `
+        font-size: 11px;
+        color: #9CA3AF;
+        max-height: 100px;
+        overflow-y: auto;
+        line-height: 1.4;
+    `;
+    logContent.classList.add('bot-ui-scroll');
+    logContainer.appendChild(logContent);
+    contentArea.appendChild(logContainer);
+
+    // Add emergency key release button with enhanced styling
+    const emergencyButton = document.createElement('button');
+    emergencyButton.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span style="font-size: 14px;">⚠️</span>
+            <span>Фикс на заевшие клавишы</span>
+        </div>
+    `;
+    emergencyButton.style.cssText = `
+        background: linear-gradient(135deg, #ff4757, #ff3838);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-top: 16px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: 600;
+        font-size: 13px;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
+    `;
+    emergencyButton.classList.add('bot-ui-button-hover');
+    emergencyButton.addEventListener('click', () => {
+        releaseAllKeysEmergency();
+        logActivity('🚨 Emergency key release triggered!');
+        // Add feedback animation
+        emergencyButton.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            emergencyButton.style.transform = '';
+        }, 150);
+    });
+    contentArea.appendChild(emergencyButton);
+
+    uiContainer.appendChild(contentArea);
+
+    // Add minimize/maximize button with better styling
+    const toggleButton = document.createElement('button');
+    toggleButton.innerHTML = '−';
+    toggleButton.style.cssText = `
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    `;
+
+    toggleButton.addEventListener('mouseenter', () => {
+        toggleButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        toggleButton.style.transform = 'scale(1.1)';
+    });
+
+    toggleButton.addEventListener('mouseleave', () => {
+        toggleButton.style.background = 'rgba(255, 255, 255, 0.1)';
+        toggleButton.style.transform = 'scale(1)';
+    });
+    
+    toggleButton.addEventListener('click', () => {
+        minimized = !minimized;
+        const contentArea = document.getElementById('bot-content-area');
+        
+        if (contentArea) {
+            if (minimized) {
+                contentArea.style.display = 'none';
+                uiContainer.style.width = '200px';
+                toggleButton.innerHTML = '+';
+            } else {
+                contentArea.style.display = 'block';
+                uiContainer.style.width = '280px';
+                toggleButton.innerHTML = '−';
+            }
+        }
+        
+        // Add click animation
+        toggleButton.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+            toggleButton.style.transform = minimized ? 'scale(1)' : 'scale(1)';
+        }, 100);
+    });
+    
+    uiContainer.appendChild(toggleButton);
+
+    // Add the container to the document
+    document.body.appendChild(uiContainer);
+}
+
+// Update UI status for a feature with enhanced visual feedback
+function updateStatus(id, active, text = null) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = text || (active ? 'ON' : 'OFF');
+        element.style.color = active ? '#4CAF50' : '#FF5252';
+        element.style.textShadow = active ? '0 0 8px rgba(76, 175, 80, 0.5)' : 'none';
+        
+        // Add subtle animation
+        element.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+            element.style.transform = 'scale(1)';
+        }, 150);
+    }
+}
+
+// Improved flash function with better visual effects
+function flashButtonStatus(id, color = '#FFD700', duration = 200) {
+    const now = Date.now();
+    if (now - lastFlashTime >= FLASH_COOLDOWN) {
+        const element = document.getElementById(id);
+        if (element) {
+            const originalStyles = {
+                backgroundColor: element.style.backgroundColor,
+                boxShadow: element.style.boxShadow,
+                transform: element.style.transform
+            };
+            
+            // Enhanced flash effect
+            element.style.backgroundColor = color;
+            element.style.boxShadow = `0 0 15px ${color}`;
+            element.style.transform = 'scale(1.05)';
+            
+            setTimeout(() => {
+                element.style.backgroundColor = originalStyles.backgroundColor;
+                element.style.boxShadow = originalStyles.boxShadow;
+                element.style.transform = originalStyles.transform;
+            }, duration);
+        }
+        lastFlashTime = now;
+    }
+}
+
+// Add message to the log with better formatting
+function logActivity(message) {
+    const logElement = document.getElementById('bot-log');
+    if (logElement) {
+        const timestamp = new Date().toLocaleTimeString();
+        const logItem = document.createElement('div');
+        logItem.style.cssText = `
+            padding: 4px 0;
+            border-left: 2px solid rgba(76, 175, 80, 0.5);
+            padding-left: 8px;
+            margin-bottom: 4px;
+            background: rgba(76, 175, 80, 0.05);
+            border-radius: 4px;
+            animation: slideIn 0.3s ease-out;
+        `;
+        logItem.innerHTML = `
+            <div style="color: #4CAF50; font-size: 10px; margin-bottom: 2px;">[${timestamp}]</div>
+            <div style="color: #E0E0E0;">${message}</div>
+        `;
+        logElement.prepend(logItem);
+        
+        // Limit number of log items
+        if (logElement.children.length > 10) {
+            logElement.removeChild(logElement.lastChild);
+        }
+    }
+    console.log(message); // Still log to console as well
+}
+
+// Enhanced key simulation functions that track key state
+function simulateKeyDown(direction) {
+    if (typeof direction === 'number') {
+        // Handle single keyCode input
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction }));
+        activeKeys.add(direction); // Add to active keys set
+        return;
+    }
+    
+    if (direction.keys) {
+        direction.keys.forEach(keyCode => {
+            document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+            activeKeys.add(keyCode); // Add to active keys set
+        });
+    } else {
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: direction.keyCode, key: direction.key }));
+        activeKeys.add(direction.keyCode); // Add to active keys set
+    }
+}
+
+function simulateKeyUp(direction) {
+    if (typeof direction === 'number') {
+        // Handle single keyCode input
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction }));
+        activeKeys.delete(direction); // Remove from active keys
+        return;
+    }
+    
+    if (direction.keys) {
+        direction.keys.forEach(keyCode => {
+            document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+            activeKeys.delete(keyCode); // Remove from active keys
+        });
+    } else {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: direction.keyCode, key: direction.key }));
+        activeKeys.delete(direction.keyCode); // Remove from active keys
+    }
+}
+
+// Emergency function to release ALL keys (for stuck keys)
+function releaseAllKeysEmergency() {
+    // Release all common game keys
+    [65, 68, 75, 82, 83, 87, 32, 37, 38, 39, 40].forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    });
+    
+    // Also release any keys tracked in our activeKeys set
+    activeKeys.forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+    });
+    
+    // Clear the active keys set
+    activeKeys.clear();
+    
+    logActivity("🔄 All keys released - reset complete");
+    
+    // Call registered cleanup functions if any exist
+    if (typeof window.gameBotCleanupFunctions === 'object') {
+        window.gameBotCleanupFunctions.forEach(fn => {
+            try {
+                fn();
+            } catch (e) {
+                console.error("Error in cleanup function:", e);
+            }
+        });
+    }
+}
+
+// Function to add feature display to the UI with enhanced styling
+function addFeatureToUI(id, label, initialActive) {
+    const contentArea = document.getElementById('bot-content-area');
+    if (!contentArea) return false; // UI not initialized yet
+    
+    // Check if feature already exists
+    if (document.getElementById(id)) return false;
+    
+    // Create feature container with enhanced styling
+    const featureContainer = document.createElement('div');
+    featureContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.2s ease;
+    `;
+
+    // Add hover effect
+    featureContainer.addEventListener('mouseenter', () => {
+        featureContainer.style.background = 'rgba(255, 255, 255, 0.08)';
+        featureContainer.style.transform = 'translateX(2px)';
+    });
+
+    featureContainer.addEventListener('mouseleave', () => {
+        featureContainer.style.background = 'rgba(255, 255, 255, 0.05)';
+        featureContainer.style.transform = 'translateX(0)';
+    });
+
+    const featureLabel = document.createElement('span');
+    featureLabel.textContent = label;
+    featureLabel.style.cssText = `
+        font-weight: 500;
+        font-size: 13px;
+        color: #E0E0E0;
+    `;
+
+    const status = document.createElement('span');
+    status.id = id;
+    status.textContent = initialActive ? 'ON' : 'OFF';
+    status.style.cssText = `
+        font-weight: 600;
+        font-size: 11px;
+        color: ${initialActive ? '#4CAF50' : '#FF5252'};
+        background: ${initialActive ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 82, 82, 0.2)'};
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid ${initialActive ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 82, 82, 0.3)'};
+        transition: all 0.2s ease;
+        text-shadow: ${initialActive ? '0 0 8px rgba(76, 175, 80, 0.5)' : 'none'};
+        min-width: 32px;
+        text-align: center;
+    `;
+
+    featureContainer.appendChild(featureLabel);
+    featureContainer.appendChild(status);
+    
+    // Insert at the beginning of content area
+    const firstChild = contentArea.firstChild;
+    if (firstChild) {
+        contentArea.insertBefore(featureContainer, firstChild);
+    } else {
+        contentArea.appendChild(featureContainer);
+    }
+    
+    return true;
+}
+
+// Initialize addon manager
+window.gameBotAddonManager = {
+    // Feature registry
+    features: {},
+    
+    // Function to register a new feature/addon
+    registerFeature: function(id, options) {
+        if (this.features[id]) {
+            console.warn(`Feature ${id} is already registered`);
+            return false;
+        }
+        
+        this.features[id] = {
+            id: id,
+            label: options.label || id,
+            active: options.initialActive || false,
+            initialize: options.initialize || function() {},
+            cleanup: options.cleanup || function() {},
+            onKeyDown: options.onKeyDown || function() {},
+            onKeyUp: options.onKeyUp || function() {}
+        };
+        
+        // Register cleanup function
+        if (!window.gameBotCleanupFunctions) {
+            window.gameBotCleanupFunctions = [];
+        }
+        window.gameBotCleanupFunctions.push(this.features[id].cleanup);
+        
+        // Initialize UI for the feature
+        addFeatureToUI(id, this.features[id].label, this.features[id].active);
+        
+        // Initialize the feature
+        this.features[id].initialize();
+        
+        console.log(`Feature ${id} registered successfully`);
+        return true;
+    }
+};
+
+// Add global document key event handlers
+document.addEventListener("keydown", (event) => {
+    // Call registered feature keydown handlers
+    for (const id in window.gameBotAddonManager.features) {
+        try {
+            window.gameBotAddonManager.features[id].onKeyDown(event);
+        } catch (e) {
+            console.error(`Error in ${id} keydown handler:`, e);
+        }
+    }
+});
+
+document.addEventListener("keyup", (event) => {
+    // Call registered feature keyup handlers
+    for (const id in window.gameBotAddonManager.features) {
+        try {
+            window.gameBotAddonManager.features[id].onKeyUp(event);
+        } catch (e) {
+            console.error(`Error in ${id} keyup handler:`, e);
+        }
+    }
+});
+
+// Handle UI visibility restoration when window/tab becomes active again
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && minimized) {
+        // If the page was hidden and becomes visible again while UI is minimized
+        const contentArea = document.getElementById('bot-content-area');
+        if (contentArea) {
+            contentArea.style.display = 'none';
+        }
+    }
+});
+
+// Handle any cleanup needed when the window is closing
+window.addEventListener('beforeunload', () => {
+    // Make sure we clean up by releasing all keys
+    releaseAllKeysEmergency();
+});
+
+// Function to fix/reload the bot UI and functionality
+window.fixGameBot = function() {
+    // Release all keys to fix any stuck keys
+    releaseAllKeysEmergency();
+    
+    // Re-create the UI
+    createVisualUI();
+    
+    // Re-initialize all registered features
+    for (const id in window.gameBotAddonManager.features) {
+        const feature = window.gameBotAddonManager.features[id];
+        // Add the feature to the UI
+        addFeatureToUI(id, feature.label, feature.active);
+        // Reinitialize the feature
+        try {
+            feature.initialize();
+        } catch (e) {
+            console.error(`Error reinitializing ${id}:`, e);
+        }
+    }
+    
+    console.log("Game bot fixed and restarted!");
+    return "Game bot UI and functionality restored.";
+};
+
+// Add periodic key state verification to prevent stuck keys
+setInterval(() => {
+    // If we have movement keys recorded as active for over 5 seconds,
+    // something might be wrong - check and possibly release them
+    if (activeKeys.size > 0) {
+        logActivity("🔍 Periodic key check - ensuring no stuck keys");
+    }
+}, 5000); // Check every 5 seconds
+
+// Initialize the script with UI
+createVisualUI();
+logActivity("🚀 Enhanced Game Bot Framework initialized");
+
+// Auto Chain Addon - Enhanced version that integrates with the new UI system
+(function() {
+    let autoChain_active = false;
+    let autoChain_interval = null;
+
+    // Function to start the auto chain bomb spam
+    function autoChain_startSpamming() {
+        // Stop any existing interval first
+        autoChain_stopSpamming();
+        
+        // Start new interval
+        autoChain_interval = setInterval(() => {
+            if (autoChain_active) {
+                // Simulate K keypress (place bomb) as fast as possible
+                document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: 75, key: "k" }));
+                activeKeys.add(75);
+                
+                // Release K key immediately for rapid spam
+                setTimeout(() => {
+                    document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: 75, key: "k" }));
+                    activeKeys.delete(75);
+                }, 10);
+            }
+        }, 20); // 20ms interval for very fast bomb spam
+        
+        logActivity("⚡ Auto Chain spam started");
+    }
+
+    // Function to stop the auto chain bomb spam
+    function autoChain_stopSpamming() {
+        if (autoChain_interval) {
+            clearInterval(autoChain_interval);
+            autoChain_interval = null;
+            logActivity("⏹️ Auto Chain spam stopped");
+        }
+    }
+
+    // Toggle Auto Chain state
+    function autoChain_toggle() {
+        autoChain_active = !autoChain_active;
+        updateStatus('auto-chain-status', autoChain_active);
+        flashButtonStatus('auto-chain-status', autoChain_active ? '#4CAF50' : '#FF5252');
+        
+        if (autoChain_active) {
+            logActivity("🔗 Auto Chain activated (toggled ON)");
+            autoChain_startSpamming();
+        } else {
+            logActivity("🔗 Auto Chain deactivated (toggled OFF)");
+            autoChain_stopSpamming();
+        }
+    }
+
+    // Register the Auto Chain feature with the addon manager
+    setTimeout(() => {
+        if (window.gameBotAddonManager) {
+            window.gameBotAddonManager.registerFeature('auto-chain-status', {
+                label: 'Цепь (J/О)',
+                initialActive: false,
+                initialize: function() {
+                    autoChain_active = false;
+                    autoChain_stopSpamming();
+                },
+                cleanup: function() {
+                    autoChain_stopSpamming();
+                },
+                onKeyDown: function(event) {
+                    // Check for 'j' key in English (which is 'о' in Russian layout)
+                    if ((event.key === "j" || event.key === "J" || 
+                         event.key === "о" || event.key === "О") && !event.repeat) {
+                        
+                        // Only toggle if we're not in an input field
+                        if (document.activeElement.tagName !== "INPUT" && 
+                            document.activeElement.tagName !== "TEXTAREA") {
+                            autoChain_toggle();
+                            event.preventDefault();
+                        }
+                    }
+                },
+                onKeyUp: function(event) {
+                    // No action needed on key up for this feature
+                }
+            });
+            
+            logActivity("🔗 Auto Chain addon registered successfully");
+        } else {
+            console.error("Game Bot Addon Manager not found!");
+        }
+    }, 100); // Small delay to ensure addon manager is ready
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        autoChain_stopSpamming();
+    });
+
+    console.log('[Auto Chain Addon - Enhanced Version] Loaded successfully!');
+})();
+// Configurable Key Spam Addon with Russian Keyboard Support
+// This addon automatically cycles through keys 1-4 when toggled on by pressing И/B
+(function() {
+    // State variables for the spam feature
+    let spamActive = false;
+    let spamInterval = null;
+    const DEFAULT_SPAM_DELAY = 50; // Default ms between key presses
+    let currentSpamDelay = DEFAULT_SPAM_DELAY;
+    
+    // Keys to cycle through (restricted to 1,2,3,4 only)
+    let spamKeys = [
+        { keyCode: 49, label: '1', active: true },
+        { keyCode: 50, label: '2', active: true },
+        { keyCode: 51, label: '3', active: true },
+        { keyCode: 52, label: '4', active: true }
+    ];
+    
+    // Create UI for key configuration
+    function createSpamConfigUI() {
+        const uiContainer = document.getElementById('bot-ui-container');
+        if (!uiContainer) return;
+        
+        // Create config panel that will be shown/hidden
+        const configPanel = document.createElement('div');
+        configPanel.id = 'spam-config-panel';
+        configPanel.style.cssText = `
+            display: none;
+            background-color: rgba(30, 30, 30, 0.95);
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        `;
+        
+        // Create key selection grid
+        const keyGrid = document.createElement('div');
+        keyGrid.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            margin-bottom: 10px;
+        `;
+        
+        // Add key toggle buttons
+        spamKeys.forEach(key => {
+            const keyButton = document.createElement('button');
+            keyButton.textContent = key.label;
+            keyButton.dataset.keyCode = key.keyCode;
+            keyButton.style.cssText = `
+                background-color: ${key.active ? '#4CAF50' : '#555'};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px;
+                cursor: pointer;
+                font-weight: bold;
+            `;
+            
+            keyButton.addEventListener('click', () => {
+                // Toggle key active state
+                const keyIndex = spamKeys.findIndex(k => k.keyCode === parseInt(keyButton.dataset.keyCode));
+                if (keyIndex !== -1) {
+                    spamKeys[keyIndex].active = !spamKeys[keyIndex].active;
+                    keyButton.style.backgroundColor = spamKeys[keyIndex].active ? '#4CAF50' : '#555';
+                    
+                    // Update key sequence display
+                    updateKeySequenceDisplay();
+                    
+                    // Save configuration
+                    saveSpamConfig();
+                    
+                    // If spam is active, restart with new key configuration
+                    if (spamActive) {
+                        stopSpamming();
+                        startSpamming();
+                    }
+                }
+            });
+            
+            keyGrid.appendChild(keyButton);
+        });
+        
+        configPanel.appendChild(keyGrid);
+        
+        // Add speed control
+        const speedContainer = document.createElement('div');
+        speedContainer.style.cssText = `
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        `;
+        
+        const speedLabel = document.createElement('span');
+        speedLabel.textContent = 'Speed:';
+        speedLabel.style.marginRight = '10px';
+        
+        const speedSlider = document.createElement('input');
+        speedSlider.type = 'range';
+        speedSlider.min = '20';
+        speedSlider.max = '500';
+        speedSlider.step = '10';
+        speedSlider.value = currentSpamDelay.toString();
+        speedSlider.style.flex = '1';
+        
+        const speedValue = document.createElement('span');
+        speedValue.textContent = `${currentSpamDelay}ms`;
+        speedValue.style.marginLeft = '10px';
+        speedValue.style.minWidth = '45px';
+        
+        speedSlider.addEventListener('input', () => {
+            currentSpamDelay = parseInt(speedSlider.value);
+            speedValue.textContent = `${currentSpamDelay}ms`;
+            
+            // If spam is active, restart with new delay
+            if (spamActive) {
+                stopSpamming();
+                startSpamming();
+            }
+            
+            // Save configuration
+            saveSpamConfig();
+        });
+        
+        speedContainer.appendChild(speedLabel);
+        speedContainer.appendChild(speedSlider);
+        speedContainer.appendChild(speedValue);
+        
+        configPanel.appendChild(speedContainer);
+        
+        // Key sequence display
+        const sequenceContainer = document.createElement('div');
+        sequenceContainer.style.cssText = `
+            margin-bottom: 10px;
+        `;
+        
+        const sequenceLabel = document.createElement('div');
+        sequenceLabel.textContent = 'Active sequence:';
+        sequenceLabel.style.marginBottom = '5px';
+        
+        const sequenceDisplay = document.createElement('div');
+        sequenceDisplay.id = 'key-sequence-display';
+        sequenceDisplay.style.cssText = `
+            padding: 5px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            font-family: monospace;
+        `;
+        
+        sequenceContainer.appendChild(sequenceLabel);
+        sequenceContainer.appendChild(sequenceDisplay);
+        configPanel.appendChild(sequenceContainer);
+        
+        // Add close button
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close';
+        closeButton.style.cssText = `
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            width: 100%;
+        `;
+        
+        closeButton.addEventListener('click', () => {
+            configPanel.style.display = 'none';
+        });
+        
+        configPanel.appendChild(closeButton);
+        
+        // Add config button to main UI
+        const spamConfigButton = document.createElement('button');
+        spamConfigButton.textContent = '⚙️';
+        spamConfigButton.style.cssText = `
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 6px;
+            margin-left: 5px;
+        `;
+        
+        spamConfigButton.addEventListener('click', () => {
+            configPanel.style.display = configPanel.style.display === 'none' ? 'block' : 'none';
+            // Update key sequence display when opening
+            if (configPanel.style.display === 'block') {
+                updateKeySequenceDisplay();
+            }
+        });
+        
+        // Find the spam status element to place the config button next to it
+        const spamStatusElement = document.getElementById('spam-status');
+        if (spamStatusElement && spamStatusElement.parentNode) {
+            spamStatusElement.parentNode.appendChild(spamConfigButton);
+        }
+        
+        // Add the config panel to the container
+        uiContainer.appendChild(configPanel);
+        
+        // Initial update of sequence display
+        updateKeySequenceDisplay();
+    }
+    
+    // Update the display showing which keys are in the sequence
+    function updateKeySequenceDisplay() {
+        const sequenceDisplay = document.getElementById('key-sequence-display');
+        if (!sequenceDisplay) return;
+        
+        const activeKeys = spamKeys.filter(k => k.active).map(k => k.label);
+        
+        if (activeKeys.length === 0) {
+            sequenceDisplay.textContent = 'No keys selected!';
+            sequenceDisplay.style.color = '#F44336';
+        } else {
+            sequenceDisplay.textContent = activeKeys.join(' → ');
+            sequenceDisplay.style.color = '#FFFFFF';
+        }
+    }
+    
+    // Save spam configuration to localStorage
+    function saveSpamConfig() {
+        try {
+            const config = {
+                keys: spamKeys.map(k => ({ keyCode: k.keyCode, label: k.label, active: k.active })),
+                delay: currentSpamDelay
+            };
+            
+            localStorage.setItem('gameBotSpamConfig', JSON.stringify(config));
+            logActivity("Spam configuration saved");
+        } catch (e) {
+            console.error("Failed to save spam configuration:", e);
+        }
+    }
+    
+    // Load spam configuration from localStorage
+    function loadSpamConfig() {
+        try {
+            const savedConfig = localStorage.getItem('gameBotSpamConfig');
+            if (savedConfig) {
+                const config = JSON.parse(savedConfig);
+                
+                // Update spam keys with saved configuration (only for keys 1-4)
+                if (config.keys && Array.isArray(config.keys)) {
+                    config.keys.forEach(savedKey => {
+                        // Only apply settings for key codes 49-52 (keys 1-4)
+                        if (savedKey.keyCode >= 49 && savedKey.keyCode <= 52) {
+                            const keyIndex = spamKeys.findIndex(k => k.keyCode === savedKey.keyCode);
+                            if (keyIndex !== -1) {
+                                spamKeys[keyIndex].active = savedKey.active;
+                            }
+                        }
+                    });
+                }
+                
+                // Update spam delay
+                if (config.delay && typeof config.delay === 'number') {
+                    currentSpamDelay = config.delay;
+                }
+                
+                logActivity("Spam configuration loaded");
+                
+                // Update UI if it exists
+                const speedSlider = document.querySelector('#spam-config-panel input[type="range"]');
+                if (speedSlider) {
+                    speedSlider.value = currentSpamDelay.toString();
+                    const speedValue = speedSlider.nextElementSibling;
+                    if (speedValue) {
+                        speedValue.textContent = `${currentSpamDelay}ms`;
+                    }
+                }
+                
+                // Update key buttons
+                spamKeys.forEach(key => {
+                    const keyButton = document.querySelector(`#spam-config-panel button[data-key-code="${key.keyCode}"]`);
+                    if (keyButton) {
+                        keyButton.style.backgroundColor = key.active ? '#4CAF50' : '#555';
+                    }
+                });
+                
+                // Update sequence display
+                updateKeySequenceDisplay();
+            }
+        } catch (e) {
+            console.error("Failed to load spam configuration:", e);
+        }
+    }
+    
+    // Simulate key press (keydown + keyup)
+    function simulateKeyPress(keyCode) {
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+        setTimeout(() => {
+            document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+        }, 10); // Small delay between down and up
+    }
+    
+    // Start spamming keys
+    function startSpamming() {
+        // Clear existing interval if running
+        stopSpamming();
+        
+        // Get active keys
+        const activeKeysCodes = spamKeys.filter(k => k.active).map(k => k.keyCode);
+        
+        // If no keys are selected, show a warning
+        if (activeKeysCodes.length === 0) {
+            logActivity("No keys selected for spam! Configure keys first.");
+            spamActive = false;
+            updateStatus('spam-status', false);
+            return;
+        }
+        
+        let index = 0;
+        spamInterval = setInterval(() => {
+            simulateKeyPress(activeKeysCodes[index]);
+            index = (index + 1) % activeKeysCodes.length;
+        }, currentSpamDelay);
+        
+        // Log the active keys
+        const activeKeysLabels = spamKeys.filter(k => k.active).map(k => k.label).join(', ');
+        logActivity(`Key spam activated - cycling keys: ${activeKeysLabels}`);
+    }
+    
+    // Stop spamming keys
+    function stopSpamming() {
+        if (spamInterval) {
+            clearInterval(spamInterval);
+            spamInterval = null;
+            logActivity("Key spam deactivated");
+        }
+    }
+    
+    // Initialize function for the addon
+    function initialize() {
+        // Try to load saved configuration
+        loadSpamConfig();
+        
+        // Create the configuration UI
+        createSpamConfigUI();
+        
+        // Start in deactivated state
+        updateStatus('spam-status', spamActive);
+        logActivity("Configurable Key Spam initialized (Keys 1-4 only)");
+    }
+    
+    // Cleanup function
+    function cleanup() {
+        stopSpamming();
+        spamActive = false;
+        updateStatus('spam-status', false);
+        logActivity("Key Spam disabled");
+        
+        // Remove config panel if it exists
+        const configPanel = document.getElementById('spam-config-panel');
+        if (configPanel) {
+            configPanel.remove();
+        }
+    }
+    
+    // Toggle spam mode
+    function toggleSpamMode() {
+        spamActive = !spamActive;
+        updateStatus('spam-status', spamActive);
+        
+        if (spamActive) {
+            startSpamming();
+        } else {
+            stopSpamming();
+        }
+    }
+    
+    // Handle keydown events - support both Latin 'B' and Cyrillic 'И' (which is on the same key as 'B')
+    function onKeyDown(event) {
+        // Check for both Latin 'b' and Cyrillic 'и' (Russian B key)
+        if (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') {
+            toggleSpamMode();
+        }
+    }
+    
+    // Register the feature with the addon manager
+    window.gameBotAddonManager.registerFeature('spam-status', {
+        label: 'Перки (B/И)',
+        initialActive: spamActive,
+        initialize: initialize,
+        cleanup: cleanup,
+        onKeyDown: onKeyDown
+    });
+})();
+// Rotation Addon for Game Bot Framework
+// This addon adds rotation functionality to the base bot framework with support for both QWERTY and Russian keyboard layouts
+// Create module-level variables outside the addon object to solve 'this' context issues
+let rotationAddon_inProgress = false;
+let rotationAddon_interval = null;
+let rotationAddon_active = false;
+
+// Key mapping for both layouts
+const KEY_MAPPINGS = {
+    // QWERTY layout
+    'w': 38, // Up arrow
+    'a': 37, // Left arrow
+    's': 40, // Down arrow
+    'd': 39, // Right arrow
+    
+    // Russian layout equivalents (Cyrillic letters at same positions as WASD)
+    'ц': 38, // Up arrow (Russian 'ts' - position of 'w')
+    'ф': 37, // Left arrow (Russian 'f' - position of 'a')
+    'ы': 40, // Down arrow (Russian 'y' - position of 's')
+    'в': 39  // Right arrow (Russian 'v' - position of 'd')
+};
+
+function rotationAddon_performRotation() {
+    if (!rotationAddon_active) return;
+    
+    // Only start if not already in progress
+    if (rotationAddon_inProgress) return;
+    
+    rotationAddon_inProgress = true;
+    
+    let currentStep = 0;
+    // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
+    const sequenceKeys = [38, 37, 40, 39, 40, 37];
+    
+    rotationAddon_interval = setInterval(() => {
+        // Use the framework's key simulation functions
+        simulateKeyDown(sequenceKeys[currentStep]);
+        
+        setTimeout(() => {
+            simulateKeyUp(sequenceKeys[currentStep]);
+            currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
+        }, 5);
+    }, 100);
+}
+
+function rotationAddon_stopRotation() {
+    if (rotationAddon_interval) {
+        clearInterval(rotationAddon_interval);
+        rotationAddon_interval = null;
+    }
+    
+    rotationAddon_inProgress = false;
+    
+    // Release all arrow keys if they're being held
+    [37, 38, 39, 40].forEach(keyCode => {
+        simulateKeyUp(keyCode);
+    });
+}
+
+// Register the rotation addon with the bot framework
+window.gameBotAddonManager.registerFeature('rotationAddon', {
+    label: 'Спин (N/Т)',
+    initialActive: false,
+    
+    // Initialize the addon
+    initialize: function() {
+        // Add visualization for rotation state in the main UI
+        logActivity("Rotation addon initialized - use 'N' or 'Т' key to toggle");
+        
+        // Set the initial active state
+        rotationAddon_active = this.active;
+        
+        // Initial UI status update
+        updateStatus('rotationAddon', this.active);
+    },
+    
+    // Cleanup when the addon is disabled
+    cleanup: function() {
+        // Clear any ongoing rotation
+        rotationAddon_stopRotation();
+        
+        logActivity("Rotation addon cleanup complete");
+    },
+    
+    // Handle keydown events
+    onKeyDown: function(event) {
+        const key = event.key.toLowerCase();
+        
+        // Toggle rotation mode with N key (or Russian equivalent 'т')
+        if (key === 'n' || key === 'т') {
+            this.active = !this.active;
+            rotationAddon_active = this.active;
+            updateStatus('rotationAddon', this.active);
+            
+            // Start or stop rotation based on active state
+            if (rotationAddon_active) {
+                rotationAddon_performRotation();
+                logActivity("Rotation mode activated - continuous rotation until toggled off");
+            } else {
+                rotationAddon_stopRotation();
+                logActivity("Rotation mode deactivated");
+            }
+        }
+        
+        // Handle manual movement with WASD or Russian equivalents
+        // This allows users to control movement manually with either keyboard layout
+        if (!rotationAddon_active && KEY_MAPPINGS[key]) {
+            simulateKeyDown(KEY_MAPPINGS[key]);
+        }
+    },
+    
+    // Handle keyup events for manual movement keys
+    onKeyUp: function(event) {
+        const key = event.key.toLowerCase();
+        
+        // Release the corresponding arrow key when WASD or Russian equivalent is released
+        if (KEY_MAPPINGS[key]) {
+            simulateKeyUp(KEY_MAPPINGS[key]);
+        }
+    }
+});
+
+// Log that the addon was loaded
+logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
+// K Hold Timer Addon with Russian UI
+// This addon automatically holds the K key for exactly 3.875 seconds when toggled with H/Р key
+(function() {
+    // State variables for the K hold feature
+    let holdActive = false;
+    let holdTimeout = null;
+    let progressInterval = null;
+    const HOLD_DURATION = 3875; // Duration in milliseconds
+    let timeRemaining = 0;
+    let progressBarVisible = true; // Toggle for progress bar visibility
+    let isToggling = false; // Flag to prevent duplicate toggling
+    
+    // Create progress bar UI with Russian text
+    function createProgressUI() {
+        const uiContainer = document.getElementById('bot-ui-container');
+        if (!uiContainer) return;
+        
+        // Create progress panel
+        const progressPanel = document.createElement('div');
+        progressPanel.id = 'k-hold-progress-panel';
+        progressPanel.style.cssText = `
+            display: none;
+            background-color: rgba(30, 30, 30, 0.95);
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        `;
+        
+        // Create progress bar container
+        const progressContainer = document.createElement('div');
+        progressContainer.style.cssText = `
+            width: 100%;
+            height: 20px;
+            background-color: #333;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        `;
+        
+        // Create progress bar
+        const progressBar = document.createElement('div');
+        progressBar.id = 'k-hold-progress-bar';
+        progressBar.style.cssText = `
+            height: 100%;
+            width: 0%;
+            background-color: #4CAF50;
+            transition: width 0.1s linear;
+        `;
+        
+        progressContainer.appendChild(progressBar);
+        
+        // Create time display with Russian text
+        const timeDisplay = document.createElement('div');
+        timeDisplay.id = 'k-hold-time-display';
+        timeDisplay.style.cssText = `
+            text-align: center;
+            font-family: monospace;
+            margin-bottom: 10px;
+        `;
+        timeDisplay.textContent = 'Готов - 3.875 секунд';
+        
+        // Add toggle button for progress bar visibility with Russian text
+        const toggleVisibilityButton = document.createElement('button');
+        toggleVisibilityButton.textContent = 'Скрыть прогресс';
+        toggleVisibilityButton.style.cssText = `
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        `;
+        
+        toggleVisibilityButton.addEventListener('click', () => {
+            progressBarVisible = !progressBarVisible;
+            progressContainer.style.display = progressBarVisible ? 'block' : 'none';
+            timeDisplay.style.display = progressBarVisible ? 'block' : 'none';
+            toggleVisibilityButton.textContent = progressBarVisible ? 'Скрыть прогресс' : 'Показать прогресс';
+        });
+        
+        // Add close button with Russian text
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Закрыть';
+        closeButton.style.cssText = `
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            width: 100%;
+        `;
+        
+        closeButton.addEventListener('click', () => {
+            progressPanel.style.display = 'none';
+        });
+        
+        // Add all elements to the progress panel
+        progressPanel.appendChild(progressContainer);
+        progressPanel.appendChild(timeDisplay);
+        progressPanel.appendChild(toggleVisibilityButton);
+        progressPanel.appendChild(closeButton);
+        
+        // Add the progress panel to the UI container
+        uiContainer.appendChild(progressPanel);
+        
+        // Add config button to main UI
+        const holdConfigButton = document.createElement('button');
+        holdConfigButton.textContent = '📊';
+        holdConfigButton.style.cssText = `
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 6px;
+            margin-left: 5px;
+        `;
+        
+        holdConfigButton.addEventListener('click', () => {
+            progressPanel.style.display = progressPanel.style.display === 'none' ? 'block' : 'none';
+        });
+        
+        // Find the hold status element to place the config button next to it
+        const holdStatusElement = document.getElementById('k-hold-status');
+        if (holdStatusElement && holdStatusElement.parentNode) {
+            holdStatusElement.parentNode.appendChild(holdConfigButton);
+        }
+    }
+    
+    // Start holding K key
+    function startHolding() {
+        // Clear existing timers if any
+        stopHolding();
+        
+        // Simulate K keydown
+        simulateKeyDown(75); // 75 is keyCode for 'K'
+        logActivity("Удерживаю клавишу K на 3.875 секунд");
+        
+        // Set time remaining
+        timeRemaining = HOLD_DURATION;
+        
+        // Update progress bar
+        updateProgressBar(100);
+        
+        // Set timer to release key after exact duration
+        holdTimeout = setTimeout(() => {
+            simulateKeyUp(75);
+            logActivity("Клавиша K отпущена после 3.875 секунд");
+            
+            // Reset UI
+            holdActive = false;
+            updateStatus('k-hold-status', false);
+            
+            // Reset progress bar
+            updateProgressBar(0);
+            
+            // Clear interval
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            
+            const timeDisplay = document.getElementById('k-hold-time-display');
+            if (timeDisplay) {
+                timeDisplay.textContent = 'Готов - 3.875 секунд';
+            }
+            
+        }, HOLD_DURATION);
+        
+        // Start progress bar update interval
+        progressInterval = setInterval(() => {
+            // Decrease time remaining
+            timeRemaining -= 100; // Update every 100ms
+            
+            // Calculate percentage of time remaining
+            const percentRemaining = (timeRemaining / HOLD_DURATION) * 100;
+            
+            // Update progress bar
+            updateProgressBar(percentRemaining);
+            
+            // Update time display with Russian text
+            const timeDisplay = document.getElementById('k-hold-time-display');
+            if (timeDisplay) {
+                const secondsRemaining = (timeRemaining / 1000).toFixed(3);
+                timeDisplay.textContent = `Осталось: ${secondsRemaining}с`;
+            }
+            
+            // Stop updating if time is up
+            if (timeRemaining <= 0) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }, 100); // Update every 100ms for smooth animation
+    }
+    
+    // Stop holding K key
+    function stopHolding() {
+        // Clear timeout
+        if (holdTimeout) {
+            clearTimeout(holdTimeout);
+            holdTimeout = null;
+        }
+        
+        // Clear interval
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        
+        // Release K key
+        simulateKeyUp(75);
+        
+        // Reset progress bar
+        updateProgressBar(0);
+        
+        // Reset time display with Russian text
+        const timeDisplay = document.getElementById('k-hold-time-display');
+        if (timeDisplay) {
+            timeDisplay.textContent = 'Готов - 3.875 секунд';
+        }
+    }
+    
+    // Update progress bar UI
+    function updateProgressBar(percentage) {
+        const progressBar = document.getElementById('k-hold-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${percentage}%`;
+            
+            // Change color based on percentage
+            if (percentage > 60) {
+                progressBar.style.backgroundColor = '#4CAF50'; // Green
+            } else if (percentage > 30) {
+                progressBar.style.backgroundColor = '#FFC107'; // Yellow
+            } else {
+                progressBar.style.backgroundColor = '#F44336'; // Red
+            }
+        }
+    }
+    
+    // Initialize function for the addon
+    function initialize() {
+        // Create the progress UI
+        createProgressUI();
+        
+        // Start in deactivated state
+        updateStatus('k-hold-status', holdActive);
+        logActivity("Таймер удержания K инициализирован (Переключение клавишей H/Р)");
+    }
+    
+    // Cleanup function
+    function cleanup() {
+        stopHolding();
+        holdActive = false;
+        updateStatus('k-hold-status', false);
+        logActivity("Таймер удержания K отключен");
+        
+        // Remove progress panel if it exists
+        const progressPanel = document.getElementById('k-hold-progress-panel');
+        if (progressPanel) {
+            progressPanel.remove();
+        }
+    }
+    
+    // Toggle hold mode
+    function toggleHoldMode() {
+        if (!isToggling) {
+            isToggling = true;
+            
+            holdActive = !holdActive;
+            updateStatus('k-hold-status', holdActive);
+            
+            if (holdActive) {
+                startHolding();
+            } else {
+                stopHolding();
+                logActivity("Таймер удержания K деактивирован");
+            }
+            
+            setTimeout(() => {
+                isToggling = false;
+            }, 100);
+        }
+    }
+    
+    // Handle keydown events - support both Latin 'H' and Cyrillic 'Р' (Russian equivalent)
+    function onKeyDown(event) {
+        // Check for both Latin 'h' and Cyrillic 'р' (Russian H key equivalent)
+        if (event.key.toLowerCase() === 'h' || event.key === 'р' || event.key === 'Р') {
+            toggleHoldMode();
+        }
+    }
+    
+    // Register the feature with the addon manager
+    window.gameBotAddonManager.registerFeature('k-hold-status', {
+        label: 'Бита (H/Р)',
+        initialActive: holdActive,
+        initialize: initialize,
+        cleanup: cleanup,
+        onKeyDown: onKeyDown
+    });
+})();
+// Chat Mode Addon - Enhanced version that integrates with the new UI system
+(function() {
+    let chatMode_active = false;
+    let originalKeydownHandler = null;
+    let originalKeyupHandler = null;
+    let originalAddEventListener = null;
+    
+    // Allowed keys that should pass through even when Chat Mode is active
+    const ALLOWED_KEYCODES = [
+        119,  // F8 for toggling chat mode
+        13,   // Enter key for sending messages
+        9,    // Tab key for navigation
+        16,   // Shift
+        17,   // Ctrl
+        18,   // Alt
+        20,   // Caps Lock
+        27,   // Escape
+        33,   // Page Up
+        34,   // Page Down
+        35,   // End
+        36,   // Home
+        37,   // Left Arrow
+        38,   // Up Arrow
+        39,   // Right Arrow
+        40,   // Down Arrow
+        45,   // Insert
+        46,   // Delete
+        8,    // Backspace
+        91,   // Left Windows/Command key
+        93,   // Right Windows/Command key
+        112,  // F1
+        113,  // F2
+        114,  // F3
+        115,  // F4
+        116,  // F5
+        117,  // F6
+        118,  // F7
+        120,  // F9
+        121,  // F10
+        122,  // F11
+        123,  // F12
+        
+        // Adding WASD keys for movement
+        87,   // W key
+        65,   // A key
+        83,   // S key
+        68,   // D key
+        
+        // Adding Russian WASD equivalent in ЙЦУКЕН layout
+        1062, // Ц (W equivalent)
+        1060, // Ф (A equivalent)
+        1067, // Ы (S equivalent)
+        1042, // В (D equivalent)
+        
+        // Adding Space key
+        32    // Space key
+    ];
+    
+    // Function to setup event blocking
+    function chatMode_setupEventBlocking() {
+        // Store original handlers if they exist
+        if (document.onkeydown && !originalKeydownHandler) {
+            originalKeydownHandler = document.onkeydown;
+        }
+        if (document.onkeyup && !originalKeyupHandler) {
+            originalKeyupHandler = document.onkeyup;
+        }
+        
+        // Override document key handlers
+        document.onkeydown = function(event) {
+            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
+                event.stopImmediatePropagation();
+                return true; // Allow default browser behavior for typing
+            }
+            
+            if (originalKeydownHandler) {
+                return originalKeydownHandler(event);
+            }
+        };
+        
+        document.onkeyup = function(event) {
+            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
+                event.stopImmediatePropagation();
+                return true; // Allow default browser behavior for typing
+            }
+            
+            if (originalKeyupHandler) {
+                return originalKeyupHandler(event);
+            }
+        };
+        
+        // Add capture-phase listeners
+        document.addEventListener('keydown', function(event) {
+            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
+                logActivity(`Клавиша заблокирована: ${event.key || event.keyCode} (Режим Чата активен)`);
+                event.stopImmediatePropagation();
+                event.stopPropagation();
+            }
+        }, true);
+        
+        document.addEventListener('keyup', function(event) {
+            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
+                event.stopImmediatePropagation();
+                event.stopPropagation();
+            }
+        }, true);
+    }
+    
+    // Function to restore original event handling
+    function chatMode_restoreEventHandling() {
+        if (originalKeydownHandler) {
+            document.onkeydown = originalKeydownHandler;
+        }
+        if (originalKeyupHandler) {
+            document.onkeyup = originalKeyupHandler;
+        }
+    }
+    
+    // Toggle Chat Mode state
+    function chatMode_toggle() {
+        chatMode_active = !chatMode_active;
+        updateStatus('chat-mode-status', chatMode_active);
+        flashButtonStatus('chat-mode-status', chatMode_active ? '#4CAF50' : '#FF5252');
+        
+        if (chatMode_active) {
+            logActivity("💬 Chat Mode activated - bot controls disabled");
+        } else {
+            logActivity("💬 Chat Mode deactivated - bot controls enabled");
+        }
+    }
+    
+    // Register the Chat Mode feature with the addon manager
+    setTimeout(() => {
+        if (window.gameBotAddonManager) {
+            window.gameBotAddonManager.registerFeature('chat-mode-status', {
+                label: 'Режим Чата (F8)',
+                initialActive: false,
+                initialize: function() {
+                    chatMode_active = false;
+                    chatMode_setupEventBlocking();
+                },
+                cleanup: function() {
+                    chatMode_active = false;
+                    chatMode_restoreEventHandling();
+                },
+                onKeyDown: function(event) {
+                    // Use F8 as a shortcut to toggle chat mode (keyCode 119)
+                    if (event.keyCode === 119 && !event.repeat) {
+                        chatMode_toggle();
+                        event.preventDefault();
+                    }
+                },
+                onKeyUp: function(event) {
+                    // No action needed on key up for this feature
+                }
+            });
+            
+            logActivity("💬 Chat Mode addon registered successfully - Press F8 to toggle");
+        } else {
+            console.error("Game Bot Addon Manager not found!");
+        }
+    }, 100); // Small delay to ensure addon manager is ready
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        chatMode_restoreEventHandling();
+    });
+    
+    console.log('[Chat Mode Addon - Enhanced Version] Loaded successfully!');
+})();
+
+
