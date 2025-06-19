@@ -1051,119 +1051,387 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
         onKeyDown: onKeyDown
     });
 })();
-// Rotation Addon for Game Bot Framework
-// This addon adds rotation functionality to the base bot framework with support for both QWERTY and Russian keyboard layouts
-// Create module-level variables outside the addon object to solve 'this' context issues
-let rotationAddon_inProgress = false;
-let rotationAddon_interval = null;
-let rotationAddon_active = false;
-
-// Key mapping for both layouts
-const KEY_MAPPINGS = {
-    // QWERTY layout
-    'w': 38, // Up arrow
-    'a': 37, // Left arrow
-    's': 40, // Down arrow
-    'd': 39, // Right arrow
-    
-    // Russian layout equivalents (Cyrillic letters at same positions as WASD)
-    'ц': 38, // Up arrow (Russian 'ts' - position of 'w')
-    'ф': 37, // Left arrow (Russian 'f' - position of 'a')
-    'ы': 40, // Down arrow (Russian 'y' - position of 's')
-    'в': 39  // Right arrow (Russian 'v' - position of 'd')
-};
-
-function rotationAddon_performRotation() {
-    if (!rotationAddon_active) return;
-    
-    // Only start if not already in progress
-    if (rotationAddon_inProgress) return;
-    
-    rotationAddon_inProgress = true;
-    
+// Simplified Rotation Addon with 5 Essential Motion Patterns and Russian Keyboard Support
+// This addon adds focused rotation patterns with configurable UI
+(function() {
+    // State variables for the rotation feature
+    let rotationActive = false;
+    let rotationInterval = null;
+    let rotationInProgress = false;
+    let currentPattern = 0;
     let currentStep = 0;
-    // W(up), A(left), S(down), D(right), S(down), A(left) translated to arrow key codes
-    const sequenceKeys = [38, 37, 40, 39, 40, 37];
     
-    rotationAddon_interval = setInterval(() => {
-        // Use the framework's key simulation functions
-        simulateKeyDown(sequenceKeys[currentStep]);
+    // Key mapping for both layouts
+    const KEY_MAPPINGS = {
+        // QWERTY layout
+        'w': 38, // Up arrow
+        'a': 37, // Left arrow
+        's': 40, // Down arrow
+        'd': 39, // Right arrow
         
-        setTimeout(() => {
-            simulateKeyUp(sequenceKeys[currentStep]);
-            currentStep = (currentStep + 1) % 6; // Cycle through all 6 steps
-        }, 5);
-    }, 100);
-}
+        // Russian layout equivalents (Cyrillic letters at same positions as WASD)
+        'ц': 38, // Up arrow (Russian 'ts' - position of 'w')
+        'ф': 37, // Left arrow (Russian 'f' - position of 'a')
+        'ы': 40, // Down arrow (Russian 'y' - position of 's')
+        'в': 39  // Right arrow (Russian 'v' - position of 'd')
+    };
+    
+    // Simplified motion patterns - only the 5 you requested
+    const MOTION_PATTERNS = {
+        0: {
+            name: "Обычный",
+            sequence: [38, 37, 40, 39], // Up, Left, Down, Right (clockwise)
+            timing: 100,
+            keyHold: 1
+        },
+        1: {
+            name: "Быстрый",
+            sequence: [38, 37, 40, 39], // Up, Left, Down, Right (clockwise)
+            timing: 60,
+            keyHold: 1
+        },
+        2: {
+            name: "Медленный",
+            sequence: [38, 37, 40, 39], // Up, Left, Down, Right (clockwise)
+            timing: 180,
+            keyHold: 1
+        },
+        3: {
+            name: "Крест",
+            sequence: [38, 40, 37, 39], // Up, Down, Left, Right
+            timing: 140,
+            keyHold: 1
+        },
+        4: {
+            name: "Туда-Сюда",
+            sequence: [38, 37, 40, 39, 38, 39, 40, 37], // 1 clockwise + 1 counter-clockwise
+            timing: 100,
+            keyHold: 1
+        }
+    };
+    
+    const TOTAL_PATTERNS = Object.keys(MOTION_PATTERNS).length;
+    
+    // Create UI for rotation configuration
+    function createRotationConfigUI() {
+        const uiContainer = document.getElementById('bot-ui-container');
+        if (!uiContainer) return;
+        
+        // Create config panel that will be shown/hidden
+        const configPanel = document.createElement('div');
+        configPanel.id = 'rotation-config-panel';
+        configPanel.style.cssText = `
+            display: none;
+            background-color: rgba(30, 30, 30, 0.95);
+            padding: 6px;
+            margin-top: 5px;
+            border-radius: 3px;
+            border: 1px solid #444;
+        `;
+        
+        // Pattern selection grid - single column for better readability with fewer patterns
+        const patternGrid = document.createElement('div');
+        patternGrid.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 3px;
+            margin-bottom: 6px;
+        `;
+        
+        // Add pattern selection buttons
+        Object.keys(MOTION_PATTERNS).forEach(patternId => {
+            const pattern = MOTION_PATTERNS[patternId];
+            const patternButton = document.createElement('button');
+            patternButton.textContent = pattern.name;
+            patternButton.dataset.patternId = patternId;
+            patternButton.style.cssText = `
+                background-color: ${currentPattern == patternId ? '#4CAF50' : '#555'};
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 4px 2px;
+                cursor: pointer;
+                font-size: 9px;
+                font-weight: bold;
+                text-align: center;
+            `;
+            
+            patternButton.addEventListener('click', () => {
+                switchPattern(parseInt(patternId));
+                updatePatternButtons();
+                saveRotationConfig();
+            });
+            
+            patternGrid.appendChild(patternButton);
+        });
+        
+        configPanel.appendChild(patternGrid);
+        
+        // Current pattern info
+        const patternInfo = document.createElement('div');
+        patternInfo.id = 'current-pattern-info';
+        patternInfo.style.cssText = `
+            padding: 4px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            margin-bottom: 6px;
+            font-size: 9px;
+        `;
+        
+        configPanel.appendChild(patternInfo);
+        
 
-function rotationAddon_stopRotation() {
-    if (rotationAddon_interval) {
-        clearInterval(rotationAddon_interval);
-        rotationAddon_interval = null;
+        
+        // Add close button
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Закрыть';
+        closeButton.style.cssText = `
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 3px 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 9px;
+        `;
+        
+        closeButton.addEventListener('click', () => {
+            configPanel.style.display = 'none';
+        });
+        
+        configPanel.appendChild(closeButton);
+        
+        // Add config button to main UI
+        const rotationConfigButton = document.createElement('button');
+        rotationConfigButton.textContent = '⚙️';
+        rotationConfigButton.style.cssText = `
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 6px;
+            margin-left: 5px;
+        `;
+        
+        rotationConfigButton.addEventListener('click', () => {
+            configPanel.style.display = configPanel.style.display === 'none' ? 'block' : 'none';
+            if (configPanel.style.display === 'block') {
+                updatePatternInfo();
+                updatePatternButtons();
+            }
+        });
+        
+        // Find the rotation status element to place the config button next to it
+        const rotationStatusElement = document.getElementById('rotation-status');
+        if (rotationStatusElement && rotationStatusElement.parentNode) {
+            rotationStatusElement.parentNode.appendChild(rotationConfigButton);
+        }
+        
+        // Add the config panel to the container
+        uiContainer.appendChild(configPanel);
+        
+        // Initial update
+        updatePatternInfo();
     }
     
-    rotationAddon_inProgress = false;
+    // Update pattern buttons to show current selection
+    function updatePatternButtons() {
+        const buttons = document.querySelectorAll('#rotation-config-panel button[data-pattern-id]');
+        buttons.forEach(button => {
+            const patternId = parseInt(button.dataset.patternId);
+            button.style.backgroundColor = currentPattern === patternId ? '#4CAF50' : '#555';
+        });
+    }
     
-    // Release all arrow keys if they're being held
-    [37, 38, 39, 40].forEach(keyCode => {
-        simulateKeyUp(keyCode);
-    });
-}
-
-// Register the rotation addon with the bot framework
-window.gameBotAddonManager.registerFeature('rotationAddon', {
-    label: 'Спин (N/Т)',
-    initialActive: false,
+    // Update current pattern info display
+    function updatePatternInfo() {
+        const patternInfo = document.getElementById('current-pattern-info');
+        if (!patternInfo) return;
+        
+        const pattern = MOTION_PATTERNS[currentPattern];
+        patternInfo.innerHTML = `
+            <strong>${pattern.name}</strong>
+        `;
+    }
     
-    // Initialize the addon
-    initialize: function() {
-        // Add visualization for rotation state in the main UI
-        logActivity("Rotation addon initialized - use 'N' or 'Т' key to toggle");
-        
-        // Set the initial active state
-        rotationAddon_active = this.active;
-        
-        // Initial UI status update
-        updateStatus('rotationAddon', this.active);
-    },
+    // Save rotation configuration
+    function saveRotationConfig() {
+        try {
+            const config = {
+                currentPattern: currentPattern
+            };
+            
+            localStorage.setItem('gameBotRotationConfig', JSON.stringify(config));
+            logActivity("Rotation configuration saved");
+        } catch (e) {
+            console.error("Failed to save rotation configuration:", e);
+        }
+    }
     
-    // Cleanup when the addon is disabled
-    cleanup: function() {
-        // Clear any ongoing rotation
-        rotationAddon_stopRotation();
+    // Load rotation configuration
+    function loadRotationConfig() {
+        try {
+            const savedConfig = localStorage.getItem('gameBotRotationConfig');
+            if (savedConfig) {
+                const config = JSON.parse(savedConfig);
+                
+                if (config.currentPattern !== undefined && MOTION_PATTERNS[config.currentPattern]) {
+                    currentPattern = config.currentPattern;
+                }
+                
+                logActivity("Rotation configuration loaded");
+            }
+        } catch (e) {
+            console.error("Failed to load rotation configuration:", e);
+        }
+    }
+    
+    // Perform rotation with current pattern
+    function performRotation() {
+        if (!rotationActive) return;
         
-        logActivity("Rotation addon cleanup complete");
-    },
+        // Only start if not already in progress
+        if (rotationInProgress) return;
+        
+        rotationInProgress = true;
+        currentStep = 0;
+        
+        const pattern = MOTION_PATTERNS[currentPattern];
+        
+        rotationInterval = setInterval(() => {
+            // Use the framework's key simulation functions
+            simulateKeyDown(pattern.sequence[currentStep]);
+            
+            setTimeout(() => {
+                simulateKeyUp(pattern.sequence[currentStep]);
+                currentStep = (currentStep + 1) % pattern.sequence.length;
+            }, 1); // Changed to 1ms press time
+            
+        }, pattern.timing);
+    }
+    
+    // Stop rotation
+    function stopRotation() {
+        if (rotationInterval) {
+            clearInterval(rotationInterval);
+            rotationInterval = null;
+        }
+        
+        rotationInProgress = false;
+        
+        // Release all arrow keys if they're being held
+        [37, 38, 39, 40].forEach(keyCode => {
+            simulateKeyUp(keyCode);
+        });
+    }
+    
+    // Switch to a specific pattern
+    function switchPattern(patternId) {
+        const wasActive = rotationActive;
+        
+        // Stop current rotation
+        if (wasActive) {
+            stopRotation();
+            rotationActive = false;
+        }
+        
+        // Switch pattern
+        if (MOTION_PATTERNS[patternId]) {
+            currentPattern = patternId;
+            
+            const pattern = MOTION_PATTERNS[currentPattern];
+            logActivity(`🔄 ${pattern.name}`);
+            
+            // Update UI status with ON/OFF instead of pattern name
+            updateStatus('rotation-status', wasActive, wasActive ? 'ON' : 'OFF');
+            
+            // Update pattern info if config panel is open
+            updatePatternInfo();
+            
+            // Restart rotation if it was active
+            if (wasActive) {
+                rotationActive = true;
+                performRotation();
+            }
+        }
+    }
+    
+    // Switch to next/previous pattern
+    function switchPatternRelative(direction = 1) {
+        const newPattern = (currentPattern + direction + TOTAL_PATTERNS) % TOTAL_PATTERNS;
+        switchPattern(newPattern);
+    }
+    
+    // Toggle rotation mode
+    function toggleRotationMode() {
+        rotationActive = !rotationActive;
+        
+        // Show ON/OFF status instead of pattern name
+        updateStatus('rotation-status', rotationActive, rotationActive ? 'ON' : 'OFF');
+        
+        if (rotationActive) {
+            performRotation();
+            const pattern = MOTION_PATTERNS[currentPattern];
+            logActivity(`✅ ${pattern.name} включен`);
+        } else {
+            stopRotation();
+            logActivity("❌ Выключен");
+        }
+    }
+    
+    // Initialize function for the addon
+    function initialize() {
+        // Try to load saved configuration
+        loadRotationConfig();
+        
+        // Create the configuration UI
+        createRotationConfigUI();
+        
+        // Start in deactivated state - show OFF status
+        updateStatus('rotation-status', rotationActive, 'OFF');
+        
+        logActivity("🎮 Аддон вращения готов!");
+        const pattern = MOTION_PATTERNS[currentPattern];
+        logActivity(`Текущий: ${pattern.name}`);
+        logActivity("N/Т - вкл/выкл");
+    }
+    
+    // Cleanup function
+    function cleanup() {
+        stopRotation();
+        rotationActive = false;
+        updateStatus('rotation-status', false);
+        logActivity("Simplified Rotation addon cleanup complete");
+        
+        // Remove config panel if it exists
+        const configPanel = document.getElementById('rotation-config-panel');
+        if (configPanel) {
+            configPanel.remove();
+        }
+    }
     
     // Handle keydown events
-    onKeyDown: function(event) {
+    function onKeyDown(event) {
         const key = event.key.toLowerCase();
         
         // Toggle rotation mode with N key (or Russian equivalent 'т')
         if (key === 'n' || key === 'т') {
-            this.active = !this.active;
-            rotationAddon_active = this.active;
-            updateStatus('rotationAddon', this.active);
-            
-            // Start or stop rotation based on active state
-            if (rotationAddon_active) {
-                rotationAddon_performRotation();
-                logActivity("Rotation mode activated - continuous rotation until toggled off");
-            } else {
-                rotationAddon_stopRotation();
-                logActivity("Rotation mode deactivated");
-            }
+            toggleRotationMode();
         }
+        
+
         
         // Handle manual movement with WASD or Russian equivalents
         // This allows users to control movement manually with either keyboard layout
-        if (!rotationAddon_active && KEY_MAPPINGS[key]) {
+        if (!rotationActive && KEY_MAPPINGS[key]) {
             simulateKeyDown(KEY_MAPPINGS[key]);
         }
-    },
+    }
     
     // Handle keyup events for manual movement keys
-    onKeyUp: function(event) {
+    function onKeyUp(event) {
         const key = event.key.toLowerCase();
         
         // Release the corresponding arrow key when WASD or Russian equivalent is released
@@ -1171,10 +1439,17 @@ window.gameBotAddonManager.registerFeature('rotationAddon', {
             simulateKeyUp(KEY_MAPPINGS[key]);
         }
     }
-});
-
-// Log that the addon was loaded
-logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to toggle continuous rotation mode");
+    
+    // Register the feature with the addon manager
+    window.gameBotAddonManager.registerFeature('rotation-status', {
+        label: 'Вращение(N/Т)', // Changed label as requested
+        initialActive: rotationActive,
+        initialize: initialize,
+        cleanup: cleanup,
+        onKeyDown: onKeyDown,
+        onKeyUp: onKeyUp
+    });
+})();
 // K Hold Timer Addon with Russian UI
 // This addon automatically holds the K key for exactly 3.875 seconds when toggled with H/Р key
 (function() {
@@ -1286,7 +1561,7 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
         
         // Add config button to main UI
         const holdConfigButton = document.createElement('button');
-        holdConfigButton.textContent = '📊';
+        holdConfigButton.textContent = '⚙';
         holdConfigButton.style.cssText = `
             background: transparent;
             border: none;
@@ -1650,5 +1925,3 @@ logActivity("Rotation addon loaded - Press 'N' (English) or 'Т' (Russian) to to
     
     console.log('[Chat Mode Addon - Enhanced Version] Loaded successfully!');
 })();
-
-
