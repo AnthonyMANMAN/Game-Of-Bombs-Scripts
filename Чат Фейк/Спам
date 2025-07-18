@@ -1,0 +1,81 @@
+// Spam detection test script
+// Pastes placeholder text with increasing repetitions
+// Press 'q' to stop the test
+
+let stopTest = false;
+
+// Listen for 'q' key press to stop the test
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'q' || event.key === 'Q') {
+        stopTest = true;
+        console.log("Stop signal received. Test will stop after current iteration.");
+    }
+});
+
+async function testSpamDetection() {
+    const testText = "СЮДА ВСТАВЬ ТЕКСТ";
+    const repetitions = [10, 12, 14, 16, 18]; // ТУТ СКАЗАНО СКОЛЬКО РАЗ БУДЕТ ПОВТОРЯТЬ, ДЕЛАЕТСЯ В ОБХОД СИСТЕМЫ ЧАТА ПРОТИВ СПАМА
+    
+    // Find the input field (adjust selector as needed)
+    const inputField = document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
+    
+    if (!inputField) {
+        console.log("No input field found. Please click on a text input first.");
+        return;
+    }
+    
+    console.log("Starting spam test in 3 seconds...");
+    console.log("Press 'q' at any time to stop the test.");
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    let cycle = 1;
+    
+    while (!stopTest) {
+        console.log(`\n--- Cycle ${cycle} ---`);
+        
+        for (let i = 0; i < repetitions.length; i++) {
+            if (stopTest) {
+                console.log("Test stopped by user.");
+                return;
+            }
+            
+            const count = repetitions[i];
+            const message = testText.repeat(count);
+            
+            console.log(`Test ${i + 1}: Pasting ${count} repetitions`);
+            
+            // Focus the input
+            inputField.focus();
+            
+            // Clear existing content
+            inputField.value = '';
+            
+            // Add the test message
+            inputField.value = message;
+            
+            // Trigger input events
+            inputField.dispatchEvent(new Event('input', { bubbles: true }));
+            inputField.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Simulate Enter key press
+            const enterEvent = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                bubbles: true
+            });
+            inputField.dispatchEvent(enterEvent);
+            
+            // Wait 5 seconds before next iteration
+            console.log("Waiting 5 seconds... (Press 'q' to stop)");
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+        
+        cycle++;
+    }
+    
+    console.log("Spam test stopped!");
+}
+
+// Run the test
+testSpamDetection();
