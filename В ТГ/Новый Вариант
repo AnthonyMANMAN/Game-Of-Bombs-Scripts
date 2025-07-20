@@ -28,7 +28,7 @@
 
     function createUI() {
         if (uiCreated) return;
-        
+
         const existingUI = document.getElementById('gob-monitor-ui');
         if (existingUI) existingUI.remove();
 
@@ -137,14 +137,14 @@
             background: rgba(255, 255, 255, 0.05); border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         `;
-        
+
         const serverLabel = document.createElement('div');
         serverLabel.textContent = 'Целевые серверы:';
         serverLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
-        
+
         const serverCheckboxes = document.createElement('div');
         serverCheckboxes.style.cssText = `display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;`;
-        
+
         ['US', 'EU', 'RU', 'BR', 'AU', 'JP'].forEach(server => {
             const checkboxContainer = document.createElement('label');
             checkboxContainer.style.cssText = `
@@ -153,18 +153,18 @@
                 background: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.1);
             `;
-            
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = server;
             checkbox.checked = targetServerNames.includes(server);
             checkbox.style.cssText = `margin-right: 6px; accent-color: #4CAF50;`;
             checkbox.addEventListener('change', updateTargetServers);
-            
+
             const label = document.createElement('span');
             label.textContent = server;
             label.style.cssText = `font-size: 12px; color: #E0E0E0; font-weight: 500;`;
-            
+
             checkboxContainer.appendChild(checkbox);
             checkboxContainer.appendChild(label);
             serverCheckboxes.appendChild(checkboxContainer);
@@ -268,11 +268,11 @@
             cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: all 0.2s ease; backdrop-filter: blur(10px);
         `;
-        
+
         toggleButton.addEventListener('click', () => {
             minimized = !minimized;
             const contentArea = document.getElementById('gob-content-area');
-            
+
             if (contentArea) {
                 if (minimized) {
                     contentArea.style.display = 'none';
@@ -285,11 +285,11 @@
                 }
             }
         });
-        
+
         container.appendChild(toggleButton);
         document.body.appendChild(container);
         uiCreated = true;
-        
+
         console.log('🎨 GoB Monitor UI created');
     }
 
@@ -304,10 +304,10 @@
             const cyclingStatus = serverCycleInterval ? '🔄 Циклируется' : '⏸️ Остановлено';
             const serverInfo = currentServer ? `на ${currentServer}` : '';
             const totalMessages = Object.values(sentMessages).reduce((sum, set) => sum + set.size, 0);
-            
+
             statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
             statusEl.style.color = serverCycleInterval ? '#4CAF50' : '#FF5252';
-            
+
             const counterEl = document.getElementById('gob-message-count');
             if (counterEl) counterEl.textContent = totalMessages;
         }
@@ -333,7 +333,7 @@
             serverCycleInterval = null;
         }
         updateStatus();
-        
+
         const startBtn = document.getElementById('gob-start-btn');
         if (startBtn) {
             startBtn.innerHTML = `
@@ -347,7 +347,7 @@
     async function checkCurrentServer() {
         const server = getCurrentServer();
         updateStatus(`🔍 Проверка ${server}...`);
-        
+
         try {
             await checkAndSendServerMessages(server);
             updateStatus();
@@ -359,10 +359,10 @@
     function getCurrentServer() {
         const selectedServer = document.querySelector('#server-select .server-list li.selected h2');
         if (selectedServer) return selectedServer.textContent.trim().toUpperCase();
-        
+
         const serverButton = document.querySelector('.butt_left_menu.ng-binding .colorRed');
         if (serverButton) return serverButton.textContent.trim().toUpperCase();
-        
+
         return 'Неизвестный';
     }
 
@@ -377,18 +377,18 @@
     function getNextTargetServer() {
         const availableServers = getAvailableServers();
         const currentServer = getCurrentServer();
-        
+
         let attempts = 0;
         while (attempts < targetServerNames.length) {
             const targetServer = targetServerNames[currentTargetIndex];
             currentTargetIndex = (currentTargetIndex + 1) % targetServerNames.length;
-            
+
             if (availableServers.includes(targetServer) && targetServer !== currentServer) {
                 return targetServer;
             }
             attempts++;
         }
-        
+
         const otherServers = availableServers.filter(server => server !== currentServer);
         return otherServers.length > 0 ? otherServers[0] : null;
     }
@@ -411,7 +411,7 @@
 
         const availableServers = getAvailableServers();
         if (availableServers.length === 0 || targetServerNames.length === 0) return;
-        
+
         const startBtn = document.getElementById('gob-start-btn');
         if (startBtn) {
             startBtn.innerHTML = `
@@ -420,23 +420,23 @@
                 </div>
             `;
         }
-        
+
         let isProcessing = false;
-        
+
         serverCycleInterval = setInterval(async () => {
             if (isProcessing) return;
-            
+
             const targetServer = getNextTargetServer();
-            
+
             if (targetServer && switchToServer(targetServer)) {
                 isProcessing = true;
-                
+
                 setTimeout(async () => {
                     const newServer = getCurrentServer();
                     if (newServer !== currentServer) {
                         currentServer = newServer;
                         updateStatus();
-                        
+
                         setTimeout(async () => {
                             try {
                                 await checkAndSendServerMessages(currentServer);
@@ -462,51 +462,91 @@
         }
 
         currentServer = getCurrentServer();
-        
+
         if (!sentMessages[currentServer]) {
             sentMessages[currentServer] = new Set();
         }
-        
+
         isMonitoring = true;
-        
+
         setTimeout(async () => {
             await checkAndSendServerMessages(currentServer);
             updateStatus();
         }, 3000);
     }
 
-   async function checkAndSendServerMessages(serverName) {
-    const messages = document.querySelectorAll('#listChat li');
-    const serverMessages = [];
-    
-    if (!sentMessages[serverName]) {
-        sentMessages[serverName] = new Set();
-    }
-    
-    messages.forEach(message => {
-        const messageText = message.textContent || message.innerText;
+    // Function to determine message color based on content
+    function getMessageColor(messageText) {
+        const lowerText = messageText.toLowerCase();
         
-        // Check for SERVER:, Mac_, or *Marihuana* patterns
-
-        const hasServer = messageText.includes('SERVER:');
-        const hasMac = messageText.includes('Mac_:');
-        const hasMarihuana = messageText.includes('_Marihuana_:');
-        
-        if ((hasServer || hasMac || hasMarihuana) && !sentMessages[serverName].has(messageText)) {
-            // Clean up the message text by removing extra whitespace
-            const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
-            serverMessages.push(cleanedMessage);
-            sentMessages[serverName].add(messageText);
+        if (lowerText.includes('plutonium')) {
+            return '🟢'; // Green for plutonium
+        } else if (lowerText.includes('evil spider')) {
+            return '🔴'; // Red for Evil Spider
+        } else if (lowerText.includes('evil hamster')) {
+            return '🔵'; // Blue for Evil Hamster
         }
-    });
-    
-    if (serverMessages.length > 0) {
-        // Use single newline instead of double newlines to reduce spacing
-        const combinedMessage = `🎮 ${serverName}\n${serverMessages.join('\n')}`;
-        await sendToTelegram(combinedMessage);
-        updateStatus();
+        
+        return '⚪'; // White/default for others
     }
-}
+
+    // Function to format message with Telegram-supported formatting
+    function formatMessageWithColor(messageText) {
+        const lowerText = messageText.toLowerCase();
+        
+        if (lowerText.includes('plutonium')) {
+            return `<b>${messageText}</b>`; // Bold for plutonium
+        } else if (lowerText.includes('evil spider')) {
+            return `<i>${messageText}</i>`; // Italic for Evil Spider
+        } else if (lowerText.includes('evil hamster')) {
+            return `<u>${messageText}</u>`; // Underline for Evil Hamster
+        }
+        
+        return messageText; // No special formatting for others
+    }
+
+    async function checkAndSendServerMessages(serverName) {
+        const messages = document.querySelectorAll('#listChat li');
+        const serverMessages = [];
+
+        if (!sentMessages[serverName]) {
+            sentMessages[serverName] = new Set();
+        }
+
+        messages.forEach(message => {
+            const messageText = message.textContent || message.innerText;
+
+            // Check for SERVER:, Mac_, or *Marihuana* patterns
+            const hasServer = messageText.includes('SERVER:');
+            const hasMac = messageText.includes('Mac_:');
+            const hasMarihuana = messageText.includes('_Marihuana_:');
+
+            // Skip messages that contain "ignored"
+            if (messageText.toLowerCase().includes('ignored')) {
+                return;
+            }
+
+            if ((hasServer || hasMac || hasMarihuana) && !sentMessages[serverName].has(messageText)) {
+                // Clean up the message text by removing extra whitespace
+                const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
+                
+                // Format message with appropriate color
+                const formattedMessage = formatMessageWithColor(cleanedMessage);
+                const colorIcon = getMessageColor(cleanedMessage);
+                
+                // Add color icon at the beginning of the message
+                serverMessages.push(`${colorIcon} ${formattedMessage}`);
+                sentMessages[serverName].add(messageText);
+            }
+        });
+
+        if (serverMessages.length > 0) {
+            // Use single newline instead of double newlines to reduce spacing
+            const combinedMessage = `🎮 ${serverName}\n${serverMessages.join('\n')}`;
+            await sendToTelegram(combinedMessage);
+            updateStatus();
+        }
+    }
 
     async function sendToTelegram(message) {
         try {
@@ -519,7 +559,7 @@
                     parse_mode: 'HTML'
                 })
             });
-            
+
             if (response.ok) {
                 console.log('✅ Message sent to Telegram');
             } else {
@@ -532,7 +572,7 @@
 
     function init() {
         console.log('🎮 GoB Monitor loaded');
-        
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => {
