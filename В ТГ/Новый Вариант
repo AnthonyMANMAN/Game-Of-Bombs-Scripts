@@ -475,31 +475,38 @@
         }, 3000);
     }
 
-    async function checkAndSendServerMessages(serverName) {
-        const messages = document.querySelectorAll('#listChat li');
-        const serverMessages = [];
-        
-        if (!sentMessages[serverName]) {
-            sentMessages[serverName] = new Set();
-        }
-        
-        messages.forEach(message => {
-            const messageText = message.textContent || message.innerText;
-            if (messageText.includes('SERVER:') && !sentMessages[serverName].has(messageText)) {
-                // Clean up the message text by removing extra whitespace
-                const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
-                serverMessages.push(cleanedMessage);
-                sentMessages[serverName].add(messageText);
-            }
-        });
-        
-        if (serverMessages.length > 0) {
-            // Use single newline instead of double newlines to reduce spacing
-            const combinedMessage = `🎮 ${serverName}\n${serverMessages.join('\n')}`;
-            await sendToTelegram(combinedMessage);
-            updateStatus();
-        }
+   async function checkAndSendServerMessages(serverName) {
+    const messages = document.querySelectorAll('#listChat li');
+    const serverMessages = [];
+    
+    if (!sentMessages[serverName]) {
+        sentMessages[serverName] = new Set();
     }
+    
+    messages.forEach(message => {
+        const messageText = message.textContent || message.innerText;
+        
+        // Check for SERVER:, Mac_, or *Marihuana* patterns
+
+        const hasServer = messageText.includes('SERVER:');
+        const hasMac = messageText.includes('Mac_:');
+        const hasMarihuana = messageText.includes('_Marihuana_:');
+        
+        if ((hasServer || hasMac || hasMarihuana) && !sentMessages[serverName].has(messageText)) {
+            // Clean up the message text by removing extra whitespace
+            const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
+            serverMessages.push(cleanedMessage);
+            sentMessages[serverName].add(messageText);
+        }
+    });
+    
+    if (serverMessages.length > 0) {
+        // Use single newline instead of double newlines to reduce spacing
+        const combinedMessage = `🎮 ${serverName}\n${serverMessages.join('\n')}`;
+        await sendToTelegram(combinedMessage);
+        updateStatus();
+    }
+}
 
     async function sendToTelegram(message) {
         try {
