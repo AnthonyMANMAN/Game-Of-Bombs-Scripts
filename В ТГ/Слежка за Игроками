@@ -25,6 +25,7 @@
     let uiCreated = false;
     let minimized = false;
     let targetPlayers = ['Afoonie'];
+    let isPaused = false;
 
     function createUI() {
         if (uiCreated) return;
@@ -98,7 +99,7 @@
         header.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #0088CC, #229ED9); border-radius: 50%; animation: pulse 2s infinite;"></div>
-                <span style="font-weight: 600; font-size: 16px;">📱 Слежка </span>
+                <span style="font-weight: 600; font-size: 16px;">📱 Multi-Player Tracker</span>
             </div>
         `;
         header.style.cssText = `
@@ -357,7 +358,7 @@
     function addPlayer() {
         const input = document.getElementById('player-input');
         const playerName = input.value.trim();
-
+        
         if (playerName && !targetPlayers.includes(playerName)) {
             targetPlayers.push(playerName);
             input.value = '';
@@ -379,7 +380,7 @@
         if (!display) return;
 
         display.innerHTML = '';
-
+        
         if (targetPlayers.length === 0) {
             display.innerHTML = '<div style="color: #888; font-size: 12px; padding: 8px; text-align: center;">Нет игроков для поиска</div>';
             return;
@@ -389,7 +390,7 @@
             const tag = document.createElement('span');
             tag.className = 'player-tag';
             tag.innerHTML = `${player}<span class="remove-btn">×</span>`;
-
+            
             tag.querySelector('.remove-btn').onclick = () => removePlayer(player);
             display.appendChild(tag);
         });
@@ -403,11 +404,18 @@
             statusEl.textContent = message;
             statusEl.style.color = '#FFD700';
         } else {
-            const cyclingStatus = serverCycleInterval ? '🔄 Поиск активен' : '⏸️ Остановлено';
+            let cyclingStatus;
+            if (isPaused && serverCycleInterval) {
+                cyclingStatus = '⏸️ На паузе';
+            } else if (serverCycleInterval) {
+                cyclingStatus = '🔄 Поиск активен';
+            } else {
+                cyclingStatus = '⏹️ Остановлено';
+            }
+            
             const serverInfo = currentServer ? `на ${currentServer}` : '';
-
             statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
-            statusEl.style.color = serverCycleInterval ? '#0088CC' : '#FF5252';
+            statusEl.style.color = serverCycleInterval && !isPaused ? '#0088CC' : '#FF5252';
 
             const counterEl = document.getElementById('multi-found-count');
             if (counterEl) counterEl.textContent = foundPlayers.size;
@@ -422,7 +430,20 @@
 
     function toggleServerCycle() {
         if (serverCycleInterval) {
-            stopServerCycle();
+            if (isPaused) {
+                isPaused = false;
+                updateStatus();
+                const startBtn = document.getElementById('multi-start-btn');
+                if (startBtn) {
+                    startBtn.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>⏸️</span><span>Пауза поиска</span>
+                        </div>
+                    `;
+                }
+            } else {
+                stopServerCycle();
+            }
         } else {
             startServerCycle();
         }
@@ -433,6 +454,7 @@
             clearInterval(serverCycleInterval);
             serverCycleInterval = null;
         }
+        isPaused = false;
         updateStatus();
 
         const startBtn = document.getElementById('multi-start-btn');
@@ -513,6 +535,7 @@
         const availableServers = getAvailableServers();
         if (availableServers.length === 0 || targetServerNames.length === 0) return;
 
+        isPaused = false;
         const startBtn = document.getElementById('multi-start-btn');
         if (startBtn) {
             startBtn.innerHTML = `
@@ -525,7 +548,7 @@
         let isProcessing = false;
 
         serverCycleInterval = setInterval(async () => {
-            if (isProcessing) return;
+            if (isProcessing || isPaused) return;
 
             const targetServer = getNextTargetServer();
 
@@ -533,12 +556,22 @@
                 isProcessing = true;
 
                 setTimeout(async () => {
+                    if (isPaused) {
+                        isProcessing = false;
+                        return;
+                    }
+                    
                     const newServer = getCurrentServer();
                     if (newServer !== currentServer) {
                         currentServer = newServer;
                         updateStatus();
 
                         setTimeout(async () => {
+                            if (isPaused) {
+                                isProcessing = false;
+                                return;
+                            }
+                            
                             try {
                                 await checkForTargetPlayers(currentServer);
                             } catch (error) {
