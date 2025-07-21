@@ -98,7 +98,7 @@
         header.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #0088CC, #229ED9); border-radius: 50%; animation: pulse 2s infinite;"></div>
-                <span style="font-weight: 600; font-size: 16px;">📱 Multi-Player Tracker</span>
+                <span style="font-weight: 600; font-size: 16px;">📱 Слежка </span>
             </div>
         `;
         header.style.cssText = `
