@@ -17,6 +17,8 @@
     const CHAT_ID = '-1002599400013';
 
     let sentMessages = {};
+    // Global duplicate prevention - tracks messages across all servers
+    let globalSentMessages = new Set();
     let observer = null;
     let currentServer = null;
     let isMonitoring = false;
@@ -25,6 +27,37 @@
     let currentTargetIndex = 0;
     let uiCreated = false;
     let minimized = false;
+
+    // Function to create a unique message identifier
+    function createMessageId(username, content) {
+        // Remove timestamps and clean the content
+        const cleanContent = content.replace(/\[\d{2}:\d{2}:\d{2}\]/g, '').trim();
+        return `${username}:${cleanContent}`;
+    }
+
+    // Function to extract username and content from message
+    function parseMessage(messageText) {
+        const patterns = [
+            /SERVER:\s*(.+)/,
+            /Mac_:\s*(.+)/,
+            /_Marihuana_:\s*(.+)/,
+            /Afoonie:\s*(.+)/
+        ];
+
+        for (const pattern of patterns) {
+            const match = messageText.match(pattern);
+            if (match) {
+                const username = messageText.includes('SERVER:') ? 'SERVER' : 
+                               messageText.includes('Mac_:') ? 'Mac_' :
+                               messageText.includes('_Marihuana_:') ? '_Marihuana_' : 'Afoonie';
+                return {
+                    username,
+                    content: match[1].trim()
+                };
+            }
+        }
+        return null;
+    }
 
     function createUI() {
         if (uiCreated) return;
@@ -224,9 +257,26 @@
         checkButton.classList.add('gob-ui-button-hover');
         checkButton.onclick = checkCurrentServer;
 
+        // Clear duplicates button
+        const clearButton = document.createElement('button');
+        clearButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>🗑️</span><span>Очистить дубликаты</span>
+            </div>
+        `;
+        clearButton.style.cssText = `
+            background: linear-gradient(135deg, #9c88ff, #8c7ae6);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(156, 136, 255, 0.3);
+        `;
+        clearButton.classList.add('gob-ui-button-hover');
+        clearButton.onclick = clearDuplicates;
+
         buttonContainer.appendChild(startButton);
         buttonContainer.appendChild(stopButton);
         buttonContainer.appendChild(checkButton);
+        buttonContainer.appendChild(clearButton);
         contentArea.appendChild(buttonContainer);
 
         // Statistics
@@ -291,6 +341,13 @@
         uiCreated = true;
 
         console.log('🎨 GoB Monitor UI created');
+    }
+
+    function clearDuplicates() {
+        globalSentMessages.clear();
+        sentMessages = {};
+        updateStatus('🗑️ Дубликаты очищены');
+        setTimeout(() => updateStatus(), 2000);
     }
 
     function updateStatus(message = null) {
@@ -516,28 +573,43 @@
         messages.forEach(message => {
             const messageText = message.textContent || message.innerText;
 
-            // Check for SERVER:, Mac_, or *Marihuana* patterns
-            const hasServer = messageText.includes('SERVER:');
-            const hasMac = messageText.includes('Mac_:');
-            const hasMarihuana = messageText.includes('_Marihuana_:');
-
             // Skip messages that contain "ignored"
             if (messageText.toLowerCase().includes('ignored')) {
                 return;
             }
 
-            if ((hasServer || hasMac || hasMarihuana) && !sentMessages[serverName].has(messageText)) {
-                // Clean up the message text by removing extra whitespace
-                const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
-                
-                // Format message with appropriate color
-                const formattedMessage = formatMessageWithColor(cleanedMessage);
-                const colorIcon = getMessageColor(cleanedMessage);
-                
-                // Add color icon at the beginning of the message
-                serverMessages.push(`${colorIcon} ${formattedMessage}`);
-                sentMessages[serverName].add(messageText);
+            // Parse the message to extract username and content
+            const parsedMessage = parseMessage(messageText);
+            if (!parsedMessage) return;
+
+            // Create unique message identifier
+            const messageId = createMessageId(parsedMessage.username, parsedMessage.content);
+
+            // Check if message was already sent globally (across all servers)
+            if (globalSentMessages.has(messageId)) {
+                return;
             }
+
+            // Check if message was already sent for this server (fallback)
+            if (sentMessages[serverName].has(messageText)) {
+                return;
+            }
+
+            // Clean up the message text by removing extra whitespace
+            const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
+            
+            // Format message with appropriate color
+            const formattedMessage = formatMessageWithColor(cleanedMessage);
+            const colorIcon = getMessageColor(cleanedMessage);
+            
+            // Add color icon at the beginning of the message
+            serverMessages.push(`${colorIcon} ${formattedMessage}`);
+            
+            // Mark message as sent both globally and per-server
+            globalSentMessages.add(messageId);
+            sentMessages[serverName].add(messageText);
+
+            console.log(`📝 New message processed: ${parsedMessage.username} - ${parsedMessage.content.substring(0, 50)}...`);
         });
 
         if (serverMessages.length > 0) {
