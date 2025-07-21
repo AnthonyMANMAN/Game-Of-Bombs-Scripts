@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Afoonie Discord Monitor
+// @name         Multi-Player Telegram Monitor
 // @namespace    http://tampermonkey.net/
-// @version      2025-07-20
-// @description  Monitor for players
+// @version      2025-07-21
+// @description  Monitor for multiple players - Telegram version
 // @author       You
 // @match        gameofbombs.com
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
@@ -12,8 +12,8 @@
 (function() {
     'use strict';
 
-    // ⚠️ НАСТРОЙТЕ ЭТО ЗНАЧЕНИЕ:
-    const DISCORD_WEBHOOK_URL = 'YOUR_DISCORD_WEBHOOK_URL_HERE';
+    const BOT_TOKEN = '7860609958:AAGSCiD2BFAfnUO6hWY-GW-VbKjVp2nifPY';
+    const CHAT_ID = '-1002599400013';
 
     let foundPlayers = new Set();
     let observer = null;
@@ -24,15 +24,14 @@
     let currentTargetIndex = 0;
     let uiCreated = false;
     let minimized = false;
-    let targetPlayer = 'Afoonie'; // The player we're looking for
+    let targetPlayers = ['Afoonie'];
 
     function createUI() {
         if (uiCreated) return;
 
-        const existingUI = document.getElementById('afoonie-monitor-ui');
+        const existingUI = document.getElementById('multi-monitor-ui');
         if (existingUI) existingUI.remove();
 
-        // Unified CSS styles
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideIn {
@@ -40,96 +39,131 @@
                 to { transform: translateX(0); opacity: 1; }
             }
             @keyframes pulse {
-                0%, 100% { box-shadow: 0 0 15px rgba(114, 137, 218, 0.3); }
-                50% { box-shadow: 0 0 25px rgba(114, 137, 218, 0.6); }
+                0%, 100% { box-shadow: 0 0 15px rgba(0, 136, 204, 0.3); }
+                50% { box-shadow: 0 0 25px rgba(0, 136, 204, 0.6); }
             }
-            .afoonie-ui-glass {
+            .multi-ui-glass {
                 backdrop-filter: blur(10px);
                 -webkit-backdrop-filter: blur(10px);
             }
-            .afoonie-ui-button-hover:hover {
+            .multi-ui-button-hover:hover {
                 transform: translateY(-2px);
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+            .player-tag {
+                display: inline-block;
+                background: rgba(0, 136, 204, 0.2);
+                color: #0088CC;
+                padding: 4px 8px;
+                margin: 2px;
+                border-radius: 12px;
+                font-size: 11px;
+                border: 1px solid rgba(0, 136, 204, 0.3);
+                position: relative;
+            }
+            .player-tag .remove-btn {
+                margin-left: 6px;
+                cursor: pointer;
+                color: #ff4757;
+                font-weight: bold;
+            }
+            .player-tag .remove-btn:hover {
+                color: #ff3838;
             }
         `;
         document.head.appendChild(style);
 
-        // Main container
         const container = document.createElement('div');
-        container.id = 'afoonie-monitor-ui';
+        container.id = 'multi-monitor-ui';
         container.style.cssText = `
             position: fixed;
             top: 10px;
-            right: 10px;
-            width: 260px;
-            background: linear-gradient(145deg, rgba(30, 30, 40, 0.95), rgba(50, 50, 70, 0.95));
+            right: 600px;
+            width: 280px;
+            background: linear-gradient(145deg, rgba(20, 20, 30, 0.95), rgba(40, 40, 60, 0.95));
             color: #ffffff;
             padding: 0;
             border-radius: 16px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             z-index: 9999;
             user-select: none;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(114, 137, 218, 0.2);
-            border: 1px solid rgba(114, 137, 218, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             animation: slideIn 0.3s ease-out;
             transition: all 0.3s ease;
         `;
-        container.classList.add('afoonie-ui-glass');
+        container.classList.add('multi-ui-glass');
 
-        // Header with Discord branding
         const header = document.createElement('div');
         header.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #7289DA, #5B6EAE); border-radius: 50%; animation: pulse 2s infinite;"></div>
-                <span style="font-weight: 600; font-size: 16px;">🔍 Afoonie Tracker</span>
+                <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #0088CC, #229ED9); border-radius: 50%; animation: pulse 2s infinite;"></div>
+                <span style="font-weight: 600; font-size: 16px;">📱 Multi-Player Tracker</span>
             </div>
         `;
         header.style.cssText = `
-            background: linear-gradient(135deg, rgba(114, 137, 218, 0.2), rgba(91, 110, 174, 0.2));
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(56, 142, 60, 0.2));
             padding: 16px 20px;
             border-radius: 16px 16px 0 0;
-            border-bottom: 1px solid rgba(114, 137, 218, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
         `;
         container.appendChild(header);
 
         const contentArea = document.createElement('div');
-        contentArea.id = 'afoonie-content-area';
+        contentArea.id = 'multi-content-area';
         contentArea.style.cssText = `padding: 16px 20px;`;
 
-        // Target player input
-        const targetSection = document.createElement('div');
-        targetSection.style.cssText = `
+        const playersSection = document.createElement('div');
+        playersSection.style.cssText = `
             margin-bottom: 12px; padding: 12px;
             background: rgba(255, 255, 255, 0.05); border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         `;
 
-        const targetLabel = document.createElement('div');
-        targetLabel.textContent = 'Целевой игрок:';
-        targetLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
+        const playersLabel = document.createElement('div');
+        playersLabel.textContent = 'Целевые игроки:';
+        playersLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
 
-        const targetInput = document.createElement('input');
-        targetInput.type = 'text';
-        targetInput.value = targetPlayer;
-        targetInput.id = 'target-player-input';
-        targetInput.style.cssText = `
-            width: 100%; padding: 8px 12px; border: 1px solid rgba(114, 137, 218, 0.3);
+        const playerInputContainer = document.createElement('div');
+        playerInputContainer.style.cssText = `display: flex; gap: 8px; margin-bottom: 8px;`;
+
+        const playerInput = document.createElement('input');
+        playerInput.type = 'text';
+        playerInput.placeholder = 'Добавить игрока...';
+        playerInput.id = 'player-input';
+        playerInput.style.cssText = `
+            flex: 1; padding: 8px 12px; border: 1px solid rgba(0, 136, 204, 0.3);
             border-radius: 8px; background: rgba(255, 255, 255, 0.1);
             color: #ffffff; font-size: 13px; font-family: inherit;
-            transition: all 0.2s ease;
+            transition: all 0.2s ease; box-sizing: border-box;
         `;
-        targetInput.addEventListener('input', (e) => {
-            targetPlayer = e.target.value.trim();
-            foundPlayers.clear(); // Reset found players when target changes
-            updateStatus();
+
+        const addButton = document.createElement('button');
+        addButton.textContent = '+';
+        addButton.style.cssText = `
+            width: 32px; height: 32px; border: none; border-radius: 6px;
+            background: rgba(0, 136, 204, 0.3); color: #0088CC;
+            cursor: pointer; font-size: 16px; font-weight: bold;
+            transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;
+        `;
+        addButton.onclick = addPlayer;
+
+        playerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPlayer();
         });
 
-        targetSection.appendChild(targetLabel);
-        targetSection.appendChild(targetInput);
-        contentArea.appendChild(targetSection);
+        const playersDisplay = document.createElement('div');
+        playersDisplay.id = 'players-display';
+        playersDisplay.style.cssText = `min-height: 40px; max-height: 100px; overflow-y: auto;`;
 
-        // Status display
+        playerInputContainer.appendChild(playerInput);
+        playerInputContainer.appendChild(addButton);
+        playersSection.appendChild(playersLabel);
+        playersSection.appendChild(playerInputContainer);
+        playersSection.appendChild(playersDisplay);
+        contentArea.appendChild(playersSection);
+
         const status = document.createElement('div');
         status.style.cssText = `
             display: flex;
@@ -148,13 +182,13 @@
         statusLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
 
         const statusValue = document.createElement('span');
-        statusValue.id = 'afoonie-status-value';
+        statusValue.id = 'multi-status-value';
         statusValue.textContent = '🔄 Инициализация...';
         statusValue.style.cssText = `
-            font-weight: 600; font-size: 11px; color: #7289DA;
-            background: rgba(114, 137, 218, 0.2); padding: 4px 8px;
-            border-radius: 6px; border: 1px solid rgba(114, 137, 218, 0.3);
-            transition: all 0.2s ease; text-shadow: 0 0 8px rgba(114, 137, 218, 0.5);
+            font-weight: 600; font-size: 11px; color: #0088CC;
+            background: rgba(0, 136, 204, 0.2); padding: 4px 8px;
+            border-radius: 6px; border: 1px solid rgba(0, 136, 204, 0.3);
+            transition: all 0.2s ease; text-shadow: 0 0 8px rgba(0, 136, 204, 0.5);
             min-width: 80px; text-align: center;
         `;
 
@@ -162,7 +196,6 @@
         status.appendChild(statusValue);
         contentArea.appendChild(status);
 
-        // Server selection
         const serverSection = document.createElement('div');
         serverSection.style.cssText = `
             margin-bottom: 12px; padding: 12px;
@@ -190,7 +223,7 @@
             checkbox.type = 'checkbox';
             checkbox.value = server;
             checkbox.checked = targetServerNames.includes(server);
-            checkbox.style.cssText = `margin-right: 6px; accent-color: #7289DA;`;
+            checkbox.style.cssText = `margin-right: 6px; accent-color: #0088CC;`;
             checkbox.addEventListener('change', updateTargetServers);
 
             const label = document.createElement('span');
@@ -206,24 +239,23 @@
         serverSection.appendChild(serverCheckboxes);
         contentArea.appendChild(serverSection);
 
-        // Control buttons
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = `display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;`;
 
         const startButton = document.createElement('button');
-        startButton.id = 'afoonie-start-btn';
+        startButton.id = 'multi-start-btn';
         startButton.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <span>▶️</span><span>Начать поиск</span>
             </div>
         `;
         startButton.style.cssText = `
-            background: linear-gradient(135deg, #7289DA, #5B6EAE);
+            background: linear-gradient(135deg, #0088CC, #229ED9);
             color: white; border: none; border-radius: 10px; padding: 12px 16px;
             cursor: pointer; font-weight: 600; font-size: 13px;
-            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(114, 137, 218, 0.3);
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0, 136, 204, 0.3);
         `;
-        startButton.classList.add('afoonie-ui-button-hover');
+        startButton.classList.add('multi-ui-button-hover');
         startButton.onclick = toggleServerCycle;
 
         const stopButton = document.createElement('button');
@@ -238,7 +270,7 @@
             cursor: pointer; font-weight: 600; font-size: 13px;
             transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
         `;
-        stopButton.classList.add('afoonie-ui-button-hover');
+        stopButton.classList.add('multi-ui-button-hover');
         stopButton.onclick = stopServerCycle;
 
         const checkButton = document.createElement('button');
@@ -253,7 +285,7 @@
             cursor: pointer; font-weight: 600; font-size: 13px;
             transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
         `;
-        checkButton.classList.add('afoonie-ui-button-hover');
+        checkButton.classList.add('multi-ui-button-hover');
         checkButton.onclick = checkCurrentServer;
 
         buttonContainer.appendChild(startButton);
@@ -261,7 +293,6 @@
         buttonContainer.appendChild(checkButton);
         contentArea.appendChild(buttonContainer);
 
-        // Statistics
         const stats = document.createElement('div');
         stats.style.cssText = `
             display: flex; justify-content: space-between; align-items: center;
@@ -274,13 +305,13 @@
         statsLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
 
         const statsValue = document.createElement('span');
-        statsValue.id = 'afoonie-found-count';
+        statsValue.id = 'multi-found-count';
         statsValue.textContent = '0';
         statsValue.style.cssText = `
-            font-weight: 600; font-size: 11px; color: #7289DA;
-            background: rgba(114, 137, 218, 0.2); padding: 4px 8px;
-            border-radius: 6px; border: 1px solid rgba(114, 137, 218, 0.3);
-            text-shadow: 0 0 8px rgba(114, 137, 218, 0.5);
+            font-weight: 600; font-size: 11px; color: #0088CC;
+            background: rgba(0, 136, 204, 0.2); padding: 4px 8px;
+            border-radius: 6px; border: 1px solid rgba(0, 136, 204, 0.3);
+            text-shadow: 0 0 8px rgba(0, 136, 204, 0.5);
             min-width: 32px; text-align: center;
         `;
 
@@ -290,7 +321,6 @@
 
         container.appendChild(contentArea);
 
-        // Minimize/maximize button
         const toggleButton = document.createElement('button');
         toggleButton.innerHTML = '−';
         toggleButton.style.cssText = `
@@ -303,7 +333,7 @@
 
         toggleButton.addEventListener('click', () => {
             minimized = !minimized;
-            const contentArea = document.getElementById('afoonie-content-area');
+            const contentArea = document.getElementById('multi-content-area');
 
             if (contentArea) {
                 if (minimized) {
@@ -312,7 +342,7 @@
                     toggleButton.innerHTML = '+';
                 } else {
                     contentArea.style.display = 'block';
-                    container.style.width = '260px';
+                    container.style.width = '280px';
                     toggleButton.innerHTML = '−';
                 }
             }
@@ -321,12 +351,52 @@
         container.appendChild(toggleButton);
         document.body.appendChild(container);
         uiCreated = true;
+        updatePlayersDisplay();
+    }
 
-        console.log('🎨 Afoonie Monitor UI created');
+    function addPlayer() {
+        const input = document.getElementById('player-input');
+        const playerName = input.value.trim();
+
+        if (playerName && !targetPlayers.includes(playerName)) {
+            targetPlayers.push(playerName);
+            input.value = '';
+            updatePlayersDisplay();
+            foundPlayers.clear();
+            updateStatus();
+        }
+    }
+
+    function removePlayer(playerName) {
+        targetPlayers = targetPlayers.filter(p => p !== playerName);
+        updatePlayersDisplay();
+        foundPlayers.clear();
+        updateStatus();
+    }
+
+    function updatePlayersDisplay() {
+        const display = document.getElementById('players-display');
+        if (!display) return;
+
+        display.innerHTML = '';
+
+        if (targetPlayers.length === 0) {
+            display.innerHTML = '<div style="color: #888; font-size: 12px; padding: 8px; text-align: center;">Нет игроков для поиска</div>';
+            return;
+        }
+
+        targetPlayers.forEach(player => {
+            const tag = document.createElement('span');
+            tag.className = 'player-tag';
+            tag.innerHTML = `${player}<span class="remove-btn">×</span>`;
+
+            tag.querySelector('.remove-btn').onclick = () => removePlayer(player);
+            display.appendChild(tag);
+        });
     }
 
     function updateStatus(message = null) {
-        const statusEl = document.getElementById('afoonie-status-value');
+        const statusEl = document.getElementById('multi-status-value');
         if (!statusEl) return;
 
         if (message) {
@@ -337,15 +407,15 @@
             const serverInfo = currentServer ? `на ${currentServer}` : '';
 
             statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
-            statusEl.style.color = serverCycleInterval ? '#7289DA' : '#FF5252';
+            statusEl.style.color = serverCycleInterval ? '#0088CC' : '#FF5252';
 
-            const counterEl = document.getElementById('afoonie-found-count');
+            const counterEl = document.getElementById('multi-found-count');
             if (counterEl) counterEl.textContent = foundPlayers.size;
         }
     }
 
     function updateTargetServers() {
-        const checkboxes = document.querySelectorAll('#afoonie-monitor-ui input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('#multi-monitor-ui input[type="checkbox"]');
         targetServerNames = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
         updateStatus();
     }
@@ -365,7 +435,7 @@
         }
         updateStatus();
 
-        const startBtn = document.getElementById('afoonie-start-btn');
+        const startBtn = document.getElementById('multi-start-btn');
         if (startBtn) {
             startBtn.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
@@ -380,7 +450,7 @@
         updateStatus(`🔍 Проверка ${server}...`);
 
         try {
-            await checkForTargetPlayer(server);
+            await checkForTargetPlayers(server);
             updateStatus();
         } catch (error) {
             updateStatus('❌ Проверка не удалась');
@@ -443,7 +513,7 @@
         const availableServers = getAvailableServers();
         if (availableServers.length === 0 || targetServerNames.length === 0) return;
 
-        const startBtn = document.getElementById('afoonie-start-btn');
+        const startBtn = document.getElementById('multi-start-btn');
         if (startBtn) {
             startBtn.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
@@ -470,9 +540,9 @@
 
                         setTimeout(async () => {
                             try {
-                                await checkForTargetPlayer(currentServer);
+                                await checkForTargetPlayers(currentServer);
                             } catch (error) {
-                                console.error('❌ Error checking for player:', error);
+                                console.error('❌ Error checking for players:', error);
                             } finally {
                                 isProcessing = false;
                             }
@@ -496,144 +566,114 @@
         isMonitoring = true;
 
         setTimeout(async () => {
-            await checkForTargetPlayer(currentServer);
+            await checkForTargetPlayers(currentServer);
             updateStatus();
         }, 3000);
     }
 
-    async function checkForTargetPlayer(serverName) {
-        if (!targetPlayer.trim()) return;
+    async function checkForTargetPlayers(serverName) {
+        if (targetPlayers.length === 0) return;
 
-        // Check the player list from the HTML document provided
         const playerElements = document.querySelectorAll('#list-players li');
-        let foundPlayer = null;
+        const foundResults = [];
 
         playerElements.forEach(playerEl => {
-            // Look for the player nickname in the span
             const nicknameSpan = playerEl.querySelector('.nickname .ng-binding');
             if (nicknameSpan) {
                 const playerName = nicknameSpan.textContent.trim();
-                
-                if (playerName.toLowerCase() === targetPlayer.toLowerCase()) {
-                    // Extract player data
-                    const place = playerEl.querySelector('.place')?.textContent || 'N/A';
-                    const pvpKills = playerEl.querySelector('.kills-new-pvp')?.textContent || '0';
-                    const pveKills = playerEl.querySelector('.kills-new-pvm')?.textContent || '0';
-                    const deaths = playerEl.querySelector('.deaths-new')?.textContent || '0';
-                    const flags = playerEl.querySelector('.flags')?.textContent || '0';
-                    
-                    // Check if player is highlighted (selected)
-                    const isHighlighted = playerEl.classList.contains('highlighted');
-                    
-                    foundPlayer = {
-                        name: playerName,
-                        place: place,
-                        pvpKills: pvpKills,
-                        pveKills: pveKills,
-                        deaths: deaths,
-                        flags: flags,
-                        highlighted: isHighlighted,
-                        server: serverName
-                    };
+
+                for (const targetPlayer of targetPlayers) {
+                    if (playerName.toLowerCase() === targetPlayer.toLowerCase()) {
+                        const place = playerEl.querySelector('.place')?.textContent || 'N/A';
+                        const pvpKills = playerEl.querySelector('.kills-new-pvp')?.textContent || '0';
+                        const pveKills = playerEl.querySelector('.kills-new-pvm')?.textContent || '0';
+                        const deaths = playerEl.querySelector('.deaths-new')?.textContent || '0';
+                        const flags = playerEl.querySelector('.flags')?.textContent || '0';
+                        const isHighlighted = playerEl.classList.contains('highlighted');
+
+                        foundResults.push({
+                            name: playerName,
+                            place: place,
+                            pvpKills: pvpKills,
+                            pveKills: pveKills,
+                            deaths: deaths,
+                            flags: flags,
+                            highlighted: isHighlighted,
+                            server: serverName
+                        });
+                    }
                 }
             }
         });
 
-        if (foundPlayer) {
-            const playerKey = `${foundPlayer.name}-${foundPlayer.server}-${Date.now()}`;
-            
+        for (const player of foundResults) {
+            const playerKey = `${player.name}-${player.server}-${Date.now()}`;
+
             if (!foundPlayers.has(playerKey)) {
                 foundPlayers.add(playerKey);
-                await sendDiscordNotification(foundPlayer);
-                updateStatus(`✅ Найден на ${serverName}!`);
-                
-                // Update UI briefly to show success
+                await sendTelegramNotification(player);
+                updateStatus(`✅ ${player.name} найден на ${serverName}!`);
+
                 setTimeout(() => updateStatus(), 3000);
             }
         }
     }
 
-    async function sendDiscordNotification(player) {
-        if (!DISCORD_WEBHOOK_URL || DISCORD_WEBHOOK_URL === 'YOUR_DISCORD_WEBHOOK_URL_HERE') {
-            console.error('❌ Discord webhook URL not configured!');
+    async function sendTelegramNotification(player) {
+        if (!BOT_TOKEN || !CHAT_ID) {
+            console.error('❌ Telegram bot token or chat ID not configured!');
             return;
         }
 
-        const embed = {
-            title: `🎯 Игрок найден!`,
-            description: `**${player.name}** обнаружен на сервере **${player.server}**`,
-            color: player.highlighted ? 0x00FF00 : 0x7289DA, // Green if highlighted, Discord blue otherwise
-            fields: [
-                {
-                    name: '🏆 Место',
-                    value: player.place,
-                    inline: true
-                },
-                {
-                    name: '⚔️ PvP Убийства',
-                    value: player.pvpKills,
-                    inline: true
-                },
-                {
-                    name: '🤖 PvE Убийства',
-                    value: player.pveKills,
-                    inline: true
-                },
-                {
-                    name: '💀 Смерти',
-                    value: player.deaths,
-                    inline: true
-                },
-                {
-                    name: '🚩 Флаги',
-                    value: player.flags,
-                    inline: true
-                },
-                {
-                    name: '🎮 Сервер',
-                    value: player.server,
-                    inline: true
-                }
-            ],
-            timestamp: new Date().toISOString(),
-            footer: {
-                text: 'GoB Player Monitor'
-            }
-        };
+        const statusIcon = player.highlighted ? '⭐' : '🎯';
+        const statusText = player.highlighted ? 'ПОДСВЕЧЕН' : 'Найден';
 
-        if (player.highlighted) {
-            embed.fields.push({
-                name: '⭐ Статус',
-                value: 'Подсвечен (выбран)',
-                inline: false
-            });
-        }
+        const message = `${statusIcon} <b>Игрок ${statusText}!</b>
+
+👤 <b>Игрок:</b> ${player.name}
+🎮 <b>Сервер:</b> ${player.server}
+🏆 <b>Место:</b> ${player.place}
+
+📊 <b>Статистика:</b>
+⚔️ PvP убийств: ${player.pvpKills}
+🤖 PvE убийств: ${player.pveKills}
+💀 Смертей: ${player.deaths}
+🚩 Флагов: ${player.flags}
+
+${player.highlighted ? '⭐ <i>Игрок выбран/подсвечен</i>' : ''}
+
+🕐 <i>${new Date().toLocaleString('ru-RU')}</i>`;
+
+        const telegramUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
         try {
-            const response = await fetch(DISCORD_WEBHOOK_URL, {
+            const response = await fetch(telegramUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    username: 'GoB Monitor',
-                    avatar_url: 'https://cdn.discordapp.com/embed/avatars/0.png',
-                    embeds: [embed]
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML',
+                    disable_web_page_preview: true
                 })
             });
 
-            if (response.ok) {
-                console.log(`✅ Discord notification sent for ${player.name} on ${player.server}`);
+            const result = await response.json();
+
+            if (result.ok) {
+                console.log(`✅ Telegram notification sent for ${player.name} on ${player.server}`);
             } else {
-                console.error('❌ Failed to send Discord notification');
+                console.error('❌ Failed to send Telegram notification:', result.description);
             }
         } catch (error) {
-            console.error('❌ Error sending Discord notification:', error);
+            console.error('❌ Error sending Telegram notification:', error);
         }
     }
 
     function init() {
-        console.log('🎮 Afoonie Monitor loaded');
+        console.log('📱 Multi-Player Telegram Monitor loaded');
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
