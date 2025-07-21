@@ -1,0 +1,654 @@
+// ==UserScript==
+// @name         Afoonie Discord Monitor
+// @namespace    http://tampermonkey.net/
+// @version      2025-07-20
+// @description  Monitor for players
+// @author       You
+// @match        gameofbombs.com
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // ⚠️ НАСТРОЙТЕ ЭТО ЗНАЧЕНИЕ:
+    const DISCORD_WEBHOOK_URL = 'YOUR_DISCORD_WEBHOOK_URL_HERE';
+
+    let foundPlayers = new Set();
+    let observer = null;
+    let currentServer = null;
+    let isMonitoring = false;
+    let serverCycleInterval = null;
+    let targetServerNames = ['US', 'EU', 'RU', 'BR', 'AU', 'JP'];
+    let currentTargetIndex = 0;
+    let uiCreated = false;
+    let minimized = false;
+    let targetPlayer = 'Afoonie'; // The player we're looking for
+
+    function createUI() {
+        if (uiCreated) return;
+
+        const existingUI = document.getElementById('afoonie-monitor-ui');
+        if (existingUI) existingUI.remove();
+
+        // Unified CSS styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(-100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes pulse {
+                0%, 100% { box-shadow: 0 0 15px rgba(114, 137, 218, 0.3); }
+                50% { box-shadow: 0 0 25px rgba(114, 137, 218, 0.6); }
+            }
+            .afoonie-ui-glass {
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+            .afoonie-ui-button-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Main container
+        const container = document.createElement('div');
+        container.id = 'afoonie-monitor-ui';
+        container.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 260px;
+            background: linear-gradient(145deg, rgba(30, 30, 40, 0.95), rgba(50, 50, 70, 0.95));
+            color: #ffffff;
+            padding: 0;
+            border-radius: 16px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 9999;
+            user-select: none;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(114, 137, 218, 0.2);
+            border: 1px solid rgba(114, 137, 218, 0.2);
+            animation: slideIn 0.3s ease-out;
+            transition: all 0.3s ease;
+        `;
+        container.classList.add('afoonie-ui-glass');
+
+        // Header with Discord branding
+        const header = document.createElement('div');
+        header.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #7289DA, #5B6EAE); border-radius: 50%; animation: pulse 2s infinite;"></div>
+                <span style="font-weight: 600; font-size: 16px;">🔍 Afoonie Tracker</span>
+            </div>
+        `;
+        header.style.cssText = `
+            background: linear-gradient(135deg, rgba(114, 137, 218, 0.2), rgba(91, 110, 174, 0.2));
+            padding: 16px 20px;
+            border-radius: 16px 16px 0 0;
+            border-bottom: 1px solid rgba(114, 137, 218, 0.2);
+            position: relative;
+        `;
+        container.appendChild(header);
+
+        const contentArea = document.createElement('div');
+        contentArea.id = 'afoonie-content-area';
+        contentArea.style.cssText = `padding: 16px 20px;`;
+
+        // Target player input
+        const targetSection = document.createElement('div');
+        targetSection.style.cssText = `
+            margin-bottom: 12px; padding: 12px;
+            background: rgba(255, 255, 255, 0.05); border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+        const targetLabel = document.createElement('div');
+        targetLabel.textContent = 'Целевой игрок:';
+        targetLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
+
+        const targetInput = document.createElement('input');
+        targetInput.type = 'text';
+        targetInput.value = targetPlayer;
+        targetInput.id = 'target-player-input';
+        targetInput.style.cssText = `
+            width: 100%; padding: 8px 12px; border: 1px solid rgba(114, 137, 218, 0.3);
+            border-radius: 8px; background: rgba(255, 255, 255, 0.1);
+            color: #ffffff; font-size: 13px; font-family: inherit;
+            transition: all 0.2s ease;
+        `;
+        targetInput.addEventListener('input', (e) => {
+            targetPlayer = e.target.value.trim();
+            foundPlayers.clear(); // Reset found players when target changes
+            updateStatus();
+        });
+
+        targetSection.appendChild(targetLabel);
+        targetSection.appendChild(targetInput);
+        contentArea.appendChild(targetSection);
+
+        // Status display
+        const status = document.createElement('div');
+        status.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease;
+        `;
+
+        const statusLabel = document.createElement('span');
+        statusLabel.textContent = 'Статус:';
+        statusLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
+
+        const statusValue = document.createElement('span');
+        statusValue.id = 'afoonie-status-value';
+        statusValue.textContent = '🔄 Инициализация...';
+        statusValue.style.cssText = `
+            font-weight: 600; font-size: 11px; color: #7289DA;
+            background: rgba(114, 137, 218, 0.2); padding: 4px 8px;
+            border-radius: 6px; border: 1px solid rgba(114, 137, 218, 0.3);
+            transition: all 0.2s ease; text-shadow: 0 0 8px rgba(114, 137, 218, 0.5);
+            min-width: 80px; text-align: center;
+        `;
+
+        status.appendChild(statusLabel);
+        status.appendChild(statusValue);
+        contentArea.appendChild(status);
+
+        // Server selection
+        const serverSection = document.createElement('div');
+        serverSection.style.cssText = `
+            margin-bottom: 12px; padding: 12px;
+            background: rgba(255, 255, 255, 0.05); border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+        const serverLabel = document.createElement('div');
+        serverLabel.textContent = 'Целевые серверы:';
+        serverLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
+
+        const serverCheckboxes = document.createElement('div');
+        serverCheckboxes.style.cssText = `display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;`;
+
+        ['US', 'EU', 'RU', 'BR', 'AU', 'JP'].forEach(server => {
+            const checkboxContainer = document.createElement('label');
+            checkboxContainer.style.cssText = `
+                display: flex; align-items: center; cursor: pointer; padding: 6px;
+                border-radius: 6px; transition: all 0.2s ease;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            `;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = server;
+            checkbox.checked = targetServerNames.includes(server);
+            checkbox.style.cssText = `margin-right: 6px; accent-color: #7289DA;`;
+            checkbox.addEventListener('change', updateTargetServers);
+
+            const label = document.createElement('span');
+            label.textContent = server;
+            label.style.cssText = `font-size: 12px; color: #E0E0E0; font-weight: 500;`;
+
+            checkboxContainer.appendChild(checkbox);
+            checkboxContainer.appendChild(label);
+            serverCheckboxes.appendChild(checkboxContainer);
+        });
+
+        serverSection.appendChild(serverLabel);
+        serverSection.appendChild(serverCheckboxes);
+        contentArea.appendChild(serverSection);
+
+        // Control buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;`;
+
+        const startButton = document.createElement('button');
+        startButton.id = 'afoonie-start-btn';
+        startButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>▶️</span><span>Начать поиск</span>
+            </div>
+        `;
+        startButton.style.cssText = `
+            background: linear-gradient(135deg, #7289DA, #5B6EAE);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(114, 137, 218, 0.3);
+        `;
+        startButton.classList.add('afoonie-ui-button-hover');
+        startButton.onclick = toggleServerCycle;
+
+        const stopButton = document.createElement('button');
+        stopButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>⏹️</span><span>Стоп</span>
+            </div>
+        `;
+        stopButton.style.cssText = `
+            background: linear-gradient(135deg, #ff4757, #ff3838);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
+        `;
+        stopButton.classList.add('afoonie-ui-button-hover');
+        stopButton.onclick = stopServerCycle;
+
+        const checkButton = document.createElement('button');
+        checkButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>🔍</span><span>Проверить текущий</span>
+            </div>
+        `;
+        checkButton.style.cssText = `
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
+        `;
+        checkButton.classList.add('afoonie-ui-button-hover');
+        checkButton.onclick = checkCurrentServer;
+
+        buttonContainer.appendChild(startButton);
+        buttonContainer.appendChild(stopButton);
+        buttonContainer.appendChild(checkButton);
+        contentArea.appendChild(buttonContainer);
+
+        // Statistics
+        const stats = document.createElement('div');
+        stats.style.cssText = `
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+        const statsLabel = document.createElement('span');
+        statsLabel.textContent = 'Найдено:';
+        statsLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
+
+        const statsValue = document.createElement('span');
+        statsValue.id = 'afoonie-found-count';
+        statsValue.textContent = '0';
+        statsValue.style.cssText = `
+            font-weight: 600; font-size: 11px; color: #7289DA;
+            background: rgba(114, 137, 218, 0.2); padding: 4px 8px;
+            border-radius: 6px; border: 1px solid rgba(114, 137, 218, 0.3);
+            text-shadow: 0 0 8px rgba(114, 137, 218, 0.5);
+            min-width: 32px; text-align: center;
+        `;
+
+        stats.appendChild(statsLabel);
+        stats.appendChild(statsValue);
+        contentArea.appendChild(stats);
+
+        container.appendChild(contentArea);
+
+        // Minimize/maximize button
+        const toggleButton = document.createElement('button');
+        toggleButton.innerHTML = '−';
+        toggleButton.style.cssText = `
+            position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
+            background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%; color: #ffffff; font-size: 16px; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s ease; backdrop-filter: blur(10px);
+        `;
+
+        toggleButton.addEventListener('click', () => {
+            minimized = !minimized;
+            const contentArea = document.getElementById('afoonie-content-area');
+
+            if (contentArea) {
+                if (minimized) {
+                    contentArea.style.display = 'none';
+                    container.style.width = '200px';
+                    toggleButton.innerHTML = '+';
+                } else {
+                    contentArea.style.display = 'block';
+                    container.style.width = '260px';
+                    toggleButton.innerHTML = '−';
+                }
+            }
+        });
+
+        container.appendChild(toggleButton);
+        document.body.appendChild(container);
+        uiCreated = true;
+
+        console.log('🎨 Afoonie Monitor UI created');
+    }
+
+    function updateStatus(message = null) {
+        const statusEl = document.getElementById('afoonie-status-value');
+        if (!statusEl) return;
+
+        if (message) {
+            statusEl.textContent = message;
+            statusEl.style.color = '#FFD700';
+        } else {
+            const cyclingStatus = serverCycleInterval ? '🔄 Поиск активен' : '⏸️ Остановлено';
+            const serverInfo = currentServer ? `на ${currentServer}` : '';
+
+            statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
+            statusEl.style.color = serverCycleInterval ? '#7289DA' : '#FF5252';
+
+            const counterEl = document.getElementById('afoonie-found-count');
+            if (counterEl) counterEl.textContent = foundPlayers.size;
+        }
+    }
+
+    function updateTargetServers() {
+        const checkboxes = document.querySelectorAll('#afoonie-monitor-ui input[type="checkbox"]');
+        targetServerNames = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+        updateStatus();
+    }
+
+    function toggleServerCycle() {
+        if (serverCycleInterval) {
+            stopServerCycle();
+        } else {
+            startServerCycle();
+        }
+    }
+
+    function stopServerCycle() {
+        if (serverCycleInterval) {
+            clearInterval(serverCycleInterval);
+            serverCycleInterval = null;
+        }
+        updateStatus();
+
+        const startBtn = document.getElementById('afoonie-start-btn');
+        if (startBtn) {
+            startBtn.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>▶️</span><span>Начать поиск</span>
+                </div>
+            `;
+        }
+    }
+
+    async function checkCurrentServer() {
+        const server = getCurrentServer();
+        updateStatus(`🔍 Проверка ${server}...`);
+
+        try {
+            await checkForTargetPlayer(server);
+            updateStatus();
+        } catch (error) {
+            updateStatus('❌ Проверка не удалась');
+        }
+    }
+
+    function getCurrentServer() {
+        const selectedServer = document.querySelector('#server-select .server-list li.selected h2');
+        if (selectedServer) return selectedServer.textContent.trim().toUpperCase();
+
+        const serverButton = document.querySelector('.butt_left_menu.ng-binding .colorRed');
+        if (serverButton) return serverButton.textContent.trim().toUpperCase();
+
+        return 'Неизвестный';
+    }
+
+    function getAvailableServers() {
+        const serverElements = document.querySelectorAll('#server-select .server-list li:not(.down)');
+        return Array.from(serverElements).map(el => {
+            const nameEl = el.querySelector('h2');
+            return nameEl ? nameEl.textContent.trim() : null;
+        }).filter(name => name !== null && name !== 'DEV');
+    }
+
+    function getNextTargetServer() {
+        const availableServers = getAvailableServers();
+        const currentServer = getCurrentServer();
+
+        let attempts = 0;
+        while (attempts < targetServerNames.length) {
+            const targetServer = targetServerNames[currentTargetIndex];
+            currentTargetIndex = (currentTargetIndex + 1) % targetServerNames.length;
+
+            if (availableServers.includes(targetServer) && targetServer !== currentServer) {
+                return targetServer;
+            }
+            attempts++;
+        }
+
+        const otherServers = availableServers.filter(server => server !== currentServer);
+        return otherServers.length > 0 ? otherServers[0] : null;
+    }
+
+    function switchToServer(serverName) {
+        const serverElements = document.querySelectorAll('#server-select .server-list li:not(.down)');
+        for (const serverEl of serverElements) {
+            const serverNameEl = serverEl.querySelector('h2');
+            if (serverNameEl && serverNameEl.textContent.trim() === serverName) {
+                if (serverEl.classList.contains('selected')) return true;
+                serverEl.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function startServerCycle() {
+        if (serverCycleInterval) clearInterval(serverCycleInterval);
+
+        const availableServers = getAvailableServers();
+        if (availableServers.length === 0 || targetServerNames.length === 0) return;
+
+        const startBtn = document.getElementById('afoonie-start-btn');
+        if (startBtn) {
+            startBtn.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>⏸️</span><span>Пауза поиска</span>
+                </div>
+            `;
+        }
+
+        let isProcessing = false;
+
+        serverCycleInterval = setInterval(async () => {
+            if (isProcessing) return;
+
+            const targetServer = getNextTargetServer();
+
+            if (targetServer && switchToServer(targetServer)) {
+                isProcessing = true;
+
+                setTimeout(async () => {
+                    const newServer = getCurrentServer();
+                    if (newServer !== currentServer) {
+                        currentServer = newServer;
+                        updateStatus();
+
+                        setTimeout(async () => {
+                            try {
+                                await checkForTargetPlayer(currentServer);
+                            } catch (error) {
+                                console.error('❌ Error checking for player:', error);
+                            } finally {
+                                isProcessing = false;
+                            }
+                        }, 3000);
+                    } else {
+                        isProcessing = false;
+                    }
+                }, 2000);
+            }
+        }, 12000);
+    }
+
+    function startMonitoring() {
+        const listContainer = document.querySelector('#list-players');
+        if (!listContainer) {
+            setTimeout(startMonitoring, 2000);
+            return;
+        }
+
+        currentServer = getCurrentServer();
+        isMonitoring = true;
+
+        setTimeout(async () => {
+            await checkForTargetPlayer(currentServer);
+            updateStatus();
+        }, 3000);
+    }
+
+    async function checkForTargetPlayer(serverName) {
+        if (!targetPlayer.trim()) return;
+
+        // Check the player list from the HTML document provided
+        const playerElements = document.querySelectorAll('#list-players li');
+        let foundPlayer = null;
+
+        playerElements.forEach(playerEl => {
+            // Look for the player nickname in the span
+            const nicknameSpan = playerEl.querySelector('.nickname .ng-binding');
+            if (nicknameSpan) {
+                const playerName = nicknameSpan.textContent.trim();
+                
+                if (playerName.toLowerCase() === targetPlayer.toLowerCase()) {
+                    // Extract player data
+                    const place = playerEl.querySelector('.place')?.textContent || 'N/A';
+                    const pvpKills = playerEl.querySelector('.kills-new-pvp')?.textContent || '0';
+                    const pveKills = playerEl.querySelector('.kills-new-pvm')?.textContent || '0';
+                    const deaths = playerEl.querySelector('.deaths-new')?.textContent || '0';
+                    const flags = playerEl.querySelector('.flags')?.textContent || '0';
+                    
+                    // Check if player is highlighted (selected)
+                    const isHighlighted = playerEl.classList.contains('highlighted');
+                    
+                    foundPlayer = {
+                        name: playerName,
+                        place: place,
+                        pvpKills: pvpKills,
+                        pveKills: pveKills,
+                        deaths: deaths,
+                        flags: flags,
+                        highlighted: isHighlighted,
+                        server: serverName
+                    };
+                }
+            }
+        });
+
+        if (foundPlayer) {
+            const playerKey = `${foundPlayer.name}-${foundPlayer.server}-${Date.now()}`;
+            
+            if (!foundPlayers.has(playerKey)) {
+                foundPlayers.add(playerKey);
+                await sendDiscordNotification(foundPlayer);
+                updateStatus(`✅ Найден на ${serverName}!`);
+                
+                // Update UI briefly to show success
+                setTimeout(() => updateStatus(), 3000);
+            }
+        }
+    }
+
+    async function sendDiscordNotification(player) {
+        if (!DISCORD_WEBHOOK_URL || DISCORD_WEBHOOK_URL === 'YOUR_DISCORD_WEBHOOK_URL_HERE') {
+            console.error('❌ Discord webhook URL not configured!');
+            return;
+        }
+
+        const embed = {
+            title: `🎯 Игрок найден!`,
+            description: `**${player.name}** обнаружен на сервере **${player.server}**`,
+            color: player.highlighted ? 0x00FF00 : 0x7289DA, // Green if highlighted, Discord blue otherwise
+            fields: [
+                {
+                    name: '🏆 Место',
+                    value: player.place,
+                    inline: true
+                },
+                {
+                    name: '⚔️ PvP Убийства',
+                    value: player.pvpKills,
+                    inline: true
+                },
+                {
+                    name: '🤖 PvE Убийства',
+                    value: player.pveKills,
+                    inline: true
+                },
+                {
+                    name: '💀 Смерти',
+                    value: player.deaths,
+                    inline: true
+                },
+                {
+                    name: '🚩 Флаги',
+                    value: player.flags,
+                    inline: true
+                },
+                {
+                    name: '🎮 Сервер',
+                    value: player.server,
+                    inline: true
+                }
+            ],
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: 'GoB Player Monitor'
+            }
+        };
+
+        if (player.highlighted) {
+            embed.fields.push({
+                name: '⭐ Статус',
+                value: 'Подсвечен (выбран)',
+                inline: false
+            });
+        }
+
+        try {
+            const response = await fetch(DISCORD_WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: 'GoB Monitor',
+                    avatar_url: 'https://cdn.discordapp.com/embed/avatars/0.png',
+                    embeds: [embed]
+                })
+            });
+
+            if (response.ok) {
+                console.log(`✅ Discord notification sent for ${player.name} on ${player.server}`);
+            } else {
+                console.error('❌ Failed to send Discord notification');
+            }
+        } catch (error) {
+            console.error('❌ Error sending Discord notification:', error);
+        }
+    }
+
+    function init() {
+        console.log('🎮 Afoonie Monitor loaded');
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => {
+                    createUI();
+                    startMonitoring();
+                }, 3000);
+            });
+        } else {
+            setTimeout(() => {
+                createUI();
+                startMonitoring();
+            }, 3000);
+        }
+    }
+
+    init();
+})();
