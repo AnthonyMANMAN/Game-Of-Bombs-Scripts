@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Scroll Script
+// @name         Enhanced GoB Monitor Script (No Chat Clear)
 // @namespace    http://tampermonkey.net/
-// @version      2025-06-23
-// @description  try to take over the world!
+// @version      2025-07-21-no-clear
+// @description  Enhanced monitoring with date-based filtering and duplicate prevention
 // @author       You
 // @match        gameofbombs.com
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
@@ -12,13 +12,11 @@
 (function() {
     'use strict';
 
-    // ⚠️ НАСТРОЙТЕ ЭТИ ЗНАЧЕНИЯ:
+    // ⚠️ CONFIGURE THESE VALUES:
     const BOT_TOKEN = '7860609958:AAGSCiD2BFAfnUO6hWY-GW-VbKjVp2nifPY';
     const CHAT_ID = '-1002599400013';
 
     let sentMessages = {};
-    // Global duplicate prevention - tracks messages across all servers
-    let globalSentMessages = new Set();
     let observer = null;
     let currentServer = null;
     let isMonitoring = false;
@@ -28,35 +26,15 @@
     let uiCreated = false;
     let minimized = false;
 
-    // Function to create a unique message identifier
-    function createMessageId(username, content) {
-        // Remove timestamps and clean the content
-        const cleanContent = content.replace(/\[\d{2}:\d{2}:\d{2}\]/g, '').trim();
-        return `${username}:${cleanContent}`;
+    // Enhanced storage system with date tracking
+    if (!window.lastSentMessagesStore) {
+        window.lastSentMessagesStore = {};
     }
 
-    // Function to extract username and content from message
-    function parseMessage(messageText) {
-        const patterns = [
-            /SERVER:\s*(.+)/,
-            /Mac_:\s*(.+)/,
-            /_Marihuana_:\s*(.+)/,
-            /Afoonie:\s*(.+)/
-        ];
-
-        for (const pattern of patterns) {
-            const match = messageText.match(pattern);
-            if (match) {
-                const username = messageText.includes('SERVER:') ? 'SERVER' : 
-                               messageText.includes('Mac_:') ? 'Mac_' :
-                               messageText.includes('_Marihuana_:') ? '_Marihuana_' : 'Afoonie';
-                return {
-                    username,
-                    content: match[1].trim()
-                };
-            }
-        }
-        return null;
+    // Global message storage with unique identifier per user
+    const USER_ID = Math.random().toString(36).substring(2, 15); // Unique ID for this browser instance
+    if (!window.globalMessageStore) {
+        window.globalMessageStore = {};
     }
 
     function createUI() {
@@ -65,7 +43,7 @@
         const existingUI = document.getElementById('gob-monitor-ui');
         if (existingUI) existingUI.remove();
 
-        // Unified CSS styles matching the second script
+        // Unified CSS styles
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideIn {
@@ -87,7 +65,7 @@
         `;
         document.head.appendChild(style);
 
-        // Main container positioned left of the second script
+        // Main container positioned left of other scripts
         const container = document.createElement('div');
         container.id = 'gob-monitor-ui';
         container.style.cssText = `
@@ -109,12 +87,12 @@
         `;
         container.classList.add('gob-ui-glass');
 
-        // Header matching second script style
+        // Header
         const header = document.createElement('div');
         header.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #4CAF50, #45a049); border-radius: 50%; animation: pulse 2s infinite;"></div>
-                <span style="font-weight: 600; font-size: 16px;">Чат в ТГ</span>
+                <span style="font-weight: 600; font-size: 16px;">Enhanced Monitor</span>
             </div>
         `;
         header.style.cssText = `
@@ -130,7 +108,7 @@
         contentArea.id = 'gob-content-area';
         contentArea.style.cssText = `padding: 16px 20px;`;
 
-        // Status display
+        // Status display with user ID
         const status = document.createElement('div');
         status.style.cssText = `
             display: flex;
@@ -162,6 +140,17 @@
         status.appendChild(statusLabel);
         status.appendChild(statusValue);
         contentArea.appendChild(status);
+
+        // User ID display
+        const userIdDiv = document.createElement('div');
+        userIdDiv.style.cssText = `
+            margin-bottom: 12px; padding: 8px;
+            background: rgba(255, 255, 255, 0.05); border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 10px; color: #888; text-align: center;
+        `;
+        userIdDiv.textContent = `ID: ${USER_ID}`;
+        contentArea.appendChild(userIdDiv);
 
         // Server selection
         const serverSection = document.createElement('div');
@@ -215,7 +204,7 @@
         startButton.id = 'gob-start-btn';
         startButton.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                <span>▶️</span><span>Начать цикл</span>
+                <span>▶️</span><span>Начать мониторинг</span>
             </div>
         `;
         startButton.style.cssText = `
@@ -257,26 +246,9 @@
         checkButton.classList.add('gob-ui-button-hover');
         checkButton.onclick = checkCurrentServer;
 
-        // Clear duplicates button
-        const clearButton = document.createElement('button');
-        clearButton.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                <span>🗑️</span><span>Очистить дубликаты</span>
-            </div>
-        `;
-        clearButton.style.cssText = `
-            background: linear-gradient(135deg, #9c88ff, #8c7ae6);
-            color: white; border: none; border-radius: 10px; padding: 12px 16px;
-            cursor: pointer; font-weight: 600; font-size: 13px;
-            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(156, 136, 255, 0.3);
-        `;
-        clearButton.classList.add('gob-ui-button-hover');
-        clearButton.onclick = clearDuplicates;
-
         buttonContainer.appendChild(startButton);
         buttonContainer.appendChild(stopButton);
         buttonContainer.appendChild(checkButton);
-        buttonContainer.appendChild(clearButton);
         contentArea.appendChild(buttonContainer);
 
         // Statistics
@@ -340,14 +312,7 @@
         document.body.appendChild(container);
         uiCreated = true;
 
-        console.log('🎨 GoB Monitor UI created');
-    }
-
-    function clearDuplicates() {
-        globalSentMessages.clear();
-        sentMessages = {};
-        updateStatus('🗑️ Дубликаты очищены');
-        setTimeout(() => updateStatus(), 2000);
+        console.log('🎨 Enhanced GoB Monitor UI created with User ID:', USER_ID);
     }
 
     function updateStatus(message = null) {
@@ -395,7 +360,7 @@
         if (startBtn) {
             startBtn.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <span>▶️</span><span>Начать цикл</span>
+                    <span>▶️</span><span>Начать мониторинг</span>
                 </div>
             `;
         }
@@ -463,6 +428,7 @@
         return false;
     }
 
+    // Enhanced server cycling with timing from first script
     function startServerCycle() {
         if (serverCycleInterval) clearInterval(serverCycleInterval);
 
@@ -473,13 +439,14 @@
         if (startBtn) {
             startBtn.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <span>⏸️</span><span>Пауза цикла</span>
+                    <span>⏸️</span><span>Пауза мониторинга</span>
                 </div>
             `;
         }
 
         let isProcessing = false;
 
+        // Use faster interval from first script (500ms vs 12000ms)
         serverCycleInterval = setInterval(async () => {
             if (isProcessing) return;
 
@@ -488,6 +455,7 @@
             if (targetServer && switchToServer(targetServer)) {
                 isProcessing = true;
 
+                // Use shorter delays from first script (1500ms vs 2000-3000ms)
                 setTimeout(async () => {
                     const newServer = getCurrentServer();
                     if (newServer !== currentServer) {
@@ -502,13 +470,13 @@
                             } finally {
                                 isProcessing = false;
                             }
-                        }, 3000);
+                        }, 1500);
                     } else {
                         isProcessing = false;
                     }
-                }, 2000);
+                }, 1500);
             }
-        }, 12000);
+        }, 500);
     }
 
     function startMonitoring() {
@@ -532,91 +500,113 @@
         }, 3000);
     }
 
-    // Function to determine message color based on content
-    function getMessageColor(messageText) {
-        const lowerText = messageText.toLowerCase();
-        
-        if (lowerText.includes('plutonium')) {
-            return '🟢'; // Green for plutonium
-        } else if (lowerText.includes('evil spider')) {
-            return '🔴'; // Red for Evil Spider
-        } else if (lowerText.includes('evil hamster')) {
-            return '🔵'; // Blue for Evil Hamster
-        }
-        
-        return '⚪'; // White/default for others
+    // Global duplicate prevention with user IDs
+    function createGlobalMessageKey(serverName, messageText) {
+        return `${serverName}|${messageText}`;
     }
 
-    // Function to format message with Telegram-supported formatting
-    function formatMessageWithColor(messageText) {
-        const lowerText = messageText.toLowerCase();
+    function isMessageAlreadySentGlobally(serverName, messageText) {
+        const globalKey = createGlobalMessageKey(serverName, messageText);
+        const now = new Date();
+        const maxAge = 5 * 60 * 1000; // 5 minutes for global duplicate prevention
         
-        if (lowerText.includes('plutonium')) {
-            return `<b>${messageText}</b>`; // Bold for plutonium
-        } else if (lowerText.includes('evil spider')) {
-            return `<i>${messageText}</i>`; // Italic for Evil Spider
-        } else if (lowerText.includes('evil hamster')) {
-            return `<u>${messageText}</u>`; // Underline for Evil Hamster
+        if (window.globalMessageStore[globalKey]) {
+            const lastSent = window.globalMessageStore[globalKey];
+            if (now - lastSent.timestamp < maxAge) {
+                // Check if it was sent by a different user instance
+                if (lastSent.userId !== USER_ID) {
+                    console.log(`🔄 Message already sent by another instance (${lastSent.userId}):`, messageText);
+                    return true;
+                }
+            }
         }
-        
-        return messageText; // No special formatting for others
+        return false;
     }
 
+    function markMessageAsSentGlobally(serverName, messageText) {
+        const globalKey = createGlobalMessageKey(serverName, messageText);
+        window.globalMessageStore[globalKey] = {
+            timestamp: new Date(),
+            userId: USER_ID
+        };
+    }
+
+    // Enhanced message processing with date-based filtering and global duplicate prevention
     async function checkAndSendServerMessages(serverName) {
         const messages = document.querySelectorAll('#listChat li');
         const serverMessages = [];
 
-        if (!sentMessages[serverName]) {
-            sentMessages[serverName] = new Set();
+        const now = new Date();
+        const maxAge = 2 * 60 * 1000; // 2 minutes max age
+        const today = now.toDateString(); // Current date for comparison
+
+        const store = window.lastSentMessagesStore;
+
+        if (!store[serverName]) {
+            store[serverName] = {};
         }
 
         messages.forEach(message => {
             const messageText = message.textContent || message.innerText;
+            
+            // Use more specific filtering
+            if (!/SERVER:|Mac_:|_Marihuana_:/i.test(messageText)) return;
 
-            // Skip messages that contain "ignored"
-            if (messageText.toLowerCase().includes('ignored')) {
+            // ENHANCED: Filter out messages containing "ignored" (case-insensitive)
+            if (/ignored/i.test(messageText)) {
+                console.log('⚠️ Skipping ignored message:', messageText.substring(0, 50));
                 return;
             }
 
-            // Parse the message to extract username and content
-            const parsedMessage = parseMessage(messageText);
-            if (!parsedMessage) return;
-
-            // Create unique message identifier
-            const messageId = createMessageId(parsedMessage.username, parsedMessage.content);
-
-            // Check if message was already sent globally (across all servers)
-            if (globalSentMessages.has(messageId)) {
-                return;
+            // Enhanced time-based filtering with date check
+            const timeEl = message.querySelector('.time');
+            if (timeEl) {
+                const timeText = timeEl.textContent.trim();
+                const [hh, mm] = timeText.split(':').map(Number);
+                if (!isNaN(hh) && !isNaN(mm)) {
+                    const msgTime = new Date(now);
+                    msgTime.setHours(hh, mm, 0, 0);
+                    
+                    // Check if message is from today
+                    if (msgTime.toDateString() !== today) {
+                        console.log(`⏰ Skipping old message from different date:`, messageText.substring(0, 50));
+                        return;
+                    }
+                    
+                    const age = now - msgTime;
+                    if (age > maxAge || age < 0) return;
+                }
             }
 
-            // Check if message was already sent for this server (fallback)
-            if (sentMessages[serverName].has(messageText)) {
-                return;
+            let cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
+
+            // Enhanced formatting with colors
+            if (/плутонием найден в/i.test(cleanedMessage)) {
+                cleanedMessage = '🟢 <b>' + cleanedMessage + '</b>';
+            } else if (/злой паук появился в|злой хомяк появился в/i.test(cleanedMessage)) {
+                cleanedMessage = '🔴 <i>' + cleanedMessage + '</i>';
             }
 
-            // Clean up the message text by removing extra whitespace
-            const cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
-            
-            // Format message with appropriate color
-            const formattedMessage = formatMessageWithColor(cleanedMessage);
-            const colorIcon = getMessageColor(cleanedMessage);
-            
-            // Add color icon at the beginning of the message
-            serverMessages.push(`${colorIcon} ${formattedMessage}`);
-            
-            // Mark message as sent both globally and per-server
-            globalSentMessages.add(messageId);
-            sentMessages[serverName].add(messageText);
+            if (/сообщ\. проигнор/i.test(cleanedMessage)) return;
 
-            console.log(`📝 New message processed: ${parsedMessage.username} - ${parsedMessage.content.substring(0, 50)}...`);
+            // Check global duplicate prevention
+            if (isMessageAlreadySentGlobally(serverName, cleanedMessage)) {
+                return; // Skip if already sent by another instance
+            }
+
+            // Enhanced time-based duplicate prevention with date
+            const messageKey = `${cleanedMessage}|${today}`;
+            const lastTime = store[serverName][messageKey];
+            if (lastTime && now - lastTime < maxAge) return;
+
+            store[serverName][messageKey] = now;
+            markMessageAsSentGlobally(serverName, cleanedMessage);
+            serverMessages.push(cleanedMessage);
         });
 
         if (serverMessages.length > 0) {
-            // Use single newline instead of double newlines to reduce spacing
-            const combinedMessage = `🎮 ${serverName}\n${serverMessages.join('\n')}`;
+            const combinedMessage = `🎮 ${serverName} [${USER_ID.substring(0, 6)}]\n${serverMessages.join('\n')}`;
             await sendToTelegram(combinedMessage);
-            updateStatus();
         }
     }
 
@@ -643,7 +633,7 @@
     }
 
     function init() {
-        console.log('🎮 GoB Monitor loaded');
+        console.log('🎮 Enhanced GoB Monitor loaded with fixes');
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
