@@ -1,5 +1,13 @@
-// Base Script - Game Bot Framework
-// Core functionality for the game bot with enhanced UI and key tracking
+// ==UserScript==
+// @name         Bomber Script
+// @namespace    http://tampermonkey.net/
+// @version      2025-06-23
+// @description  try to take over the world!
+// @author       You
+// @match        gameofbombs.com
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
+// @grant        none
+// ==/UserScript==
 
 // Global variables for script control
 let active = true; // General toggle state for the bot
@@ -9,7 +17,7 @@ const FLASH_COOLDOWN = 300; // Minimum time between UI flashes in milliseconds
 let minimized = false; // Track UI state
 let activeKeys = new Set(); // Track currently pressed keys to prevent stuck keys
 
-// Key mapping for easy reference 
+// Key mapping for easy reference
 const KEY_MAP = {
     87: "W",
     65: "A",
@@ -36,6 +44,10 @@ const ee = {
     downRight: { keys: [83, 68] }
 };
 
+// Initialization queue for features that need to wait for DOM/addon manager
+let initQueue = [];
+let addonManagerReady = false;
+
 // Create UI for visual feedback
 function createVisualUI() {
     // Remove any existing UI first (prevents duplicates on re-initialization)
@@ -51,41 +63,41 @@ function createVisualUI() {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-        
+
         @keyframes pulse {
             0%, 100% { box-shadow: 0 0 15px rgba(76, 175, 80, 0.3); }
             50% { box-shadow: 0 0 25px rgba(76, 175, 80, 0.6); }
         }
-        
+
         @keyframes glow {
             0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.3); }
             50% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
         }
-        
+
         .bot-ui-glass {
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
         }
-        
+
         .bot-ui-button-hover:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        
+
         .bot-ui-scroll::-webkit-scrollbar {
             width: 6px;
         }
-        
+
         .bot-ui-scroll::-webkit-scrollbar-track {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
         }
-        
+
         .bot-ui-scroll::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.3);
             border-radius: 3px;
         }
-        
+
         .bot-ui-scroll::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.5);
         }
@@ -138,8 +150,9 @@ function createVisualUI() {
         padding: 16px 20px;
     `;
 
-    // Add activity log with improved styling
-      // Add emergency key release button with enhanced styling
+    // Activity log removed
+
+    // Add emergency key release button with enhanced styling
     const emergencyButton = document.createElement('button');
     emergencyButton.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
@@ -207,11 +220,11 @@ function createVisualUI() {
         toggleButton.style.background = 'rgba(255, 255, 255, 0.1)';
         toggleButton.style.transform = 'scale(1)';
     });
-    
+
     toggleButton.addEventListener('click', () => {
         minimized = !minimized;
         const contentArea = document.getElementById('bot-content-area');
-        
+
         if (contentArea) {
             if (minimized) {
                 contentArea.style.display = 'none';
@@ -219,22 +232,24 @@ function createVisualUI() {
                 toggleButton.innerHTML = '+';
             } else {
                 contentArea.style.display = 'block';
-                uiContainer.style.width = '280px';
+                uiContainer.style.width = '240px';
                 toggleButton.innerHTML = '−';
             }
         }
-        
+
         // Add click animation
         toggleButton.style.transform = 'scale(0.9)';
         setTimeout(() => {
             toggleButton.style.transform = minimized ? 'scale(1)' : 'scale(1)';
         }, 100);
     });
-    
+
     uiContainer.appendChild(toggleButton);
 
     // Add the container to the document
     document.body.appendChild(uiContainer);
+
+    console.log('UI Container created and added to document');
 }
 
 // Update UI status for a feature with enhanced visual feedback
@@ -244,7 +259,7 @@ function updateStatus(id, active, text = null) {
         element.textContent = text || (active ? 'ON' : 'OFF');
         element.style.color = active ? '#4CAF50' : '#FF5252';
         element.style.textShadow = active ? '0 0 8px rgba(76, 175, 80, 0.5)' : 'none';
-        
+
         // Add subtle animation
         element.style.transform = 'scale(1.05)';
         setTimeout(() => {
@@ -264,12 +279,12 @@ function flashButtonStatus(id, color = '#FFD700', duration = 200) {
                 boxShadow: element.style.boxShadow,
                 transform: element.style.transform
             };
-            
+
             // Enhanced flash effect
             element.style.backgroundColor = color;
             element.style.boxShadow = `0 0 15px ${color}`;
             element.style.transform = 'scale(1.05)';
-            
+
             setTimeout(() => {
                 element.style.backgroundColor = originalStyles.backgroundColor;
                 element.style.boxShadow = originalStyles.boxShadow;
@@ -300,7 +315,7 @@ function logActivity(message) {
             <div style="color: #E0E0E0;">${message}</div>
         `;
         logElement.prepend(logItem);
-        
+
         // Limit number of log items
         if (logElement.children.length > 10) {
             logElement.removeChild(logElement.lastChild);
@@ -317,7 +332,7 @@ function simulateKeyDown(direction) {
         activeKeys.add(direction); // Add to active keys set
         return;
     }
-    
+
     if (direction.keys) {
         direction.keys.forEach(keyCode => {
             document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
@@ -336,7 +351,7 @@ function simulateKeyUp(direction) {
         activeKeys.delete(direction); // Remove from active keys
         return;
     }
-    
+
     if (direction.keys) {
         direction.keys.forEach(keyCode => {
             document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
@@ -354,17 +369,17 @@ function releaseAllKeysEmergency() {
     [65, 68, 75, 82, 83, 87, 32, 37, 38, 39, 40].forEach(keyCode => {
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
     });
-    
+
     // Also release any keys tracked in our activeKeys set
     activeKeys.forEach(keyCode => {
         document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
     });
-    
+
     // Clear the active keys set
     activeKeys.clear();
-    
+
     logActivity("🔄 All keys released - reset complete");
-    
+
     // Call registered cleanup functions if any exist
     if (typeof window.gameBotCleanupFunctions === 'object') {
         window.gameBotCleanupFunctions.forEach(fn => {
@@ -381,10 +396,10 @@ function releaseAllKeysEmergency() {
 function addFeatureToUI(id, label, initialActive) {
     const contentArea = document.getElementById('bot-content-area');
     if (!contentArea) return false; // UI not initialized yet
-    
+
     // Check if feature already exists
     if (document.getElementById(id)) return false;
-    
+
     // Create feature container with enhanced styling
     const featureContainer = document.createElement('div');
     featureContainer.style.cssText = `
@@ -437,7 +452,7 @@ function addFeatureToUI(id, label, initialActive) {
 
     featureContainer.appendChild(featureLabel);
     featureContainer.appendChild(status);
-    
+
     // Insert at the beginning of content area
     const firstChild = contentArea.firstChild;
     if (firstChild) {
@@ -445,22 +460,22 @@ function addFeatureToUI(id, label, initialActive) {
     } else {
         contentArea.appendChild(featureContainer);
     }
-    
+
     return true;
 }
 
-// Initialize addon manager
+// Initialize addon manager with proper queue handling
 window.gameBotAddonManager = {
     // Feature registry
     features: {},
-    
+
     // Function to register a new feature/addon
     registerFeature: function(id, options) {
         if (this.features[id]) {
             console.warn(`Feature ${id} is already registered`);
             return false;
         }
-        
+
         this.features[id] = {
             id: id,
             label: options.label || id,
@@ -470,23 +485,40 @@ window.gameBotAddonManager = {
             onKeyDown: options.onKeyDown || function() {},
             onKeyUp: options.onKeyUp || function() {}
         };
-        
+
         // Register cleanup function
         if (!window.gameBotCleanupFunctions) {
             window.gameBotCleanupFunctions = [];
         }
         window.gameBotCleanupFunctions.push(this.features[id].cleanup);
-        
+
         // Initialize UI for the feature
         addFeatureToUI(id, this.features[id].label, this.features[id].active);
-        
+
         // Initialize the feature
-        this.features[id].initialize();
-        
-        console.log(`Feature ${id} registered successfully`);
+        try {
+            this.features[id].initialize();
+            console.log(`Feature ${id} registered and initialized successfully`);
+        } catch (e) {
+            console.error(`Error initializing feature ${id}:`, e);
+        }
+
         return true;
     }
 };
+
+// Process initialization queue
+function processInitQueue() {
+    initQueue.forEach(initFunc => {
+        try {
+            initFunc();
+        } catch (e) {
+            console.error("Error processing init queue item:", e);
+        }
+    });
+    initQueue = [];
+    addonManagerReady = true;
+}
 
 // Add global document key event handlers
 document.addEventListener("keydown", (event) => {
@@ -532,10 +564,10 @@ window.addEventListener('beforeunload', () => {
 window.fixGameBot = function() {
     // Release all keys to fix any stuck keys
     releaseAllKeysEmergency();
-    
+
     // Re-create the UI
     createVisualUI();
-    
+
     // Re-initialize all registered features
     for (const id in window.gameBotAddonManager.features) {
         const feature = window.gameBotAddonManager.features[id];
@@ -548,7 +580,7 @@ window.fixGameBot = function() {
             console.error(`Error reinitializing ${id}:`, e);
         }
     }
-    
+
     console.log("Game bot fixed and restarted!");
     return "Game bot UI and functionality restored.";
 };
@@ -562,27 +594,40 @@ setInterval(() => {
     }
 }, 5000); // Check every 5 seconds
 
-// Initialize the script with UI
-createVisualUI();
-logActivity("🚀 Enhanced Game Bot Framework initialized");
+// Initialize the script when DOM is ready
+function initializeGameBot() {
+    // Ensure DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            createVisualUI();
+            processInitQueue();
+            logActivity("🚀 Enhanced Game Bot Framework initialized (DOM ready)");
+        });
+    } else {
+        // DOM is already ready
+        createVisualUI();
+        processInitQueue();
+        logActivity("🚀 Enhanced Game Bot Framework initialized");
+    }
+}
 
+// Actually call the initialization function
+initializeGameBot();
 // Auto Chain Addon - Enhanced version that integrates with the new UI system
+// Modified to use Alt+X or Alt+Ч instead of J/О
 (function() {
     let autoChain_active = false;
     let autoChain_interval = null;
-
     // Function to start the auto chain bomb spam
     function autoChain_startSpamming() {
         // Stop any existing interval first
         autoChain_stopSpamming();
-        
         // Start new interval
         autoChain_interval = setInterval(() => {
             if (autoChain_active) {
                 // Simulate K keypress (place bomb) as fast as possible
                 document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: 75, key: "k" }));
                 activeKeys.add(75);
-                
                 // Release K key immediately for rapid spam
                 setTimeout(() => {
                     document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: 75, key: "k" }));
@@ -590,10 +635,8 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                 }, 10);
             }
         }, 20); // 20ms interval for very fast bomb spam
-        
         logActivity("⚡ Auto Chain spam started");
     }
-
     // Function to stop the auto chain bomb spam
     function autoChain_stopSpamming() {
         if (autoChain_interval) {
@@ -602,13 +645,11 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             logActivity("⏹️ Auto Chain spam stopped");
         }
     }
-
     // Toggle Auto Chain state
     function autoChain_toggle() {
         autoChain_active = !autoChain_active;
         updateStatus('auto-chain-status', autoChain_active);
         flashButtonStatus('auto-chain-status', autoChain_active ? '#4CAF50' : '#FF5252');
-        
         if (autoChain_active) {
             logActivity("🔗 Auto Chain activated (toggled ON)");
             autoChain_startSpamming();
@@ -617,12 +658,11 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             autoChain_stopSpamming();
         }
     }
-
     // Register the Auto Chain feature with the addon manager
     setTimeout(() => {
         if (window.gameBotAddonManager) {
             window.gameBotAddonManager.registerFeature('auto-chain-status', {
-                label: 'Цепь (J/О)',
+                label: 'Цепь (Alt+Ч)',
                 initialActive: false,
                 initialize: function() {
                     autoChain_active = false;
@@ -632,15 +672,16 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                     autoChain_stopSpamming();
                 },
                 onKeyDown: function(event) {
-                    // Check for 'j' key in English (which is 'о' in Russian layout)
-                    if ((event.key === "j" || event.key === "J" || 
-                         event.key === "о" || event.key === "О") && !event.repeat) {
-                        
-                        // Only toggle if we're not in an input field
-                        if (document.activeElement.tagName !== "INPUT" && 
-                            document.activeElement.tagName !== "TEXTAREA") {
-                            autoChain_toggle();
-                            event.preventDefault();
+                    // Check for Alt+X (English) or Alt+Ч (Russian) key combination
+                    if (event.altKey && !event.repeat) {
+                        if (event.key === "x" || event.key === "X" ||
+                            event.key === "ч" || event.key === "Ч") {
+                            // Only toggle if we're not in an input field
+                            if (document.activeElement.tagName !== "INPUT" &&
+                                document.activeElement.tagName !== "TEXTAREA") {
+                                autoChain_toggle();
+                                event.preventDefault();
+                            }
                         }
                     }
                 },
@@ -648,29 +689,26 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                     // No action needed on key up for this feature
                 }
             });
-            
             logActivity("🔗 Auto Chain addon registered successfully");
         } else {
             console.error("Game Bot Addon Manager not found!");
         }
     }, 100); // Small delay to ensure addon manager is ready
-
     // Clean up on page unload
     window.addEventListener('beforeunload', () => {
         autoChain_stopSpamming();
     });
-
     console.log('[Auto Chain Addon - Enhanced Version] Loaded successfully!');
 })();
 // Configurable Key Spam Addon with Russian Keyboard Support
-// This addon automatically cycles through keys 1-4 when toggled on by pressing И/B
+// This addon automatically cycles through keys 1-4 when toggled on by pressing Alt + X/Ж
 (function() {
     // State variables for the spam feature
     let spamActive = false;
     let spamInterval = null;
     const DEFAULT_SPAM_DELAY = 50; // Default ms between key presses
     let currentSpamDelay = DEFAULT_SPAM_DELAY;
-    
+
     // Keys to cycle through (restricted to 1,2,3,4 only)
     let spamKeys = [
         { keyCode: 49, label: '1', active: true },
@@ -678,12 +716,12 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
         { keyCode: 51, label: '3', active: true },
         { keyCode: 52, label: '4', active: true }
     ];
-    
+
     // Create UI for key configuration
     function createSpamConfigUI() {
         const uiContainer = document.getElementById('bot-ui-container');
         if (!uiContainer) return;
-        
+
         // Create config panel that will be shown/hidden
         const configPanel = document.createElement('div');
         configPanel.id = 'spam-config-panel';
@@ -695,7 +733,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             border-radius: 4px;
             border: 1px solid #444;
         `;
-        
+
         // Create key selection grid
         const keyGrid = document.createElement('div');
         keyGrid.style.cssText = `
@@ -704,7 +742,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             gap: 5px;
             margin-bottom: 10px;
         `;
-        
+
         // Add key toggle buttons
         spamKeys.forEach(key => {
             const keyButton = document.createElement('button');
@@ -719,20 +757,20 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                 cursor: pointer;
                 font-weight: bold;
             `;
-            
+
             keyButton.addEventListener('click', () => {
                 // Toggle key active state
                 const keyIndex = spamKeys.findIndex(k => k.keyCode === parseInt(keyButton.dataset.keyCode));
                 if (keyIndex !== -1) {
                     spamKeys[keyIndex].active = !spamKeys[keyIndex].active;
                     keyButton.style.backgroundColor = spamKeys[keyIndex].active ? '#4CAF50' : '#555';
-                    
+
                     // Update key sequence display
                     updateKeySequenceDisplay();
-                    
+
                     // Save configuration
                     saveSpamConfig();
-                    
+
                     // If spam is active, restart with new key configuration
                     if (spamActive) {
                         stopSpamming();
@@ -740,12 +778,12 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                     }
                 }
             });
-            
+
             keyGrid.appendChild(keyButton);
         });
-        
+
         configPanel.appendChild(keyGrid);
-        
+
         // Add speed control
         const speedContainer = document.createElement('div');
         speedContainer.style.cssText = `
@@ -753,11 +791,11 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             align-items: center;
             margin-bottom: 10px;
         `;
-        
+
         const speedLabel = document.createElement('span');
         speedLabel.textContent = 'Speed:';
         speedLabel.style.marginRight = '10px';
-        
+
         const speedSlider = document.createElement('input');
         speedSlider.type = 'range';
         speedSlider.min = '20';
@@ -765,42 +803,42 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
         speedSlider.step = '10';
         speedSlider.value = currentSpamDelay.toString();
         speedSlider.style.flex = '1';
-        
+
         const speedValue = document.createElement('span');
         speedValue.textContent = `${currentSpamDelay}ms`;
         speedValue.style.marginLeft = '10px';
         speedValue.style.minWidth = '45px';
-        
+
         speedSlider.addEventListener('input', () => {
             currentSpamDelay = parseInt(speedSlider.value);
             speedValue.textContent = `${currentSpamDelay}ms`;
-            
+
             // If spam is active, restart with new delay
             if (spamActive) {
                 stopSpamming();
                 startSpamming();
             }
-            
+
             // Save configuration
             saveSpamConfig();
         });
-        
+
         speedContainer.appendChild(speedLabel);
         speedContainer.appendChild(speedSlider);
         speedContainer.appendChild(speedValue);
-        
+
         configPanel.appendChild(speedContainer);
-        
+
         // Key sequence display
         const sequenceContainer = document.createElement('div');
         sequenceContainer.style.cssText = `
             margin-bottom: 10px;
         `;
-        
+
         const sequenceLabel = document.createElement('div');
         sequenceLabel.textContent = 'Active sequence:';
         sequenceLabel.style.marginBottom = '5px';
-        
+
         const sequenceDisplay = document.createElement('div');
         sequenceDisplay.id = 'key-sequence-display';
         sequenceDisplay.style.cssText = `
@@ -809,11 +847,11 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             border-radius: 4px;
             font-family: monospace;
         `;
-        
+
         sequenceContainer.appendChild(sequenceLabel);
         sequenceContainer.appendChild(sequenceDisplay);
         configPanel.appendChild(sequenceContainer);
-        
+
         // Add close button
         const closeButton = document.createElement('button');
         closeButton.textContent = 'Close';
@@ -826,13 +864,13 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             cursor: pointer;
             width: 100%;
         `;
-        
+
         closeButton.addEventListener('click', () => {
             configPanel.style.display = 'none';
         });
-        
+
         configPanel.appendChild(closeButton);
-        
+
         // Add config button to main UI
         const spamConfigButton = document.createElement('button');
         spamConfigButton.textContent = '⚙️';
@@ -845,7 +883,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             padding: 2px 6px;
             margin-left: 5px;
         `;
-        
+
         spamConfigButton.addEventListener('click', () => {
             configPanel.style.display = configPanel.style.display === 'none' ? 'block' : 'none';
             // Update key sequence display when opening
@@ -853,27 +891,27 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                 updateKeySequenceDisplay();
             }
         });
-        
+
         // Find the spam status element to place the config button next to it
         const spamStatusElement = document.getElementById('spam-status');
         if (spamStatusElement && spamStatusElement.parentNode) {
             spamStatusElement.parentNode.appendChild(spamConfigButton);
         }
-        
+
         // Add the config panel to the container
         uiContainer.appendChild(configPanel);
-        
+
         // Initial update of sequence display
         updateKeySequenceDisplay();
     }
-    
+
     // Update the display showing which keys are in the sequence
     function updateKeySequenceDisplay() {
         const sequenceDisplay = document.getElementById('key-sequence-display');
         if (!sequenceDisplay) return;
-        
+
         const activeKeys = spamKeys.filter(k => k.active).map(k => k.label);
-        
+
         if (activeKeys.length === 0) {
             sequenceDisplay.textContent = 'No keys selected!';
             sequenceDisplay.style.color = '#F44336';
@@ -882,7 +920,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             sequenceDisplay.style.color = '#FFFFFF';
         }
     }
-    
+
     // Save spam configuration to localStorage
     function saveSpamConfig() {
         try {
@@ -890,21 +928,21 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                 keys: spamKeys.map(k => ({ keyCode: k.keyCode, label: k.label, active: k.active })),
                 delay: currentSpamDelay
             };
-            
+
             localStorage.setItem('gameBotSpamConfig', JSON.stringify(config));
             logActivity("Spam configuration saved");
         } catch (e) {
             console.error("Failed to save spam configuration:", e);
         }
     }
-    
+
     // Load spam configuration from localStorage
     function loadSpamConfig() {
         try {
             const savedConfig = localStorage.getItem('gameBotSpamConfig');
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
-                
+
                 // Update spam keys with saved configuration (only for keys 1-4)
                 if (config.keys && Array.isArray(config.keys)) {
                     config.keys.forEach(savedKey => {
@@ -917,14 +955,14 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                         }
                     });
                 }
-                
+
                 // Update spam delay
                 if (config.delay && typeof config.delay === 'number') {
                     currentSpamDelay = config.delay;
                 }
-                
+
                 logActivity("Spam configuration loaded");
-                
+
                 // Update UI if it exists
                 const speedSlider = document.querySelector('#spam-config-panel input[type="range"]');
                 if (speedSlider) {
@@ -934,7 +972,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                         speedValue.textContent = `${currentSpamDelay}ms`;
                     }
                 }
-                
+
                 // Update key buttons
                 spamKeys.forEach(key => {
                     const keyButton = document.querySelector(`#spam-config-panel button[data-key-code="${key.keyCode}"]`);
@@ -942,7 +980,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                         keyButton.style.backgroundColor = key.active ? '#4CAF50' : '#555';
                     }
                 });
-                
+
                 // Update sequence display
                 updateKeySequenceDisplay();
             }
@@ -950,7 +988,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             console.error("Failed to load spam configuration:", e);
         }
     }
-    
+
     // Simulate key press (keydown + keyup)
     function simulateKeyPress(keyCode) {
         document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
@@ -958,15 +996,15 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
         }, 10); // Small delay between down and up
     }
-    
+
     // Start spamming keys
     function startSpamming() {
         // Clear existing interval if running
         stopSpamming();
-        
+
         // Get active keys
         const activeKeysCodes = spamKeys.filter(k => k.active).map(k => k.keyCode);
-        
+
         // If no keys are selected, show a warning
         if (activeKeysCodes.length === 0) {
             logActivity("No keys selected for spam! Configure keys first.");
@@ -974,18 +1012,18 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             updateStatus('spam-status', false);
             return;
         }
-        
+
         let index = 0;
         spamInterval = setInterval(() => {
             simulateKeyPress(activeKeysCodes[index]);
             index = (index + 1) % activeKeysCodes.length;
         }, currentSpamDelay);
-        
+
         // Log the active keys
         const activeKeysLabels = spamKeys.filter(k => k.active).map(k => k.label).join(', ');
         logActivity(`Key spam activated - cycling keys: ${activeKeysLabels}`);
     }
-    
+
     // Stop spamming keys
     function stopSpamming() {
         if (spamInterval) {
@@ -994,57 +1032,58 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             logActivity("Key spam deactivated");
         }
     }
-    
+
     // Initialize function for the addon
     function initialize() {
         // Try to load saved configuration
         loadSpamConfig();
-        
+
         // Create the configuration UI
         createSpamConfigUI();
-        
+
         // Start in deactivated state
         updateStatus('spam-status', spamActive);
         logActivity("Configurable Key Spam initialized (Keys 1-4 only)");
     }
-    
+
     // Cleanup function
     function cleanup() {
         stopSpamming();
         spamActive = false;
         updateStatus('spam-status', false);
         logActivity("Key Spam disabled");
-        
+
         // Remove config panel if it exists
         const configPanel = document.getElementById('spam-config-panel');
         if (configPanel) {
             configPanel.remove();
         }
     }
-    
+
     // Toggle spam mode
     function toggleSpamMode() {
         spamActive = !spamActive;
         updateStatus('spam-status', spamActive);
-        
+
         if (spamActive) {
             startSpamming();
         } else {
             stopSpamming();
         }
     }
-    
-    // Handle keydown events - support both Latin 'B' and Cyrillic 'И' (which is on the same key as 'B')
+
+    // Handle keydown events - support Alt + X and Alt + Ж
     function onKeyDown(event) {
-        // Check for both Latin 'b' and Cyrillic 'и' (Russian B key)
-        if (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И') {
+        // Check for Alt + X (English) or Alt + Ж (Russian) - same physical key
+        if (event.altKey && (event.key.toLowerCase() === 'b' || event.key === 'б' || event.key === 'Б')) {
+            event.preventDefault(); // Prevent any default Alt+X behavior
             toggleSpamMode();
         }
     }
-    
+
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('spam-status', {
-        label: 'Перки (B/И)',
+        label: 'Перки (Alt+Б)',
         initialActive: spamActive,
         initialize: initialize,
         cleanup: cleanup,
@@ -1060,7 +1099,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
     let rotationInProgress = false;
     let currentPattern = 0;
     let currentStep = 0;
-    
+
     // Key mapping for both layouts
     const KEY_MAPPINGS = {
         // QWERTY layout
@@ -1068,14 +1107,14 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
         'a': 37, // Left arrow
         's': 40, // Down arrow
         'd': 39, // Right arrow
-        
+
         // Russian layout equivalents (Cyrillic letters at same positions as WASD)
         'ц': 38, // Up arrow (Russian 'ts' - position of 'w')
         'ф': 37, // Left arrow (Russian 'f' - position of 'a')
         'ы': 40, // Down arrow (Russian 'y' - position of 's')
-        'в': 39  // Right arrow (Russian 'v' - position of 'd')
+        'в': 39
     };
-    
+
     // Simplified motion patterns - only the 5 you requested
     const MOTION_PATTERNS = {
         0: {
@@ -1109,14 +1148,14 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             keyHold: 1
         }
     };
-    
+
     const TOTAL_PATTERNS = Object.keys(MOTION_PATTERNS).length;
-    
+
     // Create UI for rotation configuration
     function createRotationConfigUI() {
         const uiContainer = document.getElementById('bot-ui-container');
         if (!uiContainer) return;
-        
+
         // Create config panel that will be shown/hidden
         const configPanel = document.createElement('div');
         configPanel.id = 'rotation-config-panel';
@@ -1128,7 +1167,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             border-radius: 3px;
             border: 1px solid #444;
         `;
-        
+
         // Pattern selection grid - single column for better readability with fewer patterns
         const patternGrid = document.createElement('div');
         patternGrid.style.cssText = `
@@ -1137,7 +1176,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             gap: 3px;
             margin-bottom: 6px;
         `;
-        
+
         // Add pattern selection buttons
         Object.keys(MOTION_PATTERNS).forEach(patternId => {
             const pattern = MOTION_PATTERNS[patternId];
@@ -1155,18 +1194,18 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                 font-weight: bold;
                 text-align: center;
             `;
-            
+
             patternButton.addEventListener('click', () => {
                 switchPattern(parseInt(patternId));
                 updatePatternButtons();
                 saveRotationConfig();
             });
-            
+
             patternGrid.appendChild(patternButton);
         });
-        
+
         configPanel.appendChild(patternGrid);
-        
+
         // Current pattern info
         const patternInfo = document.createElement('div');
         patternInfo.id = 'current-pattern-info';
@@ -1177,11 +1216,11 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             margin-bottom: 6px;
             font-size: 9px;
         `;
-        
-        configPanel.appendChild(patternInfo);
-        
 
-        
+        configPanel.appendChild(patternInfo);
+
+
+
         // Add close button
         const closeButton = document.createElement('button');
         closeButton.textContent = 'Закрыть';
@@ -1195,13 +1234,13 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             width: 100%;
             font-size: 9px;
         `;
-        
+
         closeButton.addEventListener('click', () => {
             configPanel.style.display = 'none';
         });
-        
+
         configPanel.appendChild(closeButton);
-        
+
         // Add config button to main UI
         const rotationConfigButton = document.createElement('button');
         rotationConfigButton.textContent = '⚙️';
@@ -1214,7 +1253,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             padding: 2px 6px;
             margin-left: 5px;
         `;
-        
+
         rotationConfigButton.addEventListener('click', () => {
             configPanel.style.display = configPanel.style.display === 'none' ? 'block' : 'none';
             if (configPanel.style.display === 'block') {
@@ -1222,20 +1261,20 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
                 updatePatternButtons();
             }
         });
-        
+
         // Find the rotation status element to place the config button next to it
         const rotationStatusElement = document.getElementById('rotation-status');
         if (rotationStatusElement && rotationStatusElement.parentNode) {
             rotationStatusElement.parentNode.appendChild(rotationConfigButton);
         }
-        
+
         // Add the config panel to the container
         uiContainer.appendChild(configPanel);
-        
+
         // Initial update
         updatePatternInfo();
     }
-    
+
     // Update pattern buttons to show current selection
     function updatePatternButtons() {
         const buttons = document.querySelectorAll('#rotation-config-panel button[data-pattern-id]');
@@ -1244,112 +1283,112 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             button.style.backgroundColor = currentPattern === patternId ? '#4CAF50' : '#555';
         });
     }
-    
+
     // Update current pattern info display
     function updatePatternInfo() {
         const patternInfo = document.getElementById('current-pattern-info');
         if (!patternInfo) return;
-        
+
         const pattern = MOTION_PATTERNS[currentPattern];
         patternInfo.innerHTML = `
             <strong>${pattern.name}</strong>
         `;
     }
-    
+
     // Save rotation configuration
     function saveRotationConfig() {
         try {
             const config = {
                 currentPattern: currentPattern
             };
-            
+
             localStorage.setItem('gameBotRotationConfig', JSON.stringify(config));
             logActivity("Rotation configuration saved");
         } catch (e) {
             console.error("Failed to save rotation configuration:", e);
         }
     }
-    
+
     // Load rotation configuration
     function loadRotationConfig() {
         try {
             const savedConfig = localStorage.getItem('gameBotRotationConfig');
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
-                
+
                 if (config.currentPattern !== undefined && MOTION_PATTERNS[config.currentPattern]) {
                     currentPattern = config.currentPattern;
                 }
-                
+
                 logActivity("Rotation configuration loaded");
             }
         } catch (e) {
             console.error("Failed to load rotation configuration:", e);
         }
     }
-    
+
     // Perform rotation with current pattern
     function performRotation() {
         if (!rotationActive) return;
-        
+
         // Only start if not already in progress
         if (rotationInProgress) return;
-        
+
         rotationInProgress = true;
         currentStep = 0;
-        
+
         const pattern = MOTION_PATTERNS[currentPattern];
-        
+
         rotationInterval = setInterval(() => {
             // Use the framework's key simulation functions
             simulateKeyDown(pattern.sequence[currentStep]);
-            
+
             setTimeout(() => {
                 simulateKeyUp(pattern.sequence[currentStep]);
                 currentStep = (currentStep + 1) % pattern.sequence.length;
             }, 1); // Changed to 1ms press time
-            
+
         }, pattern.timing);
     }
-    
+
     // Stop rotation
     function stopRotation() {
         if (rotationInterval) {
             clearInterval(rotationInterval);
             rotationInterval = null;
         }
-        
+
         rotationInProgress = false;
-        
+
         // Release all arrow keys if they're being held
         [37, 38, 39, 40].forEach(keyCode => {
             simulateKeyUp(keyCode);
         });
     }
-    
+
     // Switch to a specific pattern
     function switchPattern(patternId) {
         const wasActive = rotationActive;
-        
+
         // Stop current rotation
         if (wasActive) {
             stopRotation();
             rotationActive = false;
         }
-        
+
         // Switch pattern
         if (MOTION_PATTERNS[patternId]) {
             currentPattern = patternId;
-            
+
             const pattern = MOTION_PATTERNS[currentPattern];
             logActivity(`🔄 ${pattern.name}`);
-            
+
             // Update UI status with ON/OFF instead of pattern name
             updateStatus('rotation-status', wasActive, wasActive ? 'ON' : 'OFF');
-            
+
             // Update pattern info if config panel is open
             updatePatternInfo();
-            
+
             // Restart rotation if it was active
             if (wasActive) {
                 rotationActive = true;
@@ -1357,20 +1396,20 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             }
         }
     }
-    
+
     // Switch to next/previous pattern
     function switchPatternRelative(direction = 1) {
         const newPattern = (currentPattern + direction + TOTAL_PATTERNS) % TOTAL_PATTERNS;
         switchPattern(newPattern);
     }
-    
+
     // Toggle rotation mode
     function toggleRotationMode() {
         rotationActive = !rotationActive;
-        
+
         // Show ON/OFF status instead of pattern name
         updateStatus('rotation-status', rotationActive, rotationActive ? 'ON' : 'OFF');
-        
+
         if (rotationActive) {
             performRotation();
             const pattern = MOTION_PATTERNS[currentPattern];
@@ -1380,69 +1419,69 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             logActivity("❌ Выключен");
         }
     }
-    
+
     // Initialize function for the addon
     function initialize() {
         // Try to load saved configuration
         loadRotationConfig();
-        
+
         // Create the configuration UI
         createRotationConfigUI();
-        
+
         // Start in deactivated state - show OFF status
         updateStatus('rotation-status', rotationActive, 'OFF');
-        
+
         logActivity("🎮 Аддон вращения готов!");
         const pattern = MOTION_PATTERNS[currentPattern];
         logActivity(`Текущий: ${pattern.name}`);
-        logActivity("N/Т - вкл/выкл");
+        logActivity("Alt+B/Alt+И - вкл/выкл");
     }
-    
+
     // Cleanup function
     function cleanup() {
         stopRotation();
         rotationActive = false;
         updateStatus('rotation-status', false);
         logActivity("Simplified Rotation addon cleanup complete");
-        
+
         // Remove config panel if it exists
         const configPanel = document.getElementById('rotation-config-panel');
         if (configPanel) {
             configPanel.remove();
         }
     }
-    
+
     // Handle keydown events
     function onKeyDown(event) {
         const key = event.key.toLowerCase();
-        
-        // Toggle rotation mode with N key (or Russian equivalent 'т')
-        if (key === 'n' || key === 'т') {
-            toggleRotationMode();
-        }
-        
 
-        
+        // Toggle rotation mode with Alt+B or Alt+И
+        if (event.altKey && (key === 'v' || key === 'м')) {
+            event.preventDefault(); // Prevent any default Alt+B behavior
+            toggleRotationMode();
+            return;
+        }
+
         // Handle manual movement with WASD or Russian equivalents
         // This allows users to control movement manually with either keyboard layout
         if (!rotationActive && KEY_MAPPINGS[key]) {
             simulateKeyDown(KEY_MAPPINGS[key]);
         }
     }
-    
+
     // Handle keyup events for manual movement keys
     function onKeyUp(event) {
         const key = event.key.toLowerCase();
-        
+
         // Release the corresponding arrow key when WASD or Russian equivalent is released
         if (KEY_MAPPINGS[key]) {
             simulateKeyUp(KEY_MAPPINGS[key]);
         }
     }
-    
+
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('rotation-status', {
-        label: 'Вращение(N/Т)', // Changed label as requested
+        label: 'Спин(Alt+М)', // Updated label to show new key combination
         initialActive: rotationActive,
         initialize: initialize,
         cleanup: cleanup,
@@ -1451,7 +1490,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
     });
 })();
 // K Hold Timer Addon with Russian UI
-// This addon automatically holds the K key for exactly 3.875 seconds when toggled with H/Р key
+// This addon automatically holds the K key for exactly 3.875 seconds when toggled with Alt+C/Alt+С key combination
 (function() {
     // State variables for the K hold feature
     let holdActive = false;
@@ -1461,12 +1500,12 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
     let timeRemaining = 0;
     let progressBarVisible = true; // Toggle for progress bar visibility
     let isToggling = false; // Flag to prevent duplicate toggling
-    
+
     // Create progress bar UI with Russian text
     function createProgressUI() {
         const uiContainer = document.getElementById('bot-ui-container');
         if (!uiContainer) return;
-        
+
         // Create progress panel
         const progressPanel = document.createElement('div');
         progressPanel.id = 'k-hold-progress-panel';
@@ -1478,7 +1517,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             border-radius: 4px;
             border: 1px solid #444;
         `;
-        
+
         // Create progress bar container
         const progressContainer = document.createElement('div');
         progressContainer.style.cssText = `
@@ -1489,7 +1528,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             margin-bottom: 10px;
             overflow: hidden;
         `;
-        
+
         // Create progress bar
         const progressBar = document.createElement('div');
         progressBar.id = 'k-hold-progress-bar';
@@ -1499,9 +1538,9 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             background-color: #4CAF50;
             transition: width 0.1s linear;
         `;
-        
+
         progressContainer.appendChild(progressBar);
-        
+
         // Create time display with Russian text
         const timeDisplay = document.createElement('div');
         timeDisplay.id = 'k-hold-time-display';
@@ -1511,7 +1550,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             margin-bottom: 10px;
         `;
         timeDisplay.textContent = 'Готов - 3.875 секунд';
-        
+
         // Add toggle button for progress bar visibility with Russian text
         const toggleVisibilityButton = document.createElement('button');
         toggleVisibilityButton.textContent = 'Скрыть прогресс';
@@ -1525,14 +1564,14 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             width: 100%;
             margin-bottom: 10px;
         `;
-        
+
         toggleVisibilityButton.addEventListener('click', () => {
             progressBarVisible = !progressBarVisible;
             progressContainer.style.display = progressBarVisible ? 'block' : 'none';
             timeDisplay.style.display = progressBarVisible ? 'block' : 'none';
             toggleVisibilityButton.textContent = progressBarVisible ? 'Скрыть прогресс' : 'Показать прогресс';
         });
-        
+
         // Add close button with Russian text
         const closeButton = document.createElement('button');
         closeButton.textContent = 'Закрыть';
@@ -1545,20 +1584,20 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             cursor: pointer;
             width: 100%;
         `;
-        
+
         closeButton.addEventListener('click', () => {
             progressPanel.style.display = 'none';
         });
-        
+
         // Add all elements to the progress panel
         progressPanel.appendChild(progressContainer);
         progressPanel.appendChild(timeDisplay);
         progressPanel.appendChild(toggleVisibilityButton);
         progressPanel.appendChild(closeButton);
-        
+
         // Add the progress panel to the UI container
         uiContainer.appendChild(progressPanel);
-        
+
         // Add config button to main UI
         const holdConfigButton = document.createElement('button');
         holdConfigButton.textContent = '⚙';
@@ -1571,76 +1610,76 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             padding: 2px 6px;
             margin-left: 5px;
         `;
-        
+
         holdConfigButton.addEventListener('click', () => {
             progressPanel.style.display = progressPanel.style.display === 'none' ? 'block' : 'none';
         });
-        
+
         // Find the hold status element to place the config button next to it
         const holdStatusElement = document.getElementById('k-hold-status');
         if (holdStatusElement && holdStatusElement.parentNode) {
             holdStatusElement.parentNode.appendChild(holdConfigButton);
         }
     }
-    
+
     // Start holding K key
     function startHolding() {
         // Clear existing timers if any
         stopHolding();
-        
+
         // Simulate K keydown
         simulateKeyDown(75); // 75 is keyCode for 'K'
         logActivity("Удерживаю клавишу K на 3.875 секунд");
-        
+
         // Set time remaining
         timeRemaining = HOLD_DURATION;
-        
+
         // Update progress bar
         updateProgressBar(100);
-        
+
         // Set timer to release key after exact duration
         holdTimeout = setTimeout(() => {
             simulateKeyUp(75);
             logActivity("Клавиша K отпущена после 3.875 секунд");
-            
+
             // Reset UI
             holdActive = false;
             updateStatus('k-hold-status', false);
-            
+
             // Reset progress bar
             updateProgressBar(0);
-            
+
             // Clear interval
             if (progressInterval) {
                 clearInterval(progressInterval);
                 progressInterval = null;
             }
-            
+
             const timeDisplay = document.getElementById('k-hold-time-display');
             if (timeDisplay) {
                 timeDisplay.textContent = 'Готов - 3.875 секунд';
             }
-            
+
         }, HOLD_DURATION);
-        
+
         // Start progress bar update interval
         progressInterval = setInterval(() => {
             // Decrease time remaining
             timeRemaining -= 100; // Update every 100ms
-            
+
             // Calculate percentage of time remaining
             const percentRemaining = (timeRemaining / HOLD_DURATION) * 100;
-            
+
             // Update progress bar
             updateProgressBar(percentRemaining);
-            
+
             // Update time display with Russian text
             const timeDisplay = document.getElementById('k-hold-time-display');
             if (timeDisplay) {
                 const secondsRemaining = (timeRemaining / 1000).toFixed(3);
                 timeDisplay.textContent = `Осталось: ${secondsRemaining}с`;
             }
-            
+
             // Stop updating if time is up
             if (timeRemaining <= 0) {
                 clearInterval(progressInterval);
@@ -1648,7 +1687,7 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             }
         }, 100); // Update every 100ms for smooth animation
     }
-    
+
     // Stop holding K key
     function stopHolding() {
         // Clear timeout
@@ -1656,32 +1695,32 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             clearTimeout(holdTimeout);
             holdTimeout = null;
         }
-        
+
         // Clear interval
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
         }
-        
+
         // Release K key
         simulateKeyUp(75);
-        
+
         // Reset progress bar
         updateProgressBar(0);
-        
+
         // Reset time display with Russian text
         const timeDisplay = document.getElementById('k-hold-time-display');
         if (timeDisplay) {
             timeDisplay.textContent = 'Готов - 3.875 секунд';
         }
     }
-    
+
     // Update progress bar UI
     function updateProgressBar(percentage) {
         const progressBar = document.getElementById('k-hold-progress-bar');
         if (progressBar) {
             progressBar.style.width = `${percentage}%`;
-            
+
             // Change color based on percentage
             if (percentage > 60) {
                 progressBar.style.backgroundColor = '#4CAF50'; // Green
@@ -1692,236 +1731,68 @@ logActivity("🚀 Enhanced Game Bot Framework initialized");
             }
         }
     }
-    
+
     // Initialize function for the addon
     function initialize() {
         // Create the progress UI
         createProgressUI();
-        
+
         // Start in deactivated state
         updateStatus('k-hold-status', holdActive);
-        logActivity("Таймер удержания K инициализирован (Переключение клавишей H/Р)");
+        logActivity("Таймер удержания K инициализирован (Переключение Alt+C/Alt+С)");
     }
-    
+
     // Cleanup function
     function cleanup() {
         stopHolding();
         holdActive = false;
         updateStatus('k-hold-status', false);
         logActivity("Таймер удержания K отключен");
-        
+
         // Remove progress panel if it exists
         const progressPanel = document.getElementById('k-hold-progress-panel');
         if (progressPanel) {
             progressPanel.remove();
         }
     }
-    
+
     // Toggle hold mode
     function toggleHoldMode() {
         if (!isToggling) {
             isToggling = true;
-            
+
             holdActive = !holdActive;
             updateStatus('k-hold-status', holdActive);
-            
+
             if (holdActive) {
                 startHolding();
             } else {
                 stopHolding();
                 logActivity("Таймер удержания K деактивирован");
             }
-            
+
             setTimeout(() => {
                 isToggling = false;
             }, 100);
         }
     }
-    
-    // Handle keydown events - support both Latin 'H' and Cyrillic 'Р' (Russian equivalent)
+
+    // Handle keydown events - support Alt+C and Alt+С (Cyrillic C)
     function onKeyDown(event) {
-        // Check for both Latin 'h' and Cyrillic 'р' (Russian H key equivalent)
-        if (event.key.toLowerCase() === 'h' || event.key === 'р' || event.key === 'Р') {
+        // Check for Alt+C (Latin) or Alt+С (Cyrillic)
+        if (event.altKey && (event.key.toLowerCase() === 'c' || event.key === 'с' || event.key === 'С')) {
+            event.preventDefault(); // Prevent default Alt+C behavior
             toggleHoldMode();
         }
     }
-    
+
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('k-hold-status', {
-        label: 'Бита (H/Р)',
+        label: 'Бита (Alt+С)',
         initialActive: holdActive,
         initialize: initialize,
         cleanup: cleanup,
         onKeyDown: onKeyDown
     });
 })();
-// Chat Mode Addon - Enhanced version that integrates with the new UI system
-(function() {
-    let chatMode_active = false;
-    let originalKeydownHandler = null;
-    let originalKeyupHandler = null;
-    let originalAddEventListener = null;
-    
-    // Allowed keys that should pass through even when Chat Mode is active
-    const ALLOWED_KEYCODES = [
-        119,  // F8 for toggling chat mode
-        13,   // Enter key for sending messages
-        9,    // Tab key for navigation
-        16,   // Shift
-        17,   // Ctrl
-        18,   // Alt
-        20,   // Caps Lock
-        27,   // Escape
-        33,   // Page Up
-        34,   // Page Down
-        35,   // End
-        36,   // Home
-        37,   // Left Arrow
-        38,   // Up Arrow
-        39,   // Right Arrow
-        40,   // Down Arrow
-        45,   // Insert
-        46,   // Delete
-        8,    // Backspace
-        91,   // Left Windows/Command key
-        93,   // Right Windows/Command key
-        112,  // F1
-        113,  // F2
-        114,  // F3
-        115,  // F4
-        116,  // F5
-        117,  // F6
-        118,  // F7
-        120,  // F9
-        121,  // F10
-        122,  // F11
-        123,  // F12
-        
-        // Adding WASD keys for movement
-        87,   // W key
-        65,   // A key
-        83,   // S key
-        68,   // D key
-        
-        // Adding Russian WASD equivalent in ЙЦУКЕН layout
-        1062, // Ц (W equivalent)
-        1060, // Ф (A equivalent)
-        1067, // Ы (S equivalent)
-        1042, // В (D equivalent)
-        
-        // Adding Space key
-        32    // Space key
-    ];
-    
-    // Function to setup event blocking
-    function chatMode_setupEventBlocking() {
-        // Store original handlers if they exist
-        if (document.onkeydown && !originalKeydownHandler) {
-            originalKeydownHandler = document.onkeydown;
-        }
-        if (document.onkeyup && !originalKeyupHandler) {
-            originalKeyupHandler = document.onkeyup;
-        }
-        
-        // Override document key handlers
-        document.onkeydown = function(event) {
-            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
-                event.stopImmediatePropagation();
-                return true; // Allow default browser behavior for typing
-            }
-            
-            if (originalKeydownHandler) {
-                return originalKeydownHandler(event);
-            }
-        };
-        
-        document.onkeyup = function(event) {
-            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
-                event.stopImmediatePropagation();
-                return true; // Allow default browser behavior for typing
-            }
-            
-            if (originalKeyupHandler) {
-                return originalKeyupHandler(event);
-            }
-        };
-        
-        // Add capture-phase listeners
-        document.addEventListener('keydown', function(event) {
-            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
-                logActivity(`Клавиша заблокирована: ${event.key || event.keyCode} (Режим Чата активен)`);
-                event.stopImmediatePropagation();
-                event.stopPropagation();
-            }
-        }, true);
-        
-        document.addEventListener('keyup', function(event) {
-            if (chatMode_active && !ALLOWED_KEYCODES.includes(event.keyCode)) {
-                event.stopImmediatePropagation();
-                event.stopPropagation();
-            }
-        }, true);
-    }
-    
-    // Function to restore original event handling
-    function chatMode_restoreEventHandling() {
-        if (originalKeydownHandler) {
-            document.onkeydown = originalKeydownHandler;
-        }
-        if (originalKeyupHandler) {
-            document.onkeyup = originalKeyupHandler;
-        }
-    }
-    
-    // Toggle Chat Mode state
-    function chatMode_toggle() {
-        chatMode_active = !chatMode_active;
-        updateStatus('chat-mode-status', chatMode_active);
-        flashButtonStatus('chat-mode-status', chatMode_active ? '#4CAF50' : '#FF5252');
-        
-        if (chatMode_active) {
-            logActivity("💬 Chat Mode activated - bot controls disabled");
-        } else {
-            logActivity("💬 Chat Mode deactivated - bot controls enabled");
-        }
-    }
-    
-    // Register the Chat Mode feature with the addon manager
-    setTimeout(() => {
-        if (window.gameBotAddonManager) {
-            window.gameBotAddonManager.registerFeature('chat-mode-status', {
-                label: 'Режим Чата (F8)',
-                initialActive: false,
-                initialize: function() {
-                    chatMode_active = false;
-                    chatMode_setupEventBlocking();
-                },
-                cleanup: function() {
-                    chatMode_active = false;
-                    chatMode_restoreEventHandling();
-                },
-                onKeyDown: function(event) {
-                    // Use F8 as a shortcut to toggle chat mode (keyCode 119)
-                    if (event.keyCode === 119 && !event.repeat) {
-                        chatMode_toggle();
-                        event.preventDefault();
-                    }
-                },
-                onKeyUp: function(event) {
-                    // No action needed on key up for this feature
-                }
-            });
-            
-            logActivity("💬 Chat Mode addon registered successfully - Press F8 to toggle");
-        } else {
-            console.error("Game Bot Addon Manager not found!");
-        }
-    }, 100); // Small delay to ensure addon manager is ready
-    
-    // Clean up on page unload
-    window.addEventListener('beforeunload', () => {
-        chatMode_restoreEventHandling();
-    });
-    
-    console.log('[Chat Mode Addon - Enhanced Version] Loaded successfully!');
-})();
+
