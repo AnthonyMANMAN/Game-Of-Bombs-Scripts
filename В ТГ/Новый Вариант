@@ -537,7 +537,7 @@
         let formattedMessage = messageText;
 
         // Check for plutonium (green dot)
-        if (/плутон|plutonium/i.test(messageText)) {
+        if (/плутоний|plutonium/i.test(messageText)) {
             formattedMessage = '🟢 ' + formattedMessage;
         }
         // Check for spider (red dot)
