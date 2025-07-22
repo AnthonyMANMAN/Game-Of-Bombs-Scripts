@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Enhanced GoB Monitor Script (No Chat Clear)
 // @namespace    http://tampermonkey.net/
-// @version      2025-07-21-no-clear
+// @version      2025-07-21-no-clear-fixed
 // @description  Enhanced monitoring with date-based filtering and duplicate prevention
 // @author       You
 // @match        gameofbombs.com
@@ -25,6 +25,7 @@
     let currentTargetIndex = 0;
     let uiCreated = false;
     let minimized = false;
+    let totalMessagesSent = 0; // Global counter for sent messages
 
     // Enhanced storage system with date tracking
     if (!window.lastSentMessagesStore) {
@@ -92,7 +93,7 @@
         header.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #4CAF50, #45a049); border-radius: 50%; animation: pulse 2s infinite;"></div>
-                <span style="font-weight: 600; font-size: 16px;">Enhanced Monitor</span>
+                <span style="font-weight: 600; font-size: 16px;">Монитор</span>
             </div>
         `;
         header.style.cssText = `
@@ -325,14 +326,14 @@
         } else {
             const cyclingStatus = serverCycleInterval ? '🔄 Циклируется' : '⏸️ Остановлено';
             const serverInfo = currentServer ? `на ${currentServer}` : '';
-            const totalMessages = Object.values(sentMessages).reduce((sum, set) => sum + set.size, 0);
 
             statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
             statusEl.style.color = serverCycleInterval ? '#4CAF50' : '#FF5252';
-
-            const counterEl = document.getElementById('gob-message-count');
-            if (counterEl) counterEl.textContent = totalMessages;
         }
+
+        // Update message counter
+        const counterEl = document.getElementById('gob-message-count');
+        if (counterEl) counterEl.textContent = totalMessagesSent;
     }
 
     function updateTargetServers() {
@@ -509,7 +510,7 @@
         const globalKey = createGlobalMessageKey(serverName, messageText);
         const now = new Date();
         const maxAge = 5 * 60 * 1000; // 5 minutes for global duplicate prevention
-        
+
         if (window.globalMessageStore[globalKey]) {
             const lastSent = window.globalMessageStore[globalKey];
             if (now - lastSent.timestamp < maxAge) {
@@ -531,6 +532,26 @@
         };
     }
 
+    // Function to format message with appropriate colored dots
+    function formatMessageWithColoredDots(messageText) {
+        let formattedMessage = messageText;
+
+        // Check for plutonium (green dot)
+        if (/плутон|plutonium/i.test(messageText)) {
+            formattedMessage = '🟢 ' + formattedMessage;
+        }
+        // Check for spider (red dot)
+        else if (/паук|spider/i.test(messageText)) {
+            formattedMessage = '🔴 ' + formattedMessage;
+        }
+        // Check for hamster (blue dot)
+        else if (/хомяк|hamster/i.test(messageText)) {
+            formattedMessage = '🔵 ' + formattedMessage;
+        }
+
+        return formattedMessage;
+    }
+
     // Enhanced message processing with date-based filtering and global duplicate prevention
     async function checkAndSendServerMessages(serverName) {
         const messages = document.querySelectorAll('#listChat li');
@@ -548,7 +569,7 @@
 
         messages.forEach(message => {
             const messageText = message.textContent || message.innerText;
-            
+
             // Use more specific filtering
             if (!/SERVER:|Mac_:|_Marihuana_:/i.test(messageText)) return;
 
@@ -566,13 +587,13 @@
                 if (!isNaN(hh) && !isNaN(mm)) {
                     const msgTime = new Date(now);
                     msgTime.setHours(hh, mm, 0, 0);
-                    
+
                     // Check if message is from today
                     if (msgTime.toDateString() !== today) {
                         console.log(`⏰ Skipping old message from different date:`, messageText.substring(0, 50));
                         return;
                     }
-                    
+
                     const age = now - msgTime;
                     if (age > maxAge || age < 0) return;
                 }
@@ -580,12 +601,8 @@
 
             let cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
 
-            // Enhanced formatting with colors
-            if (/плутонием найден в/i.test(cleanedMessage)) {
-                cleanedMessage = '🟢 <b>' + cleanedMessage + '</b>';
-            } else if (/злой паук появился в|злой хомяк появился в/i.test(cleanedMessage)) {
-                cleanedMessage = '🔴 <i>' + cleanedMessage + '</i>';
-            }
+            // Apply colored dot formatting
+            cleanedMessage = formatMessageWithColoredDots(cleanedMessage);
 
             if (/сообщ\. проигнор/i.test(cleanedMessage)) return;
 
@@ -606,7 +623,12 @@
 
         if (serverMessages.length > 0) {
             const combinedMessage = `🎮 ${serverName} [${USER_ID.substring(0, 6)}]\n${serverMessages.join('\n')}`;
-            await sendToTelegram(combinedMessage);
+            const success = await sendToTelegram(combinedMessage);
+
+            if (success) {
+                totalMessagesSent += serverMessages.length;
+                updateStatus(); // Update the counter in UI
+            }
         }
     }
 
@@ -624,11 +646,14 @@
 
             if (response.ok) {
                 console.log('✅ Message sent to Telegram');
+                return true;
             } else {
                 console.error('❌ Failed to send message');
+                return false;
             }
         } catch (error) {
             console.error('❌ Error sending to Telegram:', error);
+            return false;
         }
     }
 
