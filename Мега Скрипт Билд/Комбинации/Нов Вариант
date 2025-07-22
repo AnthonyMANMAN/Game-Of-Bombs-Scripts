@@ -1075,7 +1075,7 @@ initializeGameBot();
     // Handle keydown events - support Alt + X and Alt + Ж
     function onKeyDown(event) {
         // Check for Alt + X (English) or Alt + Ж (Russian) - same physical key
-        if (event.altKey && (event.key.toLowerCase() === 'b' || event.key === 'б' || event.key === 'Б')) {
+        if (event.altKey && (event.key.toLowerCase() === 'b' || event.key === 'и' || event.key === 'И')) {
             event.preventDefault(); // Prevent any default Alt+X behavior
             toggleSpamMode();
         }
@@ -1083,7 +1083,7 @@ initializeGameBot();
 
     // Register the feature with the addon manager
     window.gameBotAddonManager.registerFeature('spam-status', {
-        label: 'Перки (Alt+Б)',
+        label: 'Перки (Alt+И)',
         initialActive: spamActive,
         initialize: initialize,
         cleanup: cleanup,
