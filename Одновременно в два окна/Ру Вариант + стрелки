@@ -73,15 +73,32 @@ function openDatabase() {
 }
 
 function startServices() {
-    if (isEnabled && !pollingInterval) {
+    // Clear any existing intervals first to prevent duplicates
+    stopServices();
+    
+    if (isEnabled && db) {
+        // Reset the timestamp to current time when restarting
+        lastProcessedTimestamp = Date.now();
+        
         pollingInterval = setInterval(checkForNewEvents, 16);
         cleanupInterval = setInterval(cleanupOldEvents, 1000);
     }
 }
 
 function stopServices() {
-    if (pollingInterval) clearInterval(pollingInterval);
-    if (cleanupInterval) clearInterval(cleanupInterval);
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        cleanupInterval = null;
+    }
+    
+    // Clear key states when stopping to prevent stuck keys
+    Object.keys(keyStates).forEach(key => {
+        keyStates[key] = false;
+    });
 }
 
 function toggleKeyBroadcaster() {
@@ -206,6 +223,8 @@ document.addEventListener("keyup", function(event) {
 });
 
 function storeKeyEvent(keyEvent) {
+    if (!db) return; // Don't try to store if database isn't ready
+    
     const transaction = db.transaction([storeName], "readwrite");
     const store = transaction.objectStore(storeName);
 
@@ -216,6 +235,8 @@ function storeKeyEvent(keyEvent) {
 }
 
 function cleanupOldEvents() {
+    if (!db) return; // Don't try to cleanup if database isn't ready
+    
     const transaction = db.transaction([storeName], "readwrite");
     const store = transaction.objectStore(storeName);
     const oldTimestamp = Date.now() - 500;
@@ -233,6 +254,8 @@ function cleanupOldEvents() {
 }
 
 function checkForNewEvents() {
+    if (!db) return; // Don't try to check if database isn't ready
+    
     const transaction = db.transaction([storeName], "readonly");
     const store = transaction.objectStore(storeName);
     const range = IDBKeyRange.lowerBound(lastProcessedTimestamp + 1);
