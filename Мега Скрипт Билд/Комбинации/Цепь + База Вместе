@@ -1,0 +1,239 @@
+/**
+ * Auto Chain - Standalone Script
+ * Toggleable bomb placement automation that works independently
+ * Press 'J' (or 'О' in Russian layout) to toggle on/off
+ */
+
+// Global state variables
+let autoChain_active = false;
+let autoChain_interval = null;
+
+// Logging function
+function logActivity(message) {
+    console.log(`[Auto Chain] ${message}`);
+}
+
+// Create standalone UI
+function autoChain_createUI() {
+    // Remove any existing UI to prevent duplicates
+    const existingUI = document.getElementById('auto-chain-ui');
+    if (existingUI) {
+        existingUI.remove();
+    }
+    
+    // Create main container
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'auto-chain-ui';
+    uiContainer.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 120px;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 10000;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        user-select: none;
+        transition: all 0.3s ease;
+    `;
+    
+    // Create title
+    const title = document.createElement('div');
+    title.textContent = 'Auto Chain';
+    title.style.cssText = `
+        font-weight: bold;
+        margin-bottom: 8px;
+        text-align: center;
+        font-size: 16px;
+    `;
+    
+    // Create status container
+    const statusContainer = document.createElement('div');
+    statusContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    `;
+    
+    const statusLabel = document.createElement('span');
+    statusLabel.textContent = 'Status:';
+    
+    const statusIndicator = document.createElement('span');
+    statusIndicator.id = 'auto-chain-status';
+    statusIndicator.textContent = autoChain_active ? 'ON' : 'OFF';
+    statusIndicator.style.cssText = `
+        font-weight: bold;
+        color: ${autoChain_active ? '#4CAF50' : '#F44336'};
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    `;
+    
+    // Create instructions
+    const instructions = document.createElement('div');
+    instructions.textContent = 'Press J to toggle';
+    instructions.style.cssText = `
+        margin-top: 8px;
+        font-size: 12px;
+        text-align: center;
+        opacity: 0.7;
+    `;
+    
+    // Assemble UI
+    statusContainer.appendChild(statusLabel);
+    statusContainer.appendChild(statusIndicator);
+    
+    uiContainer.appendChild(title);
+    uiContainer.appendChild(statusContainer);
+    uiContainer.appendChild(instructions);
+    
+    // Add to page
+    document.body.appendChild(uiContainer);
+    
+    logActivity("Standalone UI created");
+}
+
+// Update status display
+function autoChain_updateStatus() {
+    const statusElement = document.getElementById('auto-chain-status');
+    if (statusElement) {
+        statusElement.textContent = autoChain_active ? 'ON' : 'OFF';
+        statusElement.style.color = autoChain_active ? '#4CAF50' : '#F44336';
+        
+        // Pulse effect
+        statusElement.style.transform = 'scale(1.1)';
+        setTimeout(() => {
+            statusElement.style.transform = 'scale(1)';
+        }, 150);
+    }
+}
+
+// Flash effect for visual feedback
+function autoChain_flashStatus(duration = 200) {
+    const element = document.getElementById('auto-chain-status');
+    if (element) {
+        const originalColor = element.style.color;
+        element.style.color = '#FFFFFF';
+        element.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+        
+        setTimeout(() => {
+            element.style.color = originalColor;
+            element.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        }, duration);
+    }
+}
+
+// Start bomb spamming
+function autoChain_startSpamming() {
+    // Stop any existing interval
+    autoChain_stopSpamming();
+    
+    // Start rapid bomb placement
+    autoChain_interval = setInterval(() => {
+        if (autoChain_active) {
+            // Simulate K keypress (bomb key)
+            const keydownEvent = new KeyboardEvent("keydown", { 
+                keyCode: 75, 
+                key: "k",
+                code: "KeyK",
+                bubbles: true 
+            });
+            
+            const keyupEvent = new KeyboardEvent("keyup", { 
+                keyCode: 75, 
+                key: "k",
+                code: "KeyK",
+                bubbles: true 
+            });
+            
+            // Dispatch events
+            document.dispatchEvent(keydownEvent);
+            
+            // Quick release for rapid fire
+            setTimeout(() => {
+                document.dispatchEvent(keyupEvent);
+            }, 10);
+        }
+    }, 20); // 50 bombs per second
+    
+    logActivity("Bomb spamming started (50/sec)");
+}
+
+// Stop bomb spamming
+function autoChain_stopSpamming() {
+    if (autoChain_interval) {
+        clearInterval(autoChain_interval);
+        autoChain_interval = null;
+        logActivity("Bomb spamming stopped");
+    }
+}
+
+// Toggle Auto Chain functionality
+function autoChain_toggle() {
+    autoChain_active = !autoChain_active;
+    autoChain_updateStatus();
+    autoChain_flashStatus();
+    
+    if (autoChain_active) {
+        logActivity("Auto Chain ACTIVATED");
+        autoChain_startSpamming();
+    } else {
+        logActivity("Auto Chain DEACTIVATED");
+        autoChain_stopSpamming();
+    }
+}
+
+// Keyboard event listener
+document.addEventListener("keydown", (event) => {
+    // Listen for J key (English) or О key (Russian layout)
+    if (event.key === "j" || event.key === "J" || 
+        event.key === "о" || event.key === "О") {
+        
+        // Only toggle on initial press, ignore repeats
+        if (!event.repeat) {
+            autoChain_toggle();
+        }
+        
+        // Prevent default if not in input field
+        if (document.activeElement.tagName !== "INPUT" && 
+            document.activeElement.tagName !== "TEXTAREA" &&
+            !document.activeElement.isContentEditable) {
+            event.preventDefault();
+        }
+    }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    autoChain_stopSpamming();
+});
+
+// Initialize when DOM is ready
+function initAutoChain() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', autoChain_createUI);
+    } else {
+        autoChain_createUI();
+    }
+}
+
+// Global function to manually recreate UI if needed
+window.fixAutoChain = function() {
+    autoChain_createUI();
+    logActivity("UI manually restored");
+    return "Auto Chain UI restored.";
+};
+
+// Start the script
+initAutoChain();
+
+// Success message
+console.log('[Auto Chain - Standalone] Loaded successfully! Press J to toggle.');
+console.log('[Auto Chain - Standalone] Use fixAutoChain() to restore UI if needed.');
