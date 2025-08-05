@@ -1,0 +1,331 @@
+/**
+ * Auto Chain - Standalone Script (Russian Version)
+ * Toggleable automation that works independently
+ * Press 'Я' (or 'Z' in English layout) to toggle on/off
+ * Spams 'Ы' (or 'S' in English layout) key
+ */
+
+// Global state variables
+let autoChain_active = false;
+let autoChain_interval = null;
+let autoChain_locked = false; // New lock state
+
+// Logging function
+function logActivity(message) {
+    console.log(`[Auto Chain] ${message}`);
+}
+
+// Create standalone UI
+function autoChain_createUI() {
+    // Remove any existing UI to prevent duplicates
+    const existingUI = document.getElementById('auto-chain-ui');
+    if (existingUI) {
+        existingUI.remove();
+    }
+    
+    // Create main container
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'auto-chain-ui';
+    uiContainer.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 120px;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 10000;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        user-select: none;
+        transition: all 0.3s ease;
+        min-width: 180px;
+    `;
+    
+    // Create title
+    const title = document.createElement('div');
+    title.textContent = 'Авто Цепь';
+    title.style.cssText = `
+        font-weight: bold;
+        margin-bottom: 8px;
+        text-align: center;
+        font-size: 16px;
+    `;
+    
+    // Create status container
+    const statusContainer = document.createElement('div');
+    statusContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+    `;
+    
+    const statusLabel = document.createElement('span');
+    statusLabel.textContent = 'Статус:';
+    
+    const statusIndicator = document.createElement('span');
+    statusIndicator.id = 'auto-chain-status';
+    statusIndicator.textContent = autoChain_active ? 'ВКЛ' : 'ВЫКЛ';
+    statusIndicator.style.cssText = `
+        font-weight: bold;
+        color: ${autoChain_active ? '#4CAF50' : '#F44336'};
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    `;
+    
+    // Create lock button
+    const lockButton = document.createElement('button');
+    lockButton.id = 'auto-chain-lock-btn';
+    lockButton.textContent = autoChain_locked ? 'Разблокировать' : 'Заблокировать';
+    lockButton.style.cssText = `
+        background-color: ${autoChain_locked ? '#FF5722' : '#2196F3'};
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        transition: all 0.2s ease;
+        width: 100%;
+        margin-bottom: 8px;
+    `;
+    
+    // Add hover effect
+    lockButton.addEventListener('mouseenter', () => {
+        lockButton.style.opacity = '0.8';
+        lockButton.style.transform = 'scale(1.02)';
+    });
+    
+    lockButton.addEventListener('mouseleave', () => {
+        lockButton.style.opacity = '1';
+        lockButton.style.transform = 'scale(1)';
+    });
+    
+    // Lock button click handler
+    lockButton.addEventListener('click', () => {
+        autoChain_locked = !autoChain_locked;
+        autoChain_updateLockButton();
+        
+        if (autoChain_locked) {
+            logActivity("Функция заблокирована - переключение отключено");
+            // If was active, stop it
+            if (autoChain_active) {
+                autoChain_active = false;
+                autoChain_stopSpamming();
+                autoChain_updateStatus();
+            }
+        } else {
+            logActivity("Функция разблокирована - переключение включено");
+        }
+    });
+    
+    // Create instructions
+    const instructions = document.createElement('div');
+    instructions.id = 'auto-chain-instructions';
+    instructions.textContent = autoChain_locked ? 'Заблокировано' : 'Нажми Я для переключения';
+    instructions.style.cssText = `
+        font-size: 12px;
+        text-align: center;
+        opacity: 0.7;
+        color: ${autoChain_locked ? '#FF5722' : '#FFFFFF'};
+        transition: color 0.2s ease;
+    `;
+    
+    // Assemble UI
+    statusContainer.appendChild(statusLabel);
+    statusContainer.appendChild(statusIndicator);
+    
+    uiContainer.appendChild(title);
+    uiContainer.appendChild(statusContainer);
+    uiContainer.appendChild(lockButton);
+    uiContainer.appendChild(instructions);
+    
+    // Add to page
+    document.body.appendChild(uiContainer);
+    
+    logActivity("Standalone UI создан");
+}
+
+// Update lock button appearance
+function autoChain_updateLockButton() {
+    const lockButton = document.getElementById('auto-chain-lock-btn');
+    const instructions = document.getElementById('auto-chain-instructions');
+    
+    if (lockButton) {
+        lockButton.textContent = autoChain_locked ? 'Разблокировать' : 'Заблокировать';
+        lockButton.style.backgroundColor = autoChain_locked ? '#FF5722' : '#2196F3';
+        
+        // Flash effect
+        lockButton.style.transform = 'scale(1.1)';
+        setTimeout(() => {
+            lockButton.style.transform = 'scale(1)';
+        }, 150);
+    }
+    
+    if (instructions) {
+        instructions.textContent = autoChain_locked ? 'Заблокировано' : 'Нажми Я для переключения';
+        instructions.style.color = autoChain_locked ? '#FF5722' : '#FFFFFF';
+    }
+}
+
+// Update status display
+function autoChain_updateStatus() {
+    const statusElement = document.getElementById('auto-chain-status');
+    if (statusElement) {
+        statusElement.textContent = autoChain_active ? 'ВКЛ' : 'ВЫКЛ';
+        statusElement.style.color = autoChain_active ? '#4CAF50' : '#F44336';
+        
+        // Pulse effect
+        statusElement.style.transform = 'scale(1.1)';
+        setTimeout(() => {
+            statusElement.style.transform = 'scale(1)';
+        }, 150);
+    }
+}
+
+// Flash effect for visual feedback
+function autoChain_flashStatus(duration = 200) {
+    const element = document.getElementById('auto-chain-status');
+    if (element) {
+        const originalColor = element.style.color;
+        element.style.color = '#FFFFFF';
+        element.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+        
+        setTimeout(() => {
+            element.style.color = originalColor;
+            element.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        }, duration);
+    }
+}
+
+// Start key spamming (now S/Ы key)
+function autoChain_startSpamming() {
+    // Stop any existing interval
+    autoChain_stopSpamming();
+    
+    // Start rapid S key placement
+    autoChain_interval = setInterval(() => {
+        if (autoChain_active) {
+            // Simulate S keypress (s/ы key)
+            const keydownEvent = new KeyboardEvent("keydown", { 
+                keyCode: 83, 
+                key: "s",
+                code: "KeyS",
+                bubbles: true 
+            });
+            
+            const keyupEvent = new KeyboardEvent("keyup", { 
+                keyCode: 83, 
+                key: "s",
+                code: "KeyS",
+                bubbles: true 
+            });
+            
+            // Dispatch events
+            document.dispatchEvent(keydownEvent);
+            
+            // Quick release for rapid fire
+            setTimeout(() => {
+                document.dispatchEvent(keyupEvent);
+            }, 10);
+        }
+    }, 20); // 50 presses per second
+    
+    logActivity("Спам клавиши S запущен (50/сек)");
+}
+
+// Stop key spamming
+function autoChain_stopSpamming() {
+    if (autoChain_interval) {
+        clearInterval(autoChain_interval);
+        autoChain_interval = null;
+        logActivity("Спам клавиши S остановлен");
+    }
+}
+
+// Toggle Auto Chain functionality
+function autoChain_toggle() {
+    // Check if locked
+    if (autoChain_locked) {
+        logActivity("Переключение заблокировано! Нажми кнопку 'Разблокировать' сначала.");
+        autoChain_flashStatus(500); // Longer flash to indicate blocked action
+        return;
+    }
+    
+    autoChain_active = !autoChain_active;
+    autoChain_updateStatus();
+    autoChain_flashStatus();
+    
+    if (autoChain_active) {
+        logActivity("Авто Цепь АКТИВИРОВАНА");
+        autoChain_startSpamming();
+    } else {
+        logActivity("Авто Цепь ДЕАКТИВИРОВАНА");
+        autoChain_stopSpamming();
+    }
+}
+
+// Keyboard event listener
+document.addEventListener("keydown", (event) => {
+    // Listen for Z key (English) or Я key (Russian layout)
+    if (event.key === "z" || event.key === "Z" || 
+        event.key === "я" || event.key === "Я") {
+        
+        // Only toggle on initial press, ignore repeats
+        if (!event.repeat) {
+            autoChain_toggle();
+        }
+        
+        // Prevent default if not in input field
+        if (document.activeElement.tagName !== "INPUT" && 
+            document.activeElement.tagName !== "TEXTAREA" &&
+            !document.activeElement.isContentEditable) {
+            event.preventDefault();
+        }
+    }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    autoChain_stopSpamming();
+});
+
+// Initialize when DOM is ready
+function initAutoChain() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', autoChain_createUI);
+    } else {
+        autoChain_createUI();
+    }
+}
+
+// Global function to manually recreate UI if needed
+window.fixAutoChain = function() {
+    autoChain_createUI();
+    logActivity("UI восстановлен вручную");
+    return "Авто Цепь UI восстановлен.";
+};
+
+// Global function to force unlock (for emergency)
+window.unlockAutoChain = function() {
+    autoChain_locked = false;
+    autoChain_updateLockButton();
+    logActivity("Принудительно разблокировано через консоль");
+    return "Авто Цепь разблокирован.";
+};
+
+// Start the script
+initAutoChain();
+
+// Success message
+console.log('[Авто Цепь - Standalone] Загружен успешно! Нажми Я для переключения.');
+console.log('[Авто Цепь - Standalone] Используй fixAutoChain() для восстановления UI при необходимости.');
+console.log('[Авто Цепь - Standalone] Используй unlockAutoChain() для принудительной разблокировки при необходимости.');
