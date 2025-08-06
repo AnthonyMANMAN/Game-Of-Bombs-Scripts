@@ -1,0 +1,708 @@
+(() => {
+  // ==================== CANVAS SPY FUNCTIONALITY ====================
+  const loggedCalls = new Set();
+  let isPaused = false;
+  let hookedContexts = new Set();
+  let currentTimer = '--:--';
+  let playerCoords = { x: '--', y: '--' };
+  
+  // ==================== BOT MOVEMENT FUNCTIONALITY ====================
+  let rm_firstScriptActive = false;
+  let rm_moveTimeout = null;
+  let rm_currentDirection = null;
+  let rm_bombTimeout = null;
+  
+  // Movement tracking variables
+  let previousCoords = { x: null, y: null };
+  let coordHistory = [];
+  let currentMovementX = null; // -1 for left, 1 for right, 0 for none
+  let currentMovementY = null; // -1 for down, 1 for up, 0 for none
+  let lastXChangeTime = null;
+  let lastYChangeTime = null;
+  let lastKnownCoords = { x: null, y: null };
+  let movementCheckInterval = null;
+  const STUCK_TIME_THRESHOLD = 3000; // 3 seconds in milliseconds
+  
+  // Define key codes for both English and Russian layouts
+  const rm_ee = {
+    // English WASD
+    up: { keyCode: 87, key: "w" },
+    left: { keyCode: 65, key: "a" },
+    down: { keyCode: 83, key: "s" },
+    right: { keyCode: 68, key: "d" },
+    
+    // Russian ЦФЫВ (same physical keys on keyboard)
+    upRu: { keyCode: 87, key: "ц" },
+    leftRu: { keyCode: 65, key: "ф" },
+    downRu: { keyCode: 83, key: "ы" },
+    rightRu: { keyCode: 68, key: "в" },
+    
+    // Diagonals - English
+    upLeft: { keys: [87, 65], name: "up-left" },
+    upRight: { keys: [87, 68], name: "up-right" },
+    downLeft: { keys: [83, 65], name: "down-left" },
+    downRight: { keys: [83, 68], name: "down-right" }
+  };
+
+  // ==================== UI CREATION ====================
+  const createUI = () => {
+    const popup = document.createElement('div');
+    popup.id = 'intelligent-bot-ui';
+    popup.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #2d3748;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      user-select: none;
+      cursor: default;
+      min-width: 220px;
+    `;
+    
+    // Header with controls
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid #4a5568;
+      padding-bottom: 8px;
+    `;
+    
+    const title = document.createElement('span');
+    title.textContent = 'Intelligent Bot';
+    title.style.cssText = `
+      color: #68d391;
+      font-weight: bold;
+    `;
+    
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '×';
+    closeButton.style.cssText = `
+      background: #e53e3e;
+      color: white;
+      border: none;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 1;
+    `;
+    
+    header.appendChild(title);
+    header.appendChild(closeButton);
+    
+    // Canvas Spy Status
+    const spyStatus = document.createElement('div');
+    spyStatus.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    `;
+    
+    const spyLabel = document.createElement('span');
+    spyLabel.textContent = 'Canvas Spy:';
+    spyLabel.style.color = '#a0aec0';
+    
+    const spyValue = document.createElement('span');
+    spyValue.id = 'spy-status';
+    spyValue.textContent = isPaused ? 'Paused' : 'Running';
+    spyValue.style.cssText = `
+      color: ${isPaused ? '#ed8936' : '#48bb78'};
+      font-weight: bold;
+    `;
+    
+    const spyToggle = document.createElement('button');
+    spyToggle.textContent = isPaused ? 'Resume' : 'Pause';
+    spyToggle.style.cssText = `
+      background: ${isPaused ? '#48bb78' : '#4299e1'};
+      color: white;
+      border: none;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      margin-left: 8px;
+    `;
+    
+    spyStatus.appendChild(spyLabel);
+    spyStatus.appendChild(spyValue);
+    spyStatus.appendChild(spyToggle);
+    
+    // Bot Status
+    const botStatus = document.createElement('div');
+    botStatus.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    `;
+    
+    const botLabel = document.createElement('span');
+    botLabel.textContent = 'Bot (Z/Я):';
+    botLabel.style.color = '#a0aec0';
+    
+    const botValue = document.createElement('span');
+    botValue.id = 'bot-status';
+    botValue.textContent = rm_firstScriptActive ? 'ON' : 'OFF';
+    botValue.style.cssText = `
+      color: ${rm_firstScriptActive ? '#4CAF50' : '#F44336'};
+      font-weight: bold;
+    `;
+    
+    botStatus.appendChild(botLabel);
+    botStatus.appendChild(botValue);
+    
+    // Timer display
+    const timerDiv = document.createElement('div');
+    timerDiv.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #4a5568;
+      padding-top: 8px;
+    `;
+    
+    const timerLabel = document.createElement('span');
+    timerLabel.textContent = 'Timer:';
+    timerLabel.style.color = '#a0aec0';
+    
+    const timerValue = document.createElement('span');
+    timerValue.id = 'timer-value';
+    timerValue.textContent = currentTimer;
+    timerValue.style.cssText = `
+      color: #68d391;
+      font-weight: bold;
+    `;
+    
+    timerDiv.appendChild(timerLabel);
+    timerDiv.appendChild(timerValue);
+    
+    // Coordinates display
+    const coordsDiv = document.createElement('div');
+    coordsDiv.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    `;
+    
+    const coordsLabel = document.createElement('span');
+    coordsLabel.textContent = 'Position:';
+    coordsLabel.style.color = '#a0aec0';
+    
+    const coordsValue = document.createElement('span');
+    coordsValue.id = 'coords-value';
+    coordsValue.textContent = `x:${playerCoords.x}, y:${playerCoords.y}`;
+    coordsValue.style.cssText = `
+      color: #63b3ed;
+      font-weight: bold;
+    `;
+    
+    coordsDiv.appendChild(coordsLabel);
+    coordsDiv.appendChild(coordsValue);
+    
+    // Movement status
+    const movementDiv = document.createElement('div');
+    movementDiv.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    `;
+    
+    const movementLabel = document.createElement('span');
+    movementLabel.textContent = 'Movement:';
+    movementLabel.style.color = '#a0aec0';
+    
+    const movementValue = document.createElement('span');
+    movementValue.id = 'movement-value';
+    movementValue.textContent = 'Idle';
+    movementValue.style.cssText = `
+      color: #fbb6ce;
+      font-weight: bold;
+    `;
+    
+    movementDiv.appendChild(movementLabel);
+    movementDiv.appendChild(movementValue);
+    
+    popup.appendChild(header);
+    popup.appendChild(spyStatus);
+    popup.appendChild(botStatus);
+    popup.appendChild(timerDiv);
+    popup.appendChild(coordsDiv);
+    popup.appendChild(movementDiv);
+    document.body.appendChild(popup);
+    
+    return { 
+      popup, 
+      spyValue, 
+      spyToggle, 
+      botValue, 
+      timerValue, 
+      coordsValue, 
+      movementValue,
+      closeButton 
+    };
+  };
+  
+  const ui = createUI();
+  
+  // ==================== UI UPDATE FUNCTIONS ====================
+  const updateUI = () => {
+    // Update spy status
+    ui.spyValue.textContent = isPaused ? 'Paused' : 'Running';
+    ui.spyValue.style.color = isPaused ? '#ed8936' : '#48bb78';
+    ui.spyToggle.textContent = isPaused ? 'Resume' : 'Pause';
+    ui.spyToggle.style.background = isPaused ? '#48bb78' : '#4299e1';
+    
+    // Update bot status
+    ui.botValue.textContent = rm_firstScriptActive ? 'ON' : 'OFF';
+    ui.botValue.style.color = rm_firstScriptActive ? '#4CAF50' : '#F44336';
+    
+    // Update timer and coordinates
+    ui.timerValue.textContent = currentTimer;
+    ui.coordsValue.textContent = `x:${playerCoords.x}, y:${playerCoords.y}`;
+    
+    // Update movement status
+    if (!rm_firstScriptActive) {
+      ui.movementValue.textContent = 'Idle';
+      ui.movementValue.style.color = '#fbb6ce';
+    } else if (rm_currentDirection) {
+      if (rm_currentDirection.name) {
+        ui.movementValue.textContent = rm_currentDirection.name;
+      } else {
+        ui.movementValue.textContent = 'Moving';
+      }
+      ui.movementValue.style.color = '#68d391';
+    }
+  };
+  
+  // ==================== CANVAS SPY FUNCTIONS ====================
+  const parseAndUpdateData = (callSignature) => {
+    // Parse timer from fillText calls like "fillText(4:00, 21, 13)"
+    const timerMatch = callSignature.match(/fillText\(([0-9]+:[0-9]+),/);
+    if (timerMatch) {
+      currentTimer = timerMatch[1];
+    }
+    
+    // Parse coordinates from fillText calls like "fillText(16, 9, 21, 13)"
+    const coordMatch = callSignature.match(/fillText\((\d+),\s*(\d+),\s*\d+,\s*\d+\)/);
+    if (coordMatch) {
+      const x = parseInt(coordMatch[1]);
+      const y = parseInt(coordMatch[2]);
+      
+      if (x < 32 && y < 32) {
+        const currentTime = Date.now();
+        
+        // Store previous coordinates before updating
+        if (playerCoords.x !== '--' && playerCoords.y !== '--') {
+          previousCoords.x = parseInt(playerCoords.x);
+          previousCoords.y = parseInt(playerCoords.y);
+        }
+        
+        // Update current coordinates
+        playerCoords.x = x;
+        playerCoords.y = y;
+        
+        // Check for coordinate changes and update timers
+        if (lastKnownCoords.x !== null && lastKnownCoords.y !== null) {
+          // X coordinate changed
+          if (x !== lastKnownCoords.x) {
+            lastXChangeTime = currentTime;
+            console.log(`[Bot] X changed: ${lastKnownCoords.x} → ${x}`);
+          }
+          
+          // Y coordinate changed  
+          if (y !== lastKnownCoords.y) {
+            lastYChangeTime = currentTime;
+            console.log(`[Bot] Y changed: ${lastKnownCoords.y} → ${y}`);
+          }
+        } else {
+          // Initialize timers on first coordinate detection
+          lastXChangeTime = currentTime;
+          lastYChangeTime = currentTime;
+        }
+        
+        // Update last known coordinates
+        lastKnownCoords.x = x;
+        lastKnownCoords.y = y;
+        
+        // Update coordinate history
+        coordHistory.push({ x, y, timestamp: currentTime });
+        if (coordHistory.length > 10) {
+          coordHistory.shift(); // Keep only last 10 entries
+        }
+      }
+    }
+  };
+  
+  const toggleSpyPause = () => {
+    isPaused = !isPaused;
+    updateUI();
+    console.log(`[CanvasSpy] ${isPaused ? 'Paused' : 'Resumed'}`);
+  };
+  
+  // ==================== MOVEMENT ANALYSIS ====================
+  const checkForStuckMovement = () => {
+    if (!rm_firstScriptActive) return;
+    
+    const currentTime = Date.now();
+    
+    // Skip if we don't have timing data yet
+    if (lastXChangeTime === null || lastYChangeTime === null) {
+      return;
+    }
+    
+    // Calculate how long each axis has been stuck
+    const xStuckTime = currentTime - lastXChangeTime;
+    const yStuckTime = currentTime - lastYChangeTime;
+    
+    let needsXChange = xStuckTime >= STUCK_TIME_THRESHOLD && currentMovementX !== null;
+    let needsYChange = yStuckTime >= STUCK_TIME_THRESHOLD && currentMovementY !== null;
+    
+    // If we're stuck on one axis, change that axis direction
+    if (needsXChange || needsYChange) {
+      console.log(`[Bot] Stuck detected - X: ${Math.round(xStuckTime/1000)}s, Y: ${Math.round(yStuckTime/1000)}s`);
+      adjustMovement(needsXChange, needsYChange);
+    }
+  };
+
+  const analyzeMovement = () => {
+    // This function is now mainly for logging - the real analysis happens in checkForStuckMovement
+    if (!rm_firstScriptActive) return;
+    
+    if (previousCoords.x !== null && previousCoords.y !== null) {
+      const currentX = parseInt(playerCoords.x);
+      const currentY = parseInt(playerCoords.y);
+      const prevX = previousCoords.x;
+      const prevY = previousCoords.y;
+      
+      if (currentX !== prevX || currentY !== prevY) {
+        console.log(`[Bot] Movement detected: (${prevX},${prevY}) → (${currentX},${currentY})`);
+      }
+    }
+  };
+  
+  const adjustMovement = (changeX, changeY) => {
+    if (!rm_firstScriptActive) return;
+    
+    // Stop current movement
+    if (rm_currentDirection) {
+      rm_simulateKeyUp(rm_currentDirection);
+    }
+    
+    // Determine new direction
+    let newXDirection = currentMovementX;
+    let newYDirection = currentMovementY;
+    
+    if (changeX) {
+      newXDirection = currentMovementX === 1 ? -1 : 1; // Flip X direction
+      lastXChangeTime = Date.now(); // Reset X timer
+      console.log(`[Bot] Changing X direction from ${currentMovementX} to ${newXDirection}`);
+    }
+    
+    if (changeY) {
+      newYDirection = currentMovementY === 1 ? -1 : 1; // Flip Y direction
+      lastYChangeTime = Date.now(); // Reset Y timer
+      console.log(`[Bot] Changing Y direction from ${currentMovementY} to ${newYDirection}`);
+    }
+    
+    // Set new movement direction
+    currentMovementX = newXDirection;
+    currentMovementY = newYDirection;
+    
+    // Convert to direction object
+    const newDirection = getDirectionFromMovement(newXDirection, newYDirection);
+    if (newDirection) {
+      rm_currentDirection = newDirection;
+      rm_simulateKeyDown(newDirection);
+      console.log(`[Bot] New direction: ${newDirection.name || 'diagonal'}`);
+    }
+  };
+  
+  const getDirectionFromMovement = (xDir, yDir) => {
+    if (xDir === -1 && yDir === 1) return rm_ee.upLeft;    // Left + Up
+    if (xDir === 1 && yDir === 1) return rm_ee.upRight;    // Right + Up
+    if (xDir === -1 && yDir === -1) return rm_ee.downLeft; // Left + Down
+    if (xDir === 1 && yDir === -1) return rm_ee.downRight; // Right + Down
+    
+    // Fallback to single directions
+    if (xDir === -1) return rm_ee.left;
+    if (xDir === 1) return rm_ee.right;
+    if (yDir === 1) return rm_ee.up;
+    if (yDir === -1) return rm_ee.down;
+    
+    return null;
+  };
+  
+  const getRandomDiagonal = () => {
+    const diagonals = [rm_ee.upLeft, rm_ee.upRight, rm_ee.downLeft, rm_ee.downRight];
+    return diagonals[Math.floor(Math.random() * diagonals.length)];
+  };
+  
+  // ==================== MOVEMENT SIMULATION ====================
+  const rm_simulateKeyDown = (direction) => {
+    if (direction.keys) {
+      // Handle multiple keys (diagonals)
+      direction.keys.forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { keyCode: keyCode }));
+      });
+    } else {
+      // Handle single key
+      document.dispatchEvent(new KeyboardEvent("keydown", { 
+        keyCode: direction.keyCode,
+        key: direction.key 
+      }));
+    }
+  };
+  
+  const rm_simulateKeyUp = (direction) => {
+    if (direction.keys) {
+      // Handle multiple keys (diagonals)
+      direction.keys.forEach(keyCode => {
+        document.dispatchEvent(new KeyboardEvent("keyup", { keyCode: keyCode }));
+      });
+    } else {
+      // Handle single key
+      document.dispatchEvent(new KeyboardEvent("keyup", { 
+        keyCode: direction.keyCode,
+        key: direction.key 
+      }));
+    }
+  };
+  
+  // ==================== BOMB PLACEMENT ====================
+  const rm_placeBomb = () => {
+    if (!rm_firstScriptActive) return;
+    
+    // Place bomb (K key)
+    const bombKeyEvent = new KeyboardEvent("keydown", { keyCode: 75 });
+    document.dispatchEvent(bombKeyEvent);
+    
+    // Release K after short delay
+    setTimeout(() => {
+      const bombKeyReleaseEvent = new KeyboardEvent("keyup", { keyCode: 75 });
+      document.dispatchEvent(bombKeyReleaseEvent);
+    }, 100);
+  };
+  
+  const startRandomBombPlacement = () => {
+    if (!rm_firstScriptActive) return;
+    
+    const randomDelay = Math.random() * 2000 + 1000; // 1-3 seconds
+    
+    rm_bombTimeout = setTimeout(() => {
+      if (rm_firstScriptActive) {
+        rm_placeBomb();
+        startRandomBombPlacement(); // Schedule next bomb
+      }
+    }, randomDelay);
+  };
+  
+  // ==================== MAIN BOT LOGIC ====================
+  const startBot = () => {
+    if (!rm_firstScriptActive) return;
+    
+    console.log('[Bot] Starting intelligent movement...');
+    
+    // Pick a random diagonal direction
+    const initialDirection = getRandomDiagonal();
+    rm_currentDirection = initialDirection;
+    
+    // Set initial movement directions based on chosen diagonal
+    if (initialDirection === rm_ee.upLeft) {
+      currentMovementX = -1; // Left
+      currentMovementY = 1;  // Up
+    } else if (initialDirection === rm_ee.upRight) {
+      currentMovementX = 1;  // Right
+      currentMovementY = 1;  // Up  
+    } else if (initialDirection === rm_ee.downLeft) {
+      currentMovementX = -1; // Left
+      currentMovementY = -1; // Down
+    } else if (initialDirection === rm_ee.downRight) {
+      currentMovementX = 1;  // Right
+      currentMovementY = -1; // Down
+    }
+    
+    // Initialize timing
+    const currentTime = Date.now();
+    lastXChangeTime = currentTime;
+    lastYChangeTime = currentTime;
+    
+    // Initialize known coordinates if available
+    if (playerCoords.x !== '--' && playerCoords.y !== '--') {
+      lastKnownCoords.x = parseInt(playerCoords.x);
+      lastKnownCoords.y = parseInt(playerCoords.y);
+    }
+    
+    // Start movement
+    rm_simulateKeyDown(initialDirection);
+    console.log(`[Bot] Initial direction: ${initialDirection.name}`);
+    
+    // Start bomb placement
+    startRandomBombPlacement();
+    
+    // Start periodic movement checking
+    movementCheckInterval = setInterval(checkForStuckMovement, 500); // Check every 500ms
+    
+    updateUI();
+  };
+  
+  const stopBot = () => {
+    console.log('[Bot] Stopping...');
+    
+    // Clear timeouts and intervals
+    if (rm_moveTimeout) {
+      clearTimeout(rm_moveTimeout);
+      rm_moveTimeout = null;
+    }
+    
+    if (rm_bombTimeout) {
+      clearTimeout(rm_bombTimeout);
+      rm_bombTimeout = null;
+    }
+    
+    if (movementCheckInterval) {
+      clearInterval(movementCheckInterval);
+      movementCheckInterval = null;
+    }
+    
+    // Stop movement
+    if (rm_currentDirection) {
+      rm_simulateKeyUp(rm_currentDirection);
+      rm_currentDirection = null;
+    }
+    
+    // Reset movement tracking
+    currentMovementX = null;
+    currentMovementY = null;
+    lastXChangeTime = null;
+    lastYChangeTime = null;
+    lastKnownCoords = { x: null, y: null };
+    
+    updateUI();
+  };
+  
+  // ==================== CANVAS HOOKING ====================
+  const hookCanvasContext = (ctx) => {
+    if (ctx._spyAttached) return;
+    
+    const proto = Object.getPrototypeOf(ctx);
+    
+    for (const key of Object.getOwnPropertyNames(proto)) {
+      const original = ctx[key];
+      if (typeof original !== 'function') continue;
+      if (key === 'constructor') continue;
+      
+      ctx[key] = function (...args) {
+        if (!isPaused) {
+          const callSignature = `${key}(${args.map(a => stringifyArg(a)).join(", ")})`;
+          if (!loggedCalls.has(callSignature)) {
+            loggedCalls.add(callSignature);
+            
+            // Parse and update timer/coordinates data
+            parseAndUpdateData(callSignature);
+            
+            // Analyze movement if bot is active (after parsing coordinates)
+            if (rm_firstScriptActive) {
+              analyzeMovement();
+            }
+            
+            updateUI();
+          }
+        }
+        return original.apply(this, args);
+      };
+    }
+    
+    hookedContexts.add(ctx);
+    ctx._spyAttached = true;
+  };
+  
+  const stringifyArg = (arg) => {
+    if (arg instanceof HTMLImageElement) return '[HTMLImageElement]';
+    if (arg instanceof CanvasRenderingContext2D) return '[CanvasRenderingContext2D]';
+    if (arg instanceof HTMLCanvasElement) return '[Canvas]';
+    if (arg instanceof Path2D) return '[Path2D]';
+    if (typeof arg === 'object') return JSON.stringify(arg);
+    return String(arg);
+  };
+  
+  const hookAllCanvases = () => {
+    const canvases = document.querySelectorAll('canvas');
+    for (const canvas of canvases) {
+      const ctx = canvas.getContext('2d');
+      if (ctx && !ctx._spyAttached) {
+        hookCanvasContext(ctx);
+        console.log('[CanvasSpy] Hooked canvas:', canvas);
+      }
+    }
+  };
+  
+  // ==================== EVENT LISTENERS ====================
+  
+  // Bot toggle (Z/Я key)
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "z" || event.key === "Z" || event.key === "я" || event.key === "Я") {
+      rm_firstScriptActive = !rm_firstScriptActive;
+      
+      if (rm_firstScriptActive) {
+        console.log('[Bot] Enabled');
+        startBot();
+      } else {
+        console.log('[Bot] Disabled');
+        stopBot();
+      }
+      
+      updateUI();
+    }
+  });
+  
+  // UI event listeners
+  ui.spyToggle.addEventListener('click', toggleSpyPause);
+  ui.closeButton.addEventListener('click', () => {
+    // Stop bot
+    if (rm_firstScriptActive) {
+      stopBot();
+    }
+    
+    // Remove UI
+    if (ui.popup.parentNode) {
+      ui.popup.parentNode.removeChild(ui.popup);
+    }
+    
+    // Stop observer
+    if (window.intelligentBotObserver) {
+      window.intelligentBotObserver.disconnect();
+    }
+    
+    console.log('[Intelligent Bot] Stopped');
+  });
+  
+  // ==================== INITIALIZATION ====================
+  
+  // Initial canvas hook
+  hookAllCanvases();
+  
+  // Watch for new canvases
+  const observer = new MutationObserver(hookAllCanvases);
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.intelligentBotObserver = observer;
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    stopBot();
+  });
+  
+  console.log('[Intelligent Bot] Loaded and ready! Press Z/Я to toggle bot.');
+  updateUI();
+})();
