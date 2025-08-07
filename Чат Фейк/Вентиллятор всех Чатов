@@ -66,7 +66,7 @@
         container.style.cssText = `
             position: fixed;
             top: 10px;
-            right: 150px;
+            right: 350px;
             width: 280px;
             background: linear-gradient(145deg, rgba(30, 20, 20, 0.95), rgba(60, 40, 40, 0.95));
             color: #ffffff;
@@ -87,7 +87,7 @@
         header.innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #FF5722, #E64A19); border-radius: 50%; animation: pulse 2s infinite;"></div>
-                <span style="font-weight: 600; font-size: 16px;">Спам по Сервам</span>
+                <span style="font-weight: 600; font-size: 16px;">Spam Tester</span>
             </div>
         `;
         header.style.cssText = `
@@ -381,7 +381,7 @@
     async function runSpamTest() {
         const testTextInput = document.getElementById('spam-text-input');
         const testText = testTextInput ? testTextInput.value : "СЮДА ВСТАВЬ ТЕКСТ";
-        const repetitions = [10, 12, 14, 16, 18]; // Number of repetitions for each test
+        const spaceVariations = [0, 1, 2, 3, 4, 5]; // Number of spaces to add after the message
         
         // Find the input field
         const inputField = document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
@@ -401,17 +401,18 @@
             console.log(`\n--- Cycle ${cycle} ---`);
             updateStatus(`🔥 Цикл ${cycle}`);
             
-            for (let i = 0; i < repetitions.length; i++) {
+            for (let i = 0; i < spaceVariations.length; i++) {
                 if (stopSpamTest || !spamTestRunning) {
                     console.log("Spam test stopped.");
                     return;
                 }
                 
-                const count = repetitions[i];
-                const message = testText.repeat(count);
+                const spaceCount = spaceVariations[i];
+                const spaces = ' '.repeat(spaceCount);
+                const message = testText + spaces;
                 
-                console.log(`Test ${i + 1}: Pasting ${count} repetitions`);
-                updateStatus(`🔥 Тест ${i + 1}: ${count}x`);
+                console.log(`Test ${i + 1}: Message with ${spaceCount} trailing spaces`);
+                updateStatus(`🔥 Тест ${i + 1}: +${spaceCount} пробелов`);
                 
                 // Focus the input
                 inputField.focus();
@@ -435,9 +436,9 @@
                 });
                 inputField.dispatchEvent(enterEvent);
                 
-                // Wait 5 seconds before next iteration
-                console.log("Waiting 5 seconds... (Press 'q' to stop)");
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                // Wait 2 seconds before next iteration (faster than before)
+                console.log("Waiting 2 seconds... (Press 'q' to stop)");
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
             
             cycle++;
