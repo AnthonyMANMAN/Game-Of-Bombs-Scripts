@@ -32,6 +32,28 @@
         }
     });
 
+    // Function to simulate escape key press
+    function pressEscape() {
+        const escapeEvent = new KeyboardEvent('keydown', {
+            key: 'Escape',
+            code: 'Escape',
+            keyCode: 27,
+            bubbles: true
+        });
+        document.dispatchEvent(escapeEvent);
+        
+        // Also dispatch keyup for completeness
+        const escapeUpEvent = new KeyboardEvent('keyup', {
+            key: 'Escape',
+            code: 'Escape',
+            keyCode: 27,
+            bubbles: true
+        });
+        document.dispatchEvent(escapeUpEvent);
+        
+        console.log('Escape key pressed');
+    }
+
     function createUI() {
         if (uiCreated) return;
 
@@ -372,10 +394,76 @@
             if (serverNameEl && serverNameEl.textContent.trim() === serverName) {
                 if (serverEl.classList.contains('selected')) return true;
                 serverEl.click();
+                
+                // Press Escape after switching servers
+                setTimeout(() => {
+                    pressEscape();
+                }, 300); // Small delay to ensure server switch is processed
+                
                 return true;
             }
         }
         return false;
+    }
+
+    async function runSpamTestOnce() {
+        const testTextInput = document.getElementById('spam-text-input');
+        const testText = testTextInput ? testTextInput.value : "СЮДА ВСТАВЬ ТЕКСТ";
+        const spaceVariations = [0, 1, 2, 3, 4, 5]; // Number of spaces to add after the message
+        
+        // Find the input field
+        const inputField = document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
+        
+        if (!inputField) {
+            console.log("No input field found. Please click on a text input first.");
+            updateStatus('❌ Поле ввода не найдено');
+            return;
+        }
+        
+        console.log(`Starting spam test on ${currentServer}...`);
+        updateStatus(`🔥 Тестирую ${currentServer}`);
+        
+        for (let i = 0; i < spaceVariations.length; i++) {
+            if (stopSpamTest || !spamTestRunning) {
+                console.log("Spam test stopped.");
+                return;
+            }
+            
+            const spaceCount = spaceVariations[i];
+            const spaces = ' '.repeat(spaceCount);
+            const message = testText + spaces;
+            
+            console.log(`Test ${i + 1}: Message with ${spaceCount} trailing spaces on ${currentServer}`);
+            updateStatus(`🔥 ${currentServer}: +${spaceCount} пробелов`);
+            
+            // Focus the input
+            inputField.focus();
+            
+            // Clear existing content
+            inputField.value = '';
+            
+            // Add the test message
+            inputField.value = message;
+            
+            // Trigger input events
+            inputField.dispatchEvent(new Event('input', { bubbles: true }));
+            inputField.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Simulate Enter key press
+            const enterEvent = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                bubbles: true
+            });
+            inputField.dispatchEvent(enterEvent);
+            
+            // Wait 2 seconds before next iteration (faster than before)
+            console.log("Waiting 2 seconds... (Press 'q' to stop)");
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        console.log(`Spam test completed on ${currentServer}!`);
     }
 
     async function runSpamTest() {
@@ -392,7 +480,7 @@
             return;
         }
         
-        console.log("Starting spam test...");
+        console.log("Starting continuous spam test...");
         updateStatus('🔥 Запуск спам теста...');
         
         let cycle = 1;
@@ -491,7 +579,7 @@
 
                         setTimeout(async () => {
                             try {
-                                await runSpamTest();
+                                await runSpamTestOnce();
                             } catch (error) {
                                 console.error('❌ Error running spam test:', error);
                             } finally {
