@@ -1,0 +1,566 @@
+// ==UserScript==
+// @name         GoB Spam Test Script (No Telegram)
+// @namespace    http://tampermonkey.net/
+// @version      2025-08-06-spam-test
+// @description  Server cycling with spam testing for anti-spam detection
+// @author       You
+// @match        gameofbombs.com
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let currentServer = null;
+    let serverCycleInterval = null;
+    let targetServerNames = ['US', 'EU', 'RU', 'BR', 'AU', 'JP'];
+    let currentTargetIndex = 0;
+    let uiCreated = false;
+    let minimized = false;
+
+    // Spam test variables
+    let stopSpamTest = false;
+    let spamTestRunning = false;
+    let spamTestInterval = null;
+
+    // Listen for 'q' key press to stop the spam test
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'q' || event.key === 'Q') {
+            stopSpamTest = true;
+            console.log("Stop signal received. Spam test will stop after current iteration.");
+        }
+    });
+
+    function createUI() {
+        if (uiCreated) return;
+
+        const existingUI = document.getElementById('gob-spam-ui');
+        if (existingUI) existingUI.remove();
+
+        // Unified CSS styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(-100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes pulse {
+                0%, 100% { box-shadow: 0 0 15px rgba(255, 87, 34, 0.3); }
+                50% { box-shadow: 0 0 25px rgba(255, 87, 34, 0.6); }
+            }
+            .gob-ui-glass {
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+            .gob-ui-button-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Main container
+        const container = document.createElement('div');
+        container.id = 'gob-spam-ui';
+        container.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 150px;
+            width: 280px;
+            background: linear-gradient(145deg, rgba(30, 20, 20, 0.95), rgba(60, 40, 40, 0.95));
+            color: #ffffff;
+            padding: 0;
+            border-radius: 16px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 9999;
+            user-select: none;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideIn 0.3s ease-out;
+            transition: all 0.3s ease;
+        `;
+        container.classList.add('gob-ui-glass');
+
+        // Header
+        const header = document.createElement('div');
+        header.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #FF5722, #E64A19); border-radius: 50%; animation: pulse 2s infinite;"></div>
+                <span style="font-weight: 600; font-size: 16px;">Спам по Сервам</span>
+            </div>
+        `;
+        header.style.cssText = `
+            background: linear-gradient(135deg, rgba(255, 87, 34, 0.2), rgba(230, 74, 25, 0.2));
+            padding: 16px 20px;
+            border-radius: 16px 16px 0 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        `;
+        container.appendChild(header);
+
+        const contentArea = document.createElement('div');
+        contentArea.id = 'gob-content-area';
+        contentArea.style.cssText = `padding: 16px 20px;`;
+
+        // Status display
+        const status = document.createElement('div');
+        status.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease;
+        `;
+
+        const statusLabel = document.createElement('span');
+        statusLabel.textContent = 'Статус:';
+        statusLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
+
+        const statusValue = document.createElement('span');
+        statusValue.id = 'gob-status-value';
+        statusValue.textContent = '🔄 Готов к тесту';
+        statusValue.style.cssText = `
+            font-weight: 600; font-size: 11px; color: #FF5722;
+            background: rgba(255, 87, 34, 0.2); padding: 4px 8px;
+            border-radius: 6px; border: 1px solid rgba(255, 87, 34, 0.3);
+            transition: all 0.2s ease; text-shadow: 0 0 8px rgba(255, 87, 34, 0.5);
+            min-width: 100px; text-align: center;
+        `;
+
+        status.appendChild(statusLabel);
+        status.appendChild(statusValue);
+        contentArea.appendChild(status);
+
+        // Spam test configuration
+        const spamConfigSection = document.createElement('div');
+        spamConfigSection.style.cssText = `
+            margin-bottom: 12px; padding: 12px;
+            background: rgba(255, 255, 255, 0.05); border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+        const spamConfigLabel = document.createElement('div');
+        spamConfigLabel.textContent = 'Текст для спама:';
+        spamConfigLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
+
+        const spamTextInput = document.createElement('input');
+        spamTextInput.id = 'spam-text-input';
+        spamTextInput.type = 'text';
+        spamTextInput.value = 'СЮДА ВСТАВЬ ТЕКСТ';
+        spamTextInput.style.cssText = `
+            width: 100%; padding: 8px; border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px; background: rgba(0, 0, 0, 0.3); color: white;
+            font-size: 12px; margin-bottom: 8px;
+        `;
+
+        const instructionText = document.createElement('div');
+        instructionText.textContent = 'Нажми Q для остановки теста';
+        instructionText.style.cssText = `font-size: 10px; color: #888; text-align: center; font-style: italic;`;
+
+        spamConfigSection.appendChild(spamConfigLabel);
+        spamConfigSection.appendChild(spamTextInput);
+        spamConfigSection.appendChild(instructionText);
+        contentArea.appendChild(spamConfigSection);
+
+        // Server selection
+        const serverSection = document.createElement('div');
+        serverSection.style.cssText = `
+            margin-bottom: 12px; padding: 12px;
+            background: rgba(255, 255, 255, 0.05); border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+        const serverLabel = document.createElement('div');
+        serverLabel.textContent = 'Целевые серверы:';
+        serverLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
+
+        const serverCheckboxes = document.createElement('div');
+        serverCheckboxes.style.cssText = `display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;`;
+
+        ['US', 'EU', 'RU', 'BR', 'AU', 'JP'].forEach(server => {
+            const checkboxContainer = document.createElement('label');
+            checkboxContainer.style.cssText = `
+                display: flex; align-items: center; cursor: pointer; padding: 6px;
+                border-radius: 6px; transition: all 0.2s ease;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            `;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = server;
+            checkbox.checked = targetServerNames.includes(server);
+            checkbox.style.cssText = `margin-right: 6px; accent-color: #FF5722;`;
+            checkbox.addEventListener('change', updateTargetServers);
+
+            const label = document.createElement('span');
+            label.textContent = server;
+            label.style.cssText = `font-size: 12px; color: #E0E0E0; font-weight: 500;`;
+
+            checkboxContainer.appendChild(checkbox);
+            checkboxContainer.appendChild(label);
+            serverCheckboxes.appendChild(checkboxContainer);
+        });
+
+        serverSection.appendChild(serverLabel);
+        serverSection.appendChild(serverCheckboxes);
+        contentArea.appendChild(serverSection);
+
+        // Control buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;`;
+
+        const startButton = document.createElement('button');
+        startButton.id = 'gob-start-btn';
+        startButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>🔥</span><span>Начать спам тест</span>
+            </div>
+        `;
+        startButton.style.cssText = `
+            background: linear-gradient(135deg, #FF5722, #E64A19);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(255, 87, 34, 0.3);
+        `;
+        startButton.classList.add('gob-ui-button-hover');
+        startButton.onclick = startSpamTestCycle;
+
+        const stopButton = document.createElement('button');
+        stopButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>⏹️</span><span>Стоп</span>
+            </div>
+        `;
+        stopButton.style.cssText = `
+            background: linear-gradient(135deg, #607D8B, #455A64);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(96, 125, 139, 0.3);
+        `;
+        stopButton.classList.add('gob-ui-button-hover');
+        stopButton.onclick = stopAllTests;
+
+        const testCurrentButton = document.createElement('button');
+        testCurrentButton.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>🎯</span><span>Тест текущего сервера</span>
+            </div>
+        `;
+        testCurrentButton.style.cssText = `
+            background: linear-gradient(135deg, #9C27B0, #7B1FA2);
+            color: white; border: none; border-radius: 10px; padding: 12px 16px;
+            cursor: pointer; font-weight: 600; font-size: 13px;
+            transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3);
+        `;
+        testCurrentButton.classList.add('gob-ui-button-hover');
+        testCurrentButton.onclick = testCurrentServerSpam;
+
+        buttonContainer.appendChild(startButton);
+        buttonContainer.appendChild(stopButton);
+        buttonContainer.appendChild(testCurrentButton);
+        contentArea.appendChild(buttonContainer);
+
+        container.appendChild(contentArea);
+
+        // Minimize/maximize button
+        const toggleButton = document.createElement('button');
+        toggleButton.innerHTML = '−';
+        toggleButton.style.cssText = `
+            position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
+            background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%; color: #ffffff; font-size: 16px; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s ease; backdrop-filter: blur(10px);
+        `;
+
+        toggleButton.addEventListener('click', () => {
+            minimized = !minimized;
+            const contentArea = document.getElementById('gob-content-area');
+
+            if (contentArea) {
+                if (minimized) {
+                    contentArea.style.display = 'none';
+                    container.style.width = '200px';
+                    toggleButton.innerHTML = '+';
+                } else {
+                    contentArea.style.display = 'block';
+                    container.style.width = '280px';
+                    toggleButton.innerHTML = '−';
+                }
+            }
+        });
+
+        container.appendChild(toggleButton);
+        document.body.appendChild(container);
+        uiCreated = true;
+
+        console.log('🔥 Spam Tester UI created');
+    }
+
+    function updateStatus(message = null) {
+        const statusEl = document.getElementById('gob-status-value');
+        if (!statusEl) return;
+
+        if (message) {
+            statusEl.textContent = message;
+        } else {
+            if (spamTestRunning) {
+                const cyclingStatus = serverCycleInterval ? '🔥 Циклит + Спамит' : '🎯 Спамит текущий';
+                statusEl.textContent = cyclingStatus;
+                statusEl.style.color = '#FF5722';
+            } else {
+                const cyclingStatus = serverCycleInterval ? '🔄 Циклируется' : '⏸️ Остановлено';
+                statusEl.textContent = cyclingStatus;
+                statusEl.style.color = serverCycleInterval ? '#FF9800' : '#607D8B';
+            }
+        }
+    }
+
+    function updateTargetServers() {
+        const checkboxes = document.querySelectorAll('#gob-spam-ui input[type="checkbox"]');
+        targetServerNames = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+        updateStatus();
+    }
+
+    function getCurrentServer() {
+        const selectedServer = document.querySelector('#server-select .server-list li.selected h2');
+        if (selectedServer) return selectedServer.textContent.trim().toUpperCase();
+
+        const serverButton = document.querySelector('.butt_left_menu.ng-binding .colorRed');
+        if (serverButton) return serverButton.textContent.trim().toUpperCase();
+
+        return 'Неизвестный';
+    }
+
+    function getAvailableServers() {
+        const serverElements = document.querySelectorAll('#server-select .server-list li:not(.down)');
+        return Array.from(serverElements).map(el => {
+            const nameEl = el.querySelector('h2');
+            return nameEl ? nameEl.textContent.trim() : null;
+        }).filter(name => name !== null && name !== 'DEV');
+    }
+
+    function getNextTargetServer() {
+        const availableServers = getAvailableServers();
+        const currentServer = getCurrentServer();
+
+        let attempts = 0;
+        while (attempts < targetServerNames.length) {
+            const targetServer = targetServerNames[currentTargetIndex];
+            currentTargetIndex = (currentTargetIndex + 1) % targetServerNames.length;
+
+            if (availableServers.includes(targetServer) && targetServer !== currentServer) {
+                return targetServer;
+            }
+            attempts++;
+        }
+
+        const otherServers = availableServers.filter(server => server !== currentServer);
+        return otherServers.length > 0 ? otherServers[0] : null;
+    }
+
+    function switchToServer(serverName) {
+        const serverElements = document.querySelectorAll('#server-select .server-list li:not(.down)');
+        for (const serverEl of serverElements) {
+            const serverNameEl = serverEl.querySelector('h2');
+            if (serverNameEl && serverNameEl.textContent.trim() === serverName) {
+                if (serverEl.classList.contains('selected')) return true;
+                serverEl.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async function runSpamTest() {
+        const testTextInput = document.getElementById('spam-text-input');
+        const testText = testTextInput ? testTextInput.value : "СЮДА ВСТАВЬ ТЕКСТ";
+        const repetitions = [10, 12, 14, 16, 18]; // Number of repetitions for each test
+        
+        // Find the input field
+        const inputField = document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
+        
+        if (!inputField) {
+            console.log("No input field found. Please click on a text input first.");
+            updateStatus('❌ Поле ввода не найдено');
+            return;
+        }
+        
+        console.log("Starting spam test...");
+        updateStatus('🔥 Запуск спам теста...');
+        
+        let cycle = 1;
+        
+        while (!stopSpamTest && spamTestRunning) {
+            console.log(`\n--- Cycle ${cycle} ---`);
+            updateStatus(`🔥 Цикл ${cycle}`);
+            
+            for (let i = 0; i < repetitions.length; i++) {
+                if (stopSpamTest || !spamTestRunning) {
+                    console.log("Spam test stopped.");
+                    return;
+                }
+                
+                const count = repetitions[i];
+                const message = testText.repeat(count);
+                
+                console.log(`Test ${i + 1}: Pasting ${count} repetitions`);
+                updateStatus(`🔥 Тест ${i + 1}: ${count}x`);
+                
+                // Focus the input
+                inputField.focus();
+                
+                // Clear existing content
+                inputField.value = '';
+                
+                // Add the test message
+                inputField.value = message;
+                
+                // Trigger input events
+                inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                inputField.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                // Simulate Enter key press
+                const enterEvent = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    bubbles: true
+                });
+                inputField.dispatchEvent(enterEvent);
+                
+                // Wait 5 seconds before next iteration
+                console.log("Waiting 5 seconds... (Press 'q' to stop)");
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            
+            cycle++;
+        }
+        
+        console.log("Spam test completed or stopped!");
+        updateStatus('✅ Тест завершен');
+    }
+
+    function startSpamTestCycle() {
+        if (serverCycleInterval || spamTestRunning) {
+            stopAllTests();
+            return;
+        }
+
+        const availableServers = getAvailableServers();
+        if (availableServers.length === 0 || targetServerNames.length === 0) {
+            updateStatus('❌ Нет доступных серверов');
+            return;
+        }
+
+        spamTestRunning = true;
+        stopSpamTest = false;
+
+        const startBtn = document.getElementById('gob-start-btn');
+        if (startBtn) {
+            startBtn.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>⏸️</span><span>Остановить тест</span>
+                </div>
+            `;
+        }
+
+        let isProcessing = false;
+
+        // Start server cycling
+        serverCycleInterval = setInterval(async () => {
+            if (isProcessing || !spamTestRunning) return;
+
+            const targetServer = getNextTargetServer();
+
+            if (targetServer && switchToServer(targetServer)) {
+                isProcessing = true;
+
+                setTimeout(async () => {
+                    const newServer = getCurrentServer();
+                    if (newServer !== currentServer) {
+                        currentServer = newServer;
+                        updateStatus(`🔄 Переключено на ${currentServer}`);
+
+                        setTimeout(async () => {
+                            try {
+                                await runSpamTest();
+                            } catch (error) {
+                                console.error('❌ Error running spam test:', error);
+                            } finally {
+                                isProcessing = false;
+                            }
+                        }, 1500);
+                    } else {
+                        isProcessing = false;
+                    }
+                }, 1500);
+            }
+        }, 500);
+
+        updateStatus();
+    }
+
+    function testCurrentServerSpam() {
+        if (spamTestRunning) {
+            stopAllTests();
+            return;
+        }
+
+        spamTestRunning = true;
+        stopSpamTest = false;
+        currentServer = getCurrentServer();
+        
+        updateStatus(`🎯 Тестирую ${currentServer}`);
+        runSpamTest();
+    }
+
+    function stopAllTests() {
+        stopSpamTest = true;
+        spamTestRunning = false;
+        
+        if (serverCycleInterval) {
+            clearInterval(serverCycleInterval);
+            serverCycleInterval = null;
+        }
+
+        const startBtn = document.getElementById('gob-start-btn');
+        if (startBtn) {
+            startBtn.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>🔥</span><span>Начать спам тест</span>
+                </div>
+            `;
+        }
+
+        updateStatus('⏹️ Все тесты остановлены');
+    }
+
+    function init() {
+        console.log('🔥 Spam Tester loaded');
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => {
+                    createUI();
+                    currentServer = getCurrentServer();
+                    updateStatus();
+                }, 3000);
+            });
+        } else {
+            setTimeout(() => {
+                createUI();
+                currentServer = getCurrentServer();
+                updateStatus();
+            }, 3000);
+        }
+    }
+
+    init();
+})();
