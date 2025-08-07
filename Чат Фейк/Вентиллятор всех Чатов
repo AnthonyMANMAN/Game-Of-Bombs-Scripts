@@ -388,22 +388,51 @@
     }
 
     function switchToServer(serverName) {
-        const serverElements = document.querySelectorAll('#server-select .server-list li:not(.down)');
-        for (const serverEl of serverElements) {
-            const serverNameEl = serverEl.querySelector('h2');
-            if (serverNameEl && serverNameEl.textContent.trim() === serverName) {
-                if (serverEl.classList.contains('selected')) return true;
-                serverEl.click();
-                
-                // Press Escape after switching servers
-                setTimeout(() => {
-                    pressEscape();
-                }, 300); // Small delay to ensure server switch is processed
-                
-                return true;
-            }
+        // First, click the server dropdown button to open the server selection
+        const serverButton = document.querySelector('.butt_left_menu.ng-binding[dropdown-toggle]');
+        if (!serverButton) {
+            console.log('Server dropdown button not found');
+            return false;
         }
-        return false;
+        
+        // Check if we're already on the target server
+        const currentServerSpan = serverButton.querySelector('.colorRed');
+        if (currentServerSpan && currentServerSpan.textContent.trim() === serverName) {
+            console.log(`Already on server ${serverName}`);
+            return true;
+        }
+        
+        // Click to open the dropdown
+        serverButton.click();
+        
+        // Wait a bit for the dropdown to open, then select the server
+        setTimeout(() => {
+            const serverElements = document.querySelectorAll('#server-select .server-list li:not(.down)');
+            for (const serverEl of serverElements) {
+                const serverNameEl = serverEl.querySelector('h2');
+                if (serverNameEl && serverNameEl.textContent.trim() === serverName) {
+                    if (serverEl.classList.contains('selected')) {
+                        // Press Escape to close the dropdown
+                        pressEscape();
+                        return true;
+                    }
+                    serverEl.click();
+                    
+                    // Press Escape after switching servers to close any remaining menus
+                    setTimeout(() => {
+                        pressEscape();
+                    }, 300);
+                    
+                    return true;
+                }
+            }
+            
+            // If server not found, close the dropdown
+            pressEscape();
+            return false;
+        }, 200);
+        
+        return true; // Return true immediately since we're handling the async operation
     }
 
     async function runSpamTestOnce() {
