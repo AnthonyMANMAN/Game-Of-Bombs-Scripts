@@ -33,7 +33,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 const label = document.createElement('span');
-label.textContent = 'K Key: OFF';
+label.textContent = 'Бита: OFF';
 
 toggle.appendChild(checkbox);
 toggle.appendChild(label);
@@ -47,7 +47,7 @@ let preventKKeyUp = null;
 function toggleKStick() {
     if (!kStuck) {
         preventKKeyUp = function(event) {
-            if (event.key.toLowerCase() === 'k') {
+            if (event.key.toLowerCase() === 'k') ||(event.key.toLowerCase() === 'л') {
                 event.preventDefault();
                 event.stopPropagation();
             }
