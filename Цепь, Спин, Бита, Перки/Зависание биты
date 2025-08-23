@@ -1,3 +1,39 @@
+// K-stick toggle with Russian UI
+// Supports both Latin and Cyrillic keyboards
+
+// Enhanced key detection for multiple keyboard layouts
+function isKKey(event) {
+    const key = event.key.toLowerCase();
+    const code = event.code.toLowerCase();
+    
+    // Latin K
+    if (key === 'k' || code === 'keyk') return true;
+    
+    // Cyrillic Л (appears as 'k' position on Russian keyboard)
+    if (key === 'л' || code === 'keyk') return true;
+    
+    // Handle different keyboard layouts
+    if (event.code === 'KeyK') return true;
+    
+    return false;
+}
+
+function isLKey(event) {
+    const key = event.key.toLowerCase();
+    const code = event.code.toLowerCase();
+    
+    // Latin L
+    if (key === 'l' || code === 'keyl') return true;
+    
+    // Cyrillic Д (appears as 'l' position on Russian keyboard)
+    if (key === 'д' || code === 'keyl') return true;
+    
+    // Handle different keyboard layouts
+    if (event.code === 'KeyL') return true;
+    
+    return false;
+}
+
 // Create UI overlay
 const ui = document.createElement('div');
 ui.style.cssText = `
@@ -5,6 +41,7 @@ ui.style.cssText = `
     background: rgba(0,0,0,0.8); color: white; padding: 15px;
     border-radius: 8px; font-family: monospace; font-size: 14px;
     border: 2px solid #444; backdrop-filter: blur(10px);
+    min-width: 180px; user-select: none;
 `;
 
 const toggle = document.createElement('label');
@@ -33,8 +70,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 const label = document.createElement('span');
-label.textContent = 'Бита: OFF';
-
+label.textContent = 'K Клавиша: ВЫКЛ';
 toggle.appendChild(checkbox);
 toggle.appendChild(label);
 ui.appendChild(toggle);
@@ -47,37 +83,38 @@ let preventKKeyUp = null;
 function toggleKStick() {
     if (!kStuck) {
         preventKKeyUp = function(event) {
-            if (event.key.toLowerCase() === 'k') ||(event.key.toLowerCase() === 'л') {
+            if (isKKey(event)) {
                 event.preventDefault();
                 event.stopPropagation();
             }
         };
         document.addEventListener('keyup', preventKKeyUp, true);
         kStuck = true;
-        label.textContent = 'K Key: STUCK';
+        label.textContent = 'K Клавиша: ЗАБЛОК';
         label.style.color = '#ff4444';
+        checkbox.checked = true;
     } else {
         if (preventKKeyUp) {
             document.removeEventListener('keyup', preventKKeyUp, true);
             preventKKeyUp = null;
         }
         kStuck = false;
-        label.textContent = 'K Key: OFF';
+        label.textContent = 'K Клавиша: ВЫКЛ';
         label.style.color = 'white';
+        checkbox.checked = false;
     }
 }
 
 checkbox.addEventListener('change', toggleKStick);
 
-// L key still works
+// L/Д key still works for toggle
 document.addEventListener('keydown', function(e) {
-    if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (isLKey(e) && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
             e.preventDefault();
-            checkbox.checked = !checkbox.checked;
             toggleKStick();
         }
     }
 });
 
-console.log('✅ K-stick toggle UI loaded! Press L or use the toggle in top-right.');
+console.log('✅ K-блокировщик загружен! Нажмите L/Д или используйте переключатель справа вверху.');
