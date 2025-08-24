@@ -52,7 +52,7 @@ observer.observe(document.body, { childList: true, subtree: true });
 
 // Toggle FOV
 document.addEventListener('keydown', function(e) {
-    if (e.key.toLowerCase() === 'q') {
+    if (e.key.toLowerCase() === 'q' || e.key.toLowerCase() === 'й') {
         e.preventDefault();
         e.stopImmediatePropagation();
         
