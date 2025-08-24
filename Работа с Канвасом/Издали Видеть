@@ -1,0 +1,62 @@
+// Hook all canvas contexts and modify their scale calls
+let largeFOV = false;
+const scaleMultiplier = 0.7; // Adjust this value as needed
+
+// Function to hook a specific canvas context
+function hookContext(ctx) {
+    if (ctx._fovHooked) return; // Already hooked
+    
+    const originalScale = ctx.scale;
+    const originalSetTransform = ctx.setTransform;
+    const originalTransform = ctx.transform;
+    
+    ctx.scale = function(x, y) {
+        if (largeFOV) {
+            return originalScale.call(this, x * scaleMultiplier, y * scaleMultiplier);
+        }
+        return originalScale.call(this, x, y);
+    };
+    
+    ctx.setTransform = function(a, b, c, d, e, f) {
+        if (largeFOV) {
+            return originalSetTransform.call(this, a * scaleMultiplier, b * scaleMultiplier, c * scaleMultiplier, d * scaleMultiplier, e, f);
+        }
+        return originalSetTransform.call(this, a, b, c, d, e, f);
+    };
+    
+    ctx.transform = function(a, b, c, d, e, f) {
+        if (largeFOV) {
+            return originalTransform.call(this, a * scaleMultiplier, b * scaleMultiplier, c * scaleMultiplier, d * scaleMultiplier, e, f);
+        }
+        return originalTransform.call(this, a, b, c, d, e, f);
+    };
+    
+    ctx._fovHooked = true;
+    console.log('Hooked canvas context for FOV');
+}
+
+// Hook all existing canvases
+document.querySelectorAll('canvas').forEach(canvas => {
+    const ctx = canvas.getContext('2d');
+    if (ctx) hookContext(ctx);
+});
+
+// Hook future canvases
+const observer = new MutationObserver(() => {
+    document.querySelectorAll('canvas').forEach(canvas => {
+        const ctx = canvas.getContext('2d');
+        if (ctx) hookContext(ctx);
+    });
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+// Toggle FOV
+document.addEventListener('keydown', function(e) {
+    if (e.key.toLowerCase() === 'q') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        
+        largeFOV = !largeFOV;
+        console.log('FOV toggled:', largeFOV ? 'Large' : 'Normal');
+    }
+}, true);
