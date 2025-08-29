@@ -438,7 +438,7 @@
     async function runSpamTestOnce() {
         const testTextInput = document.getElementById('spam-text-input');
         const testText = testTextInput ? testTextInput.value : "СЮДА ВСТАВЬ ТЕКСТ";
-        const spaceVariations = [0, 1, 2, 3, 4, 5]; // Number of spaces to add after the message
+        const spaceVariations = Array.from({length: 21}, (_, i) => i); // 0 to 20 spaces
         
         // Find the input field
         const inputField = document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
@@ -462,7 +462,7 @@
             const spaces = ' '.repeat(spaceCount);
             const message = testText + spaces;
             
-            console.log(`Test ${i + 1}: Message with ${spaceCount} trailing spaces on ${currentServer}`);
+            console.log(`Test ${i + 1}/21: Message with ${spaceCount} trailing spaces on ${currentServer}`);
             updateStatus(`🔥 ${currentServer}: +${spaceCount} пробелов`);
             
             // Focus the input
@@ -498,7 +498,7 @@
     async function runSpamTest() {
         const testTextInput = document.getElementById('spam-text-input');
         const testText = testTextInput ? testTextInput.value : "СЮДА ВСТАВЬ ТЕКСТ";
-        const spaceVariations = [0, 1, 2, 3, 4, 5]; // Number of spaces to add after the message
+        const spaceVariations = Array.from({length: 21}, (_, i) => i); // 0 to 20 spaces
         
         // Find the input field
         const inputField = document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
@@ -528,7 +528,7 @@
                 const spaces = ' '.repeat(spaceCount);
                 const message = testText + spaces;
                 
-                console.log(`Test ${i + 1}: Message with ${spaceCount} trailing spaces`);
+                console.log(`Test ${i + 1}/21: Message with ${spaceCount} trailing spaces`);
                 updateStatus(`🔥 Тест ${i + 1}: +${spaceCount} пробелов`);
                 
                 // Focus the input
