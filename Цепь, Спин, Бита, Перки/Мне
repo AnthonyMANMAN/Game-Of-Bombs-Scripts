@@ -116,7 +116,7 @@ function autoChain_toggle() {
 }
 
 // K-Stick Functions
-function toggleKStick() {
+function kStick_toggle() {
     if (!kStuck) {
         preventKKeyUp = function(event) {
             if (isKKey(event)) {
@@ -158,7 +158,7 @@ document.addEventListener("keydown", (event) => {
     if (isLKey(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
         if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
             event.preventDefault();
-            toggleKStick();
+            kStick_toggle();
         }
     }
 });
@@ -178,7 +178,7 @@ window.toggleAutoChain = function() {
 };
 
 window.toggleKStick = function() {
-    toggleKStick();
+    kStick_toggle();
     return `K-Stick is now ${kStuck ? 'BLOCKED' : 'UNBLOCKED'}`;
 };
 
