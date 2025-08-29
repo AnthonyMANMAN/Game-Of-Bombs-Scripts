@@ -37,7 +37,7 @@ function isLKey(event) {
 // Create UI overlay
 const ui = document.createElement('div');
 ui.style.cssText = `
-    position: fixed; top: 20px; right: 20px; z-index: 10000;
+    position: fixed; top: 220px; right: 20px; z-index: 10000;
     background: rgba(0,0,0,0.8); color: white; padding: 15px;
     border-radius: 8px; font-family: monospace; font-size: 14px;
     border: 2px solid #444; backdrop-filter: blur(10px);
