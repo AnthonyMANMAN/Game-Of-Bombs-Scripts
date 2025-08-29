@@ -1,0 +1,197 @@
+/**
+ * Combined Auto Chain + K-Stick Script (No UI)
+ * Auto Chain: Press 'J' (or 'О' in Russian layout) to toggle bomb placement automation
+ * K-Stick: Press 'L' (or 'Д' in Russian layout) to toggle K key blocking
+ */
+
+// Global state variables for Auto Chain
+let autoChain_active = false;
+let autoChain_interval = null;
+
+// Global state variables for K-Stick
+let kStuck = false;
+let preventKKeyUp = null;
+
+// Logging function
+function logActivity(message) {
+    console.log(`[Combined Script] ${message}`);
+}
+
+// Enhanced key detection for multiple keyboard layouts
+function isKKey(event) {
+    const key = event.key.toLowerCase();
+    const code = event.code.toLowerCase();
+    
+    // Latin K
+    if (key === 'k' || code === 'keyk') return true;
+    
+    // Cyrillic Л (appears as 'k' position on Russian keyboard)
+    if (key === 'л' || code === 'keyk') return true;
+    
+    // Handle different keyboard layouts
+    if (event.code === 'KeyK') return true;
+    
+    return false;
+}
+
+function isLKey(event) {
+    const key = event.key.toLowerCase();
+    const code = event.code.toLowerCase();
+    
+    // Latin L
+    if (key === 'l' || code === 'keyl') return true;
+    
+    // Cyrillic Д (appears as 'l' position on Russian keyboard)
+    if (key === 'д' || code === 'keyl') return true;
+    
+    // Handle different keyboard layouts
+    if (event.code === 'KeyL') return true;
+    
+    return false;
+}
+
+function isJKey(event) {
+    const key = event.key.toLowerCase();
+    
+    // Latin J or Cyrillic О (Russian layout equivalent)
+    if (key === 'j' || key === 'о') return true;
+    
+    return false;
+}
+
+// Auto Chain Functions
+function autoChain_startSpamming() {
+    // Stop any existing interval
+    autoChain_stopSpamming();
+    
+    // Start rapid bomb placement
+    autoChain_interval = setInterval(() => {
+        if (autoChain_active) {
+            // Simulate K keypress (bomb key)
+            const keydownEvent = new KeyboardEvent("keydown", { 
+                keyCode: 75, 
+                key: "k",
+                code: "KeyK",
+                bubbles: true 
+            });
+            
+            const keyupEvent = new KeyboardEvent("keyup", { 
+                keyCode: 75, 
+                key: "k",
+                code: "KeyK",
+                bubbles: true 
+            });
+            
+            // Dispatch events
+            document.dispatchEvent(keydownEvent);
+            
+            // Quick release for rapid fire
+            setTimeout(() => {
+                document.dispatchEvent(keyupEvent);
+            }, 10);
+        }
+    }, 20); // 50 bombs per second
+    
+    logActivity("Auto Chain: Bomb spamming started (50/sec)");
+}
+
+function autoChain_stopSpamming() {
+    if (autoChain_interval) {
+        clearInterval(autoChain_interval);
+        autoChain_interval = null;
+        logActivity("Auto Chain: Bomb spamming stopped");
+    }
+}
+
+function autoChain_toggle() {
+    autoChain_active = !autoChain_active;
+    
+    if (autoChain_active) {
+        logActivity("Auto Chain: ACTIVATED");
+        autoChain_startSpamming();
+    } else {
+        logActivity("Auto Chain: DEACTIVATED");
+        autoChain_stopSpamming();
+    }
+}
+
+// K-Stick Functions
+function toggleKStick() {
+    if (!kStuck) {
+        preventKKeyUp = function(event) {
+            if (isKKey(event)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+        document.addEventListener('keyup', preventKKeyUp, true);
+        kStuck = true;
+        logActivity("K-Stick: K key BLOCKED");
+    } else {
+        if (preventKKeyUp) {
+            document.removeEventListener('keyup', preventKKeyUp, true);
+            preventKKeyUp = null;
+        }
+        kStuck = false;
+        logActivity("K-Stick: K key UNBLOCKED");
+    }
+}
+
+// Combined keyboard event listener
+document.addEventListener("keydown", (event) => {
+    // Auto Chain toggle - J key (English) or О key (Russian layout)
+    if (isJKey(event)) {
+        // Only toggle on initial press, ignore repeats
+        if (!event.repeat) {
+            autoChain_toggle();
+        }
+        
+        // Prevent default if not in input field
+        if (document.activeElement.tagName !== "INPUT" && 
+            document.activeElement.tagName !== "TEXTAREA" &&
+            !document.activeElement.isContentEditable) {
+            event.preventDefault();
+        }
+    }
+    
+    // K-Stick toggle - L/Д key
+    if (isLKey(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+            event.preventDefault();
+            toggleKStick();
+        }
+    }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    autoChain_stopSpamming();
+    if (preventKKeyUp) {
+        document.removeEventListener('keyup', preventKKeyUp, true);
+    }
+});
+
+// Global functions for manual control
+window.toggleAutoChain = function() {
+    autoChain_toggle();
+    return `Auto Chain is now ${autoChain_active ? 'ON' : 'OFF'}`;
+};
+
+window.toggleKStick = function() {
+    toggleKStick();
+    return `K-Stick is now ${kStuck ? 'BLOCKED' : 'UNBLOCKED'}`;
+};
+
+window.getStatus = function() {
+    return {
+        autoChain: autoChain_active ? 'ON' : 'OFF',
+        kStick: kStuck ? 'BLOCKED' : 'UNBLOCKED'
+    };
+};
+
+// Success message
+console.log('✅ Combined Script loaded successfully!');
+console.log('📋 Controls:');
+console.log('   • Press J/О to toggle Auto Chain (bomb spamming)');
+console.log('   • Press L/Д to toggle K-Stick (K key blocking)');
+console.log('🔧 Manual functions: toggleAutoChain(), toggleKStick(), getStatus()');
