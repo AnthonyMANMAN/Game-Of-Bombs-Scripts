@@ -1,49 +1,103 @@
 const scoreboard = document.getElementById("scoreboard-new");
 let respawnTimer = null;
 let movementTimer = null;
+let isScriptActive = true; // Track if script is active
+let ii = null; // Store interval reference
 
-let ii = setInterval(() => {
-    if (scoreboard.offsetParent === null) {
-        // not visible
-        return;
-    }
+// Function to start the script
+function startScript() {
+    if (ii) return; // Already running
     
-    const respawnButton = [...document.getElementsByTagName("button")]
-        .filter(b => b.innerText.indexOf("Respawn [Space]") === 0)[0];
-    
-    if (respawnButton) {
-        // Clear any existing timers
-        if (respawnTimer) clearTimeout(respawnTimer);
-        if (movementTimer) clearTimeout(movementTimer);
+    ii = setInterval(() => {
+        if (!isScriptActive) return; // Skip if script is disabled
         
-        // Click the respawn button
-        respawnButton.click();
+        if (scoreboard.offsetParent === null) {
+            // not visible
+            return;
+        }
         
-        // Set timer for movement sequence
-        respawnTimer = setTimeout(() => {
-            console.log("Executing movement sequence");
+        const respawnButton = [...document.getElementsByTagName("button")]
+            .filter(b => b.innerText.indexOf("Respawn [Space]") === 0)[0];
+        
+        if (respawnButton) {
+            // Clear any existing timers
+            if (respawnTimer) clearTimeout(respawnTimer);
+            if (movementTimer) clearTimeout(movementTimer);
             
-            // Simulate left keypress
-            const leftKeyDown = new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37 });
-            document.dispatchEvent(leftKeyDown);
+            // Click the respawn button
+            respawnButton.click();
             
-            // Release left key after 200ms
-            setTimeout(() => {
-                const leftKeyUp = new KeyboardEvent('keyup', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37 });
-                document.dispatchEvent(leftKeyUp);
+            // Set timer for movement sequence
+            respawnTimer = setTimeout(() => {
+                if (!isScriptActive) return; // Check again before executing movement
                 
-                // Simulate right keypress after left completes
+                console.log("Executing movement sequence");
+                
+                // Simulate left keypress
+                const leftKeyDown = new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37 });
+                document.dispatchEvent(leftKeyDown);
+                
+                // Release left key after 200ms
                 setTimeout(() => {
-                    const rightKeyDown = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 });
-                    document.dispatchEvent(rightKeyDown);
+                    if (!isScriptActive) return;
                     
-                    // Release right key after 200ms
+                    const leftKeyUp = new KeyboardEvent('keyup', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37 });
+                    document.dispatchEvent(leftKeyUp);
+                    
+                    // Simulate right keypress after left completes
                     setTimeout(() => {
-                        const rightKeyUp = new KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 });
-                        document.dispatchEvent(rightKeyUp);
+                        if (!isScriptActive) return;
+                        
+                        const rightKeyDown = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 });
+                        document.dispatchEvent(rightKeyDown);
+                        
+                        // Release right key after 200ms
+                        setTimeout(() => {
+                            if (!isScriptActive) return;
+                            
+                            const rightKeyUp = new KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 });
+                            document.dispatchEvent(rightKeyUp);
+                        }, 50);
                     }, 50);
                 }, 50);
-            }, 50);
-        }, 3000); // 3 seconds after respawn
+            }, 3000); // 3 seconds after respawn
+        }
+    }, 100);
+}
+
+// Function to stop the script
+function stopScript() {
+    if (ii) {
+        clearInterval(ii);
+        ii = null;
     }
-}, 100);
+    
+    // Clear any pending timers
+    if (respawnTimer) {
+        clearTimeout(respawnTimer);
+        respawnTimer = null;
+    }
+    if (movementTimer) {
+        clearTimeout(movementTimer);
+        movementTimer = null;
+    }
+}
+
+// Toggle script on/off with 'z' key
+document.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() === 'z') {
+        isScriptActive = !isScriptActive;
+        
+        if (isScriptActive) {
+            console.log("Auto-respawn script ENABLED");
+            startScript();
+        } else {
+            console.log("Auto-respawn script DISABLED");
+            stopScript();
+        }
+    }
+});
+
+// Start the script initially
+console.log("Auto-respawn script loaded. Press 'Z' to toggle on/off. Currently: ENABLED");
+startScript();
