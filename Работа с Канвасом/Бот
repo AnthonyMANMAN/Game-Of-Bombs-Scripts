@@ -22,7 +22,7 @@
     }
   };
   
-  const STUCK_THRESHOLD = 3000;
+  const STUCK_THRESHOLD = 1000;
   
   // ==================== MOVEMENT KEYS ====================
   const keys = {
