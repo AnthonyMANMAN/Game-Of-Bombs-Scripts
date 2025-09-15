@@ -1,434 +1,312 @@
 // ==UserScript==
-// @name         Intelligent Bot
+// @name         Intelligent Bot - Game of Bombs
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Intelligent bot with canvas spy, movement AI, and cache clearing
+// @version      1.1
+// @description  Intelligent bot with canvas spy, movement AI, and cache clearing for Game of Bombs
 // @author       You
-// @match        *://*/*
+// @match        https://gameofbombs.com/*
+// @match        https://*.gameofbombs.com/*
+// @match        http://gameofbombs.com/*
+// @match        http://*.gameofbombs.com/*
 // @grant        none
-// @run-at       document-idle
+// @run-at       document-end
 // ==/UserScript==
 
 (function() {
     'use strict';
     
-    // ==================== CORE STATE ====================
-    const state = {
-        spy: {
-            paused: false,
-            loggedCalls: new Set(),
-            hookedContexts: new Set()
-        },
-        game: {
-            timer: '--:--',
-            coords: { x: '--', y: '--' },
-            lastKnownCoords: { x: null, y: null }
-        },
-        bot: {
-            active: false,
-            currentDirection: null,
-            movementX: null,
-            movementY: null,
-            timeouts: { move: null, bomb: null },
-            intervals: { check: null },
-            lastChangeTime: { x: null, y: null }
-        }
-    };
+    console.log('[Bot] Script loading...');
     
-    const STUCK_THRESHOLD = 1500; // Reduced from 3000ms to 1500ms
-    
-    // ==================== MOVEMENT KEYS ====================
-    const keys = {
-        up: { code: 87, key: "w" },
-        left: { code: 65, key: "a" },
-        down: { code: 83, key: "s" },
-        right: { code: 68, key: "d" },
-        upLeft: { codes: [87, 65], name: "up-left" },
-        upRight: { codes: [87, 68], name: "up-right" },
-        downLeft: { codes: [83, 65], name: "down-left" },
-        downRight: { codes: [83, 68], name: "down-right" }
-    };
-    
-    // ==================== UI CREATION ====================
-    const createUI = () => {
+    // Force create UI immediately
+    const forceCreateUI = () => {
+        console.log('[Bot] Force creating UI...');
+        
+        // Remove any existing UI
+        const existing = document.getElementById('game-bot-ui');
+        if (existing) existing.remove();
+        
+        // Create simple, visible UI
         const ui = document.createElement('div');
-        ui.id = 'bot-ui';
+        ui.id = 'game-bot-ui';
         ui.innerHTML = `
-            <div style="position:fixed;top:20px;right:20px;background:#2d3748;color:white;padding:12px 16px;border-radius:8px;font:12px monospace;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:10000;min-width:220px;user-select:none">
-                <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #4a5568;padding-bottom:8px;margin-bottom:8px">
-                    <span style="color:#68d391;font-weight:bold">Intelligent Bot</span>
-                    <button id="close-btn" style="background:#e53e3e;color:white;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font:bold 14px monospace">×</button>
+            <div id="bot-panel" style="
+                position: fixed !important;
+                top: 10px !important;
+                right: 10px !important;
+                width: 250px !important;
+                background: #1a1a1a !important;
+                color: #fff !important;
+                border: 3px solid #00ff00 !important;
+                border-radius: 10px !important;
+                padding: 15px !important;
+                font: bold 14px Arial, sans-serif !important;
+                z-index: 999999 !important;
+                box-shadow: 0 0 20px rgba(0,255,0,0.5) !important;
+                user-select: none !important;
+                cursor: move !important;
+            ">
+                <div style="text-align: center; color: #00ff00; font-size: 16px; margin-bottom: 10px;">
+                    🎮 GAME BOT ACTIVE 🎮
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                    <span style="color:#a0aec0">Canvas Spy:</span>
-                    <div>
-                        <span id="spy-status" style="color:#48bb78;font-weight:bold">Running</span>
-                        <button id="spy-toggle" style="background:#4299e1;color:white;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font:10px monospace;margin-left:8px">Pause</button>
-                    </div>
+                <div style="margin: 5px 0;">
+                    Bot Status: <span id="bot-status" style="color: #ff4444;">OFF</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                    <span style="color:#a0aec0">Bot (Z):</span>
-                    <span id="bot-status" style="color:#F44336;font-weight:bold">OFF</span>
+                <div style="margin: 5px 0;">
+                    Position: <span id="pos-display">--,--</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;border-top:1px solid #4a5568;padding-top:8px">
-                    <span style="color:#a0aec0">Timer:</span>
-                    <span id="timer-val" style="color:#68d391;font-weight:bold">--:--</span>
+                <div style="margin: 5px 0;">
+                    Timer: <span id="timer-display">--:--</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                    <span style="color:#a0aec0">Position:</span>
-                    <span id="coords-val" style="color:#63b3ed;font-weight:bold">x:--, y:--</span>
+                <div style="margin: 10px 0; text-align: center;">
+                    <button id="toggle-bot" style="
+                        background: #ff4444; 
+                        color: white; 
+                        border: none; 
+                        padding: 8px 16px; 
+                        border-radius: 5px; 
+                        cursor: pointer;
+                        font-weight: bold;
+                    ">START BOT (Z)</button>
                 </div>
-                <div style="display:flex;justify-content:space-between">
-                    <span style="color:#a0aec0">Movement:</span>
-                    <span id="movement-val" style="color:#fbb6ce;font-weight:bold">Idle</span>
+                <div style="font-size: 12px; color: #888; text-align: center;">
+                    Press Z to toggle
                 </div>
-                <button id="clear-cache" style="width:100%;background:#805ad5;color:white;border:none;padding:6px;border-radius:4px;cursor:pointer;font:10px monospace;margin-top:8px">Clear Cache</button>
             </div>
         `;
         
-        document.body.appendChild(ui);
+        // Force append to body or html
+        const target = document.body || document.documentElement;
+        target.appendChild(ui);
         
-        return {
-            spyStatus: ui.querySelector('#spy-status'),
-            spyToggle: ui.querySelector('#spy-toggle'),
-            botStatus: ui.querySelector('#bot-status'),
-            timerVal: ui.querySelector('#timer-val'),
-            coordsVal: ui.querySelector('#coords-val'),
-            movementVal: ui.querySelector('#movement-val'),
-            closeBtn: ui.querySelector('#close-btn'),
-            clearCache: ui.querySelector('#clear-cache'),
-            container: ui
-        };
+        console.log('[Bot] UI created and added to DOM');
+        return ui;
     };
     
-    let ui;
+    // Bot state
+    let botActive = false;
+    let gameData = { x: '--', y: '--', timer: '--:--' };
+    let movement = { direction: null, timeouts: [], intervals: [] };
     
-    // ==================== UI UPDATES ====================
+    // Movement keys
+    const keys = {
+        up: 87, left: 65, down: 83, right: 68,
+        upLeft: [87, 65], upRight: [87, 68],
+        downLeft: [83, 65], downRight: [83, 68]
+    };
+    
+    // UI elements
+    let ui = null;
+    
+    // Update UI function
     const updateUI = () => {
         if (!ui) return;
         
-        const { spy, bot, game } = state;
+        const statusEl = ui.querySelector('#bot-status');
+        const posEl = ui.querySelector('#pos-display');
+        const timerEl = ui.querySelector('#timer-display');
+        const toggleBtn = ui.querySelector('#toggle-bot');
         
-        ui.spyStatus.textContent = spy.paused ? 'Paused' : 'Running';
-        ui.spyStatus.style.color = spy.paused ? '#ed8936' : '#48bb78';
-        ui.spyToggle.textContent = spy.paused ? 'Resume' : 'Pause';
-        ui.spyToggle.style.background = spy.paused ? '#48bb78' : '#4299e1';
+        if (statusEl) {
+            statusEl.textContent = botActive ? 'ON' : 'OFF';
+            statusEl.style.color = botActive ? '#44ff44' : '#ff4444';
+        }
         
-        ui.botStatus.textContent = bot.active ? 'ON' : 'OFF';
-        ui.botStatus.style.color = bot.active ? '#4CAF50' : '#F44336';
+        if (posEl) posEl.textContent = `${gameData.x},${gameData.y}`;
+        if (timerEl) timerEl.textContent = gameData.timer;
         
-        ui.timerVal.textContent = game.timer;
-        ui.coordsVal.textContent = `x:${game.coords.x}, y:${game.coords.y}`;
-        
-        if (!bot.active) {
-            ui.movementVal.textContent = 'Idle';
-            ui.movementVal.style.color = '#fbb6ce';
-        } else if (bot.currentDirection) {
-            ui.movementVal.textContent = bot.currentDirection.name || 'Moving';
-            ui.movementVal.style.color = '#68d391';
+        if (toggleBtn) {
+            toggleBtn.textContent = botActive ? 'STOP BOT (Z)' : 'START BOT (Z)';
+            toggleBtn.style.background = botActive ? '#44ff44' : '#ff4444';
         }
     };
     
-    // ==================== DATA PARSING ====================
-    const parseCanvasCall = (signature) => {
-        const timerMatch = signature.match(/fillText\(([0-9]+:[0-9]+),/);
-        if (timerMatch) {
-            state.game.timer = timerMatch[1];
-        }
-        
-        const coordMatch = signature.match(/fillText\((\d+),\s*(\d+),\s*\d+,\s*\d+\)/);
-        if (coordMatch) {
-            const [, x, y] = coordMatch;
-            const newX = parseInt(x), newY = parseInt(y);
-            
-            if (newX < 32 && newY < 32) {
-                const now = Date.now();
-                const { game, bot } = state;
-                
-                // Update coordinates
-                game.coords.x = newX;
-                game.coords.y = newY;
-                
-                // Track changes for bot
-                if (game.lastKnownCoords.x !== null) {
-                    if (newX !== game.lastKnownCoords.x) bot.lastChangeTime.x = now;
-                    if (newY !== game.lastKnownCoords.y) bot.lastChangeTime.y = now;
-                } else {
-                    bot.lastChangeTime.x = bot.lastChangeTime.y = now;
-                }
-                
-                game.lastKnownCoords.x = newX;
-                game.lastKnownCoords.y = newY;
-            }
-        }
+    // Key simulation
+    const pressKey = (keyCode, isDown = true) => {
+        const event = new KeyboardEvent(isDown ? 'keydown' : 'keyup', {
+            keyCode: keyCode,
+            which: keyCode,
+            bubbles: true
+        });
+        document.dispatchEvent(event);
     };
     
-    // ==================== MOVEMENT SYSTEM ====================
-    const simulateKey = (direction, isDown = true) => {
-        const event = isDown ? 'keydown' : 'keyup';
-        
-        if (direction.codes) {
-            direction.codes.forEach(code => {
-                document.dispatchEvent(new KeyboardEvent(event, { keyCode: code }));
-            });
+    const pressKeys = (keyCodes, isDown = true) => {
+        if (Array.isArray(keyCodes)) {
+            keyCodes.forEach(code => pressKey(code, isDown));
         } else {
-            document.dispatchEvent(new KeyboardEvent(event, { 
-                keyCode: direction.code, 
-                key: direction.key 
-            }));
+            pressKey(keyCodes, isDown);
         }
     };
     
-    const getDirection = (xDir, yDir) => {
-        if (xDir === -1 && yDir === 1) return keys.upLeft;
-        if (xDir === 1 && yDir === 1) return keys.upRight;
-        if (xDir === -1 && yDir === -1) return keys.downLeft;
-        if (xDir === 1 && yDir === -1) return keys.downRight;
-        if (xDir === -1) return keys.left;
-        if (xDir === 1) return keys.right;
-        if (yDir === 1) return keys.up;
-        if (yDir === -1) return keys.down;
-        return null;
-    };
-    
-    const getRandomDiagonal = () => {
-        const diagonals = [keys.upLeft, keys.upRight, keys.downLeft, keys.downRight];
-        return diagonals[Math.floor(Math.random() * 4)];
-    };
-    
-    const placeBomb = () => {
-        if (!state.bot.active) return;
+    // Bot movement
+    const startMovement = () => {
+        if (!botActive) return;
         
-        document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 75 }));
-        setTimeout(() => {
-            document.dispatchEvent(new KeyboardEvent('keyup', { keyCode: 75 }));
-        }, 100);
-    };
-    
-    const checkStuck = () => {
-        if (!state.bot.active) return;
+        // Random diagonal direction
+        const directions = [keys.upLeft, keys.upRight, keys.downLeft, keys.downRight];
+        const direction = directions[Math.floor(Math.random() * directions.length)];
         
-        const { bot } = state;
-        const now = Date.now();
+        movement.direction = direction;
+        pressKeys(direction, true);
         
-        if (!bot.lastChangeTime.x || !bot.lastChangeTime.y) return;
+        console.log('[Bot] Started moving');
         
-        const xStuck = now - bot.lastChangeTime.x >= STUCK_THRESHOLD && bot.movementX !== null;
-        const yStuck = now - bot.lastChangeTime.y >= STUCK_THRESHOLD && bot.movementY !== null;
-        
-        if (xStuck || yStuck) {
-            adjustMovement(xStuck, yStuck);
-        }
-    };
-    
-    const adjustMovement = (changeX, changeY) => {
-        const { bot } = state;
-        
-        if (bot.currentDirection) {
-            simulateKey(bot.currentDirection, false);
-        }
-        
-        if (changeX) {
-            bot.movementX = bot.movementX === 1 ? -1 : 1;
-            bot.lastChangeTime.x = Date.now();
-        }
-        
-        if (changeY) {
-            bot.movementY = bot.movementY === 1 ? -1 : 1;
-            bot.lastChangeTime.y = Date.now();
-        }
-        
-        const newDirection = getDirection(bot.movementX, bot.movementY);
-        if (newDirection) {
-            bot.currentDirection = newDirection;
-            simulateKey(newDirection, true);
-        }
-    };
-    
-    const startBombTimer = () => {
-        if (!state.bot.active) return;
-        
-        const delay = Math.random() * 2000 + 1000;
-        state.bot.timeouts.bomb = setTimeout(() => {
-            if (state.bot.active) {
-                placeBomb();
-                startBombTimer();
-            }
-        }, delay);
-    };
-    
-    // ==================== BOT CONTROL ====================
-    const startBot = () => {
-        const { bot, game } = state;
-        const direction = getRandomDiagonal();
-        
-        bot.currentDirection = direction;
-        
-        // Set movement directions
-        if (direction === keys.upLeft) { bot.movementX = -1; bot.movementY = 1; }
-        else if (direction === keys.upRight) { bot.movementX = 1; bot.movementY = 1; }
-        else if (direction === keys.downLeft) { bot.movementX = -1; bot.movementY = -1; }
-        else { bot.movementX = 1; bot.movementY = -1; }
-        
-        const now = Date.now();
-        bot.lastChangeTime.x = bot.lastChangeTime.y = now;
-        
-        if (game.coords.x !== '--' && game.coords.y !== '--') {
-            game.lastKnownCoords.x = parseInt(game.coords.x);
-            game.lastKnownCoords.y = parseInt(game.coords.y);
-        }
-        
-        simulateKey(direction, true);
-        startBombTimer();
-        bot.intervals.check = setInterval(checkStuck, 200); // Check every 200ms for faster response
-    };
-    
-    const stopBot = () => {
-        const { bot } = state;
-        
-        Object.values(bot.timeouts).forEach(t => t && clearTimeout(t));
-        Object.values(bot.intervals).forEach(i => i && clearInterval(i));
-        
-        bot.timeouts = { move: null, bomb: null };
-        bot.intervals = { check: null };
-        
-        if (bot.currentDirection) {
-            simulateKey(bot.currentDirection, false);
-            bot.currentDirection = null;
-        }
-        
-        bot.movementX = bot.movementY = null;
-        bot.lastChangeTime = { x: null, y: null };
-        state.game.lastKnownCoords = { x: null, y: null };
-    };
-    
-    // ==================== CANVAS HOOKING ====================
-    const hookContext = (ctx) => {
-        if (ctx._hooked) return;
-        
-        const proto = Object.getPrototypeOf(ctx);
-        const methods = Object.getOwnPropertyNames(proto).filter(key => 
-            typeof ctx[key] === 'function' && key !== 'constructor'
-        );
-        
-        methods.forEach(method => {
-            const original = ctx[method];
-            ctx[method] = function(...args) {
-                if (!state.spy.paused) {
-                    const signature = `${method}(${args.map(stringifyArg).join(", ")})`;
-                    if (!state.spy.loggedCalls.has(signature)) {
-                        state.spy.loggedCalls.add(signature);
-                        parseCanvasCall(signature);
-                        updateUI();
-                    }
-                }
-                return original.apply(this, args);
-            };
-        });
-        
-        state.spy.hookedContexts.add(ctx);
-        ctx._hooked = true;
-    };
-    
-    const stringifyArg = (arg) => {
-        if (arg instanceof HTMLImageElement) return '[HTMLImageElement]';
-        if (arg instanceof CanvasRenderingContext2D) return '[CanvasRenderingContext2D]';
-        if (arg instanceof HTMLCanvasElement) return '[Canvas]';
-        if (arg instanceof Path2D) return '[Path2D]';
-        if (typeof arg === 'object' && arg !== null) return JSON.stringify(arg);
-        return String(arg);
-    };
-    
-    const hookCanvases = () => {
-        document.querySelectorAll('canvas').forEach(canvas => {
-            const ctx = canvas.getContext('2d');
-            if (ctx && !ctx._hooked) hookContext(ctx);
-        });
-    };
-    
-    const clearCache = () => {
-        state.spy.loggedCalls.clear();
-        
-        // Clear browser caches
-        if ('caches' in window) {
-            caches.keys().then(names => {
-                names.forEach(name => caches.delete(name));
-            });
-        }
-        
-        // Force reload resources
-        const images = document.querySelectorAll('img');
-        images.forEach(img => {
-            const src = img.src;
-            img.src = '';
-            img.src = src + '?_=' + Date.now();
-        });
-        
-        // Clear canvas data
-        document.querySelectorAll('canvas').forEach(canvas => {
-            const ctx = canvas.getContext('2d');
-            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-        });
-    };
-    
-    // ==================== EVENT HANDLERS ====================
-    const handleKeyDown = (e) => {
-        if (e.key.toLowerCase() === 'z' || e.key === 'я') {
-            state.bot.active = !state.bot.active;
+        // Random bomb placement
+        const placeBomb = () => {
+            if (!botActive) return;
+            pressKey(75); // K key
+            setTimeout(() => pressKey(75, false), 50);
             
-            if (state.bot.active) {
-                startBot();
-            } else {
-                stopBot();
+            if (botActive) {
+                movement.timeouts.push(setTimeout(placeBomb, 1000 + Math.random() * 2000));
+            }
+        };
+        
+        // Start bombing
+        movement.timeouts.push(setTimeout(placeBomb, 1000));
+        
+        // Direction change every 2 seconds
+        const changeDirection = () => {
+            if (!botActive) return;
+            
+            // Stop current movement
+            if (movement.direction) {
+                pressKeys(movement.direction, false);
             }
             
-            updateUI();
-        }
+            // Start new movement
+            setTimeout(startMovement, 100);
+        };
+        
+        movement.timeouts.push(setTimeout(changeDirection, 1500 + Math.random() * 1000));
     };
     
-    const cleanup = () => {
-        if (state.bot.active) stopBot();
-        if (ui && ui.container.parentNode) ui.container.parentNode.removeChild(ui.container);
-        if (window.botObserver) window.botObserver.disconnect();
-        document.removeEventListener('keydown', handleKeyDown);
-    };
-    
-    // ==================== INITIALIZATION ====================
-    const initialize = () => {
-        // Wait for document to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialize);
-            return;
+    const stopMovement = () => {
+        // Clear all timeouts and intervals
+        movement.timeouts.forEach(t => clearTimeout(t));
+        movement.intervals.forEach(i => clearInterval(i));
+        movement.timeouts = [];
+        movement.intervals = [];
+        
+        // Stop current keys
+        if (movement.direction) {
+            pressKeys(movement.direction, false);
+            movement.direction = null;
         }
         
-        // Create UI
-        ui = createUI();
+        console.log('[Bot] Stopped moving');
+    };
+    
+    // Bot control
+    const toggleBot = () => {
+        botActive = !botActive;
         
-        // Hook existing canvases
-        hookCanvases();
-        
-        // Watch for new canvases
-        const observer = new MutationObserver(hookCanvases);
-        observer.observe(document.body, { childList: true, subtree: true });
-        window.botObserver = observer;
-        
-        // Add event listeners
-        document.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('beforeunload', cleanup);
-        
-        // UI event listeners
-        ui.spyToggle.addEventListener('click', () => {
-            state.spy.paused = !state.spy.paused;
-            updateUI();
-        });
-        
-        ui.closeBtn.addEventListener('click', cleanup);
-        ui.clearCache.addEventListener('click', clearCache);
+        if (botActive) {
+            console.log('[Bot] Starting...');
+            startMovement();
+        } else {
+            console.log('[Bot] Stopping...');
+            stopMovement();
+        }
         
         updateUI();
     };
     
-    // Start the script
-    initialize();
+    // Canvas spy for game data
+    const hookCanvas = () => {
+        const canvases = document.querySelectorAll('canvas');
+        console.log(`[Bot] Found ${canvases.length} canvas elements`);
+        
+        canvases.forEach(canvas => {
+            if (canvas._hooked) return;
+            
+            const ctx = canvas.getContext('2d');
+            if (ctx && ctx.fillText) {
+                const originalFillText = ctx.fillText;
+                ctx.fillText = function(text, x, y, maxWidth) {
+                    // Parse timer
+                    if (typeof text === 'string' && text.match(/^\d+:\d+$/)) {
+                        gameData.timer = text;
+                        updateUI();
+                    }
+                    
+                    // Parse coordinates
+                    if (typeof text === 'number' && arguments.length >= 3) {
+                        const numX = parseInt(text);
+                        const numY = parseInt(arguments[1]);
+                        if (numX < 32 && numY < 32) {
+                            gameData.x = numX;
+                            gameData.y = numY;
+                            updateUI();
+                        }
+                    }
+                    
+                    return originalFillText.apply(this, arguments);
+                };
+                canvas._hooked = true;
+            }
+        });
+    };
+    
+    // Key listener
+    const handleKeyPress = (e) => {
+        if ((e.key === 'z' || e.key === 'Z' || e.key === 'я') && !e.repeat) {
+            e.preventDefault();
+            toggleBot();
+        }
+    };
+    
+    // Initialize everything
+    const init = () => {
+        console.log('[Bot] Initializing...');
+        
+        // Create UI
+        ui = forceCreateUI();
+        
+        // Add button click handler
+        const toggleBtn = ui.querySelector('#toggle-bot');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', toggleBot);
+        }
+        
+        // Hook canvases
+        hookCanvas();
+        
+        // Watch for new canvases
+        const observer = new MutationObserver(hookCanvas);
+        observer.observe(document.body, { childList: true, subtree: true });
+        
+        // Add key listener
+        document.addEventListener('keydown', handleKeyPress);
+        
+        // Update UI
+        updateUI();
+        
+        console.log('[Bot] Initialization complete! UI should be visible.');
+        
+        // Test visibility
+        const testUI = document.getElementById('game-bot-ui');
+        console.log('[Bot] UI test:', testUI ? 'FOUND' : 'NOT FOUND');
+    };
+    
+    // Multiple initialization attempts
+    const tryInit = () => {
+        if (document.body) {
+            init();
+        } else {
+            setTimeout(tryInit, 100);
+        }
+    };
+    
+    // Start immediately
+    tryInit();
+    
+    // Backup initializations
+    document.addEventListener('DOMContentLoaded', tryInit);
+    window.addEventListener('load', tryInit);
+    setTimeout(tryInit, 1000);
+    setTimeout(tryInit, 3000);
+    
+    console.log('[Bot] Script fully loaded');
     
 })();
