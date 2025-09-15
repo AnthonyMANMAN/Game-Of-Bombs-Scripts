@@ -1,7 +1,7 @@
 const scoreboard = document.getElementById("scoreboard-new");
 let respawnTimer = null;
 let movementTimer = null;
-let isScriptActive = true; // Track if script is active
+let isScriptActive = false; // Track if script is active
 let ii = null; // Store interval reference
 
 // Function to start the script
