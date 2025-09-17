@@ -11,7 +11,7 @@
     popup.id = 'canvas-spy-ui';
     popup.style.cssText = `
       position: fixed;
-      top: 160px;
+      top: 260px;
       right: 950px;
       background: #2d3748;
       color: white;
