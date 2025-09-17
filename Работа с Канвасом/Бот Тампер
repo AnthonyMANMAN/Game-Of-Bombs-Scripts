@@ -32,7 +32,7 @@
             <div id="bot-panel" style="
                 position: fixed !important;
                 top: 10px !important;
-                right: 1010px !important;
+                right: 950px !important;
                 width: 250px !important;
                 background: #1a1a1a !important;
                 color: #fff !important;
