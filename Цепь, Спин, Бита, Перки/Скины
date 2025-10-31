@@ -1,0 +1,202 @@
+// Auto Skin Cycler - Cycles through skins in background while playing
+// Paste this into your browser console while on the game page
+
+(function() {
+    let cycling = false;
+    let intervalId = null;
+    let currentIndex = 0;
+    const cycleSpeed = 100; // Change skin every 100ms (very fast!)
+    let skinsList = [];
+
+    function initializeSkinsList() {
+        // Get Angular scope to access skin data directly
+        const angular = window.angular;
+        if (!angular) {
+            console.error('Angular not found!');
+            return false;
+        }
+
+        // Find the skins controller element
+        const skinsElement = document.querySelector('[ng-repeat*="skin in group.skins"]');
+        if (!skinsElement) {
+            console.error('Skins element not found!');
+            return false;
+        }
+
+        const scope = angular.element(skinsElement).scope();
+        if (!scope || !scope.$parent) {
+            console.error('Could not access scope!');
+            return false;
+        }
+
+        // Get the parent scope that has the group data
+        let parentScope = scope.$parent;
+        while (parentScope && !parentScope.group) {
+            parentScope = parentScope.$parent;
+        }
+
+        if (parentScope && parentScope.group && parentScope.group.skins) {
+            skinsList = parentScope.group.skins;
+            console.log(`Found ${skinsList.length} skins`);
+            return true;
+        }
+
+        console.error('Could not find skins data in scope');
+        return false;
+    }
+
+    function activateSkinDirectly(skin) {
+        const angular = window.angular;
+        if (!angular) return false;
+
+        // Find any element with the activateSkin function
+        const elements = document.querySelectorAll('[ng-click*="activateSkin"]');
+        for (let elem of elements) {
+            const scope = angular.element(elem).scope();
+            if (scope && scope.activateSkin) {
+                // First select the skin
+                if (scope.selectSkin) {
+                    scope.$apply(function() {
+                        scope.selectSkin(skin);
+                    });
+                }
+                
+                // Then activate it
+                scope.$apply(function() {
+                    scope.activateSkin(skin);
+                });
+                
+                console.log(`Activated skin: ${skin.name}`);
+                return true;
+            }
+        }
+
+        // Fallback: try to find the scope differently
+        const skinsElement = document.querySelector('[ng-repeat*="skin in group.skins"]');
+        if (skinsElement) {
+            const scope = angular.element(skinsElement).scope();
+            let parentScope = scope.$parent;
+            
+            while (parentScope) {
+                if (parentScope.activateSkin && parentScope.selectSkin) {
+                    parentScope.$apply(function() {
+                        parentScope.selectSkin(skin);
+                        parentScope.activateSkin(skin);
+                    });
+                    console.log(`Activated skin: ${skin.name}`);
+                    return true;
+                }
+                parentScope = parentScope.$parent;
+            }
+        }
+        
+        return false;
+    }
+
+    function cycleNext() {
+        if (skinsList.length === 0) {
+            if (!initializeSkinsList()) {
+                console.error('Failed to initialize skins list');
+                stopCycling();
+                return;
+            }
+        }
+
+        // Skip the first skin (index 0), cycle through 1 to length-1
+        if (skinsList.length <= 1) {
+            console.error('Not enough skins to cycle (need at least 2)');
+            return;
+        }
+
+        currentIndex = currentIndex + 1;
+        if (currentIndex >= skinsList.length) {
+            currentIndex = 1; // Reset to 1 (skip 0)
+        }
+        
+        const skin = skinsList[currentIndex];
+        
+        if (activateSkinDirectly(skin)) {
+            console.log(`Cycled to skin ${currentIndex + 1}/${skinsList.length}`);
+        } else {
+            console.error('Failed to activate skin');
+        }
+    }
+
+    function startCycling() {
+        if (cycling) return;
+        
+        if (!initializeSkinsList() || skinsList.length === 0) {
+            console.error('No skins found! Make sure you are on the skins page first, then go back to game.');
+            return;
+        }
+        
+        cycling = true;
+        console.log(`Starting skin cycling with ${skinsList.length} skins (${cycleSpeed}ms interval)`);
+        intervalId = setInterval(cycleNext, cycleSpeed);
+    }
+
+    function stopCycling() {
+        if (!cycling) return;
+        
+        cycling = false;
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        console.log('Stopped skin cycling');
+    }
+
+    function toggleCycling() {
+        if (cycling) {
+            stopCycling();
+        } else {
+            startCycling();
+        }
+    }
+
+    // Add keyboard shortcut (Ctrl+K to toggle)
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'k') {
+            e.preventDefault();
+            toggleCycling();
+        }
+    });
+
+    // Expose controls globally
+    window.skinCycler = {
+        start: startCycling,
+        stop: stopCycling,
+        toggle: toggleCycling,
+        setSpeed: function(ms) {
+            const wasRunning = cycling;
+            if (wasRunning) stopCycling();
+            cycleSpeed = ms;
+            if (wasRunning) startCycling();
+            console.log(`Cycle speed set to ${ms}ms`);
+        },
+        status: function() {
+            return cycling ? 'Running' : 'Stopped';
+        },
+        reload: function() {
+            initializeSkinsList();
+            console.log(`Reloaded ${skinsList.length} skins`);
+        }
+    };
+
+    console.log('=== Auto Skin Cycler Loaded ===');
+    console.log('IMPORTANT: Visit the skins page once first, then return to game!');
+    console.log('Commands:');
+    console.log('  skinCycler.start()  - Start cycling');
+    console.log('  skinCycler.stop()   - Stop cycling');
+    console.log('  skinCycler.toggle() - Toggle on/off');
+    console.log('  skinCycler.reload() - Reload skins list');
+    console.log('  Ctrl+K              - Keyboard toggle');
+    console.log('===============================');
+    
+    // Try to auto-start
+    if (initializeSkinsList() && skinsList.length > 0) {
+        startCycling();
+    } else {
+        console.log('Visit the skins page once, then come back and run: skinCycler.start()');
+    }
+})();
