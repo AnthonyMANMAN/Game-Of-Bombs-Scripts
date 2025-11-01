@@ -1,7 +1,8 @@
 /**
- * Combined Auto Chain + K-Stick Script (No UI)
- * Auto Chain: Press 'J' (or 'О' in Russian layout) to toggle bomb placement automation
- * K-Stick: Press 'L' (or 'Д' in Russian layout) to toggle K key blocking
+ * Combined Auto Chain + K-Stick + Skin Cycler Script (No UI)
+ * Auto Chain: Press 'J' to toggle bomb placement automation
+ * K-Stick: Press 'L' to toggle K key blocking
+ * Skin Cycler: Press 'H' to toggle skin cycling
  */
 
 // Global state variables for Auto Chain
@@ -12,23 +13,24 @@ let autoChain_interval = null;
 let kStuck = false;
 let preventKKeyUp = null;
 
+// Global state variables for Skin Cycler
+let skinCycler_active = false;
+let skinCycler_interval = null;
+let skinCycler_currentIndex = 0;
+let skinCycler_skinsList = [];
+const SKIN_CYCLE_SPEED = 100; // 100ms interval
+
 // Logging function
 function logActivity(message) {
     console.log(`[Combined Script] ${message}`);
 }
 
-// Enhanced key detection for multiple keyboard layouts
+// Key detection functions
 function isKKey(event) {
     const key = event.key.toLowerCase();
     const code = event.code.toLowerCase();
     
-    // Latin K
     if (key === 'k' || code === 'keyk') return true;
-    
-    // Cyrillic Л (appears as 'k' position on Russian keyboard)
-    if (key === 'л' || code === 'keyk') return true;
-    
-    // Handle different keyboard layouts
     if (event.code === 'KeyK') return true;
     
     return false;
@@ -38,13 +40,7 @@ function isLKey(event) {
     const key = event.key.toLowerCase();
     const code = event.code.toLowerCase();
     
-    // Latin L
     if (key === 'l' || code === 'keyl') return true;
-    
-    // Cyrillic Д (appears as 'l' position on Russian keyboard)
-    if (key === 'д' || code === 'keyl') return true;
-    
-    // Handle different keyboard layouts
     if (event.code === 'KeyL') return true;
     
     return false;
@@ -53,8 +49,15 @@ function isLKey(event) {
 function isJKey(event) {
     const key = event.key.toLowerCase();
     
-    // Latin J or Cyrillic О (Russian layout equivalent)
-    if (key === 'j' || key === 'о') return true;
+    if (key === 'j') return true;
+    
+    return false;
+}
+
+function isHKey(event) {
+    const key = event.key.toLowerCase();
+    
+    if (key === 'h') return true;
     
     return false;
 }
@@ -137,9 +140,140 @@ function kStick_toggle() {
     }
 }
 
+// Skin Cycler Functions
+function skinCycler_initializeSkinsList() {
+    const angular = window.angular;
+    if (!angular) {
+        logActivity("Skin Cycler: Angular not found");
+        return false;
+    }
+
+    const skinsElement = document.querySelector('[ng-repeat*="skin in group.skins"]');
+    if (!skinsElement) {
+        logActivity("Skin Cycler: Skins element not found");
+        return false;
+    }
+
+    const scope = angular.element(skinsElement).scope();
+    if (!scope || !scope.$parent) {
+        logActivity("Skin Cycler: Could not access scope");
+        return false;
+    }
+
+    let parentScope = scope.$parent;
+    while (parentScope && !parentScope.group) {
+        parentScope = parentScope.$parent;
+    }
+
+    if (parentScope && parentScope.group && parentScope.group.skins) {
+        skinCycler_skinsList = parentScope.group.skins;
+        logActivity(`Skin Cycler: Found ${skinCycler_skinsList.length} skins`);
+        return true;
+    }
+
+    logActivity("Skin Cycler: Could not find skins data");
+    return false;
+}
+
+function skinCycler_activateSkin(skin) {
+    const angular = window.angular;
+    if (!angular) return false;
+
+    // Optimized: Cache scope lookup
+    const elements = document.querySelectorAll('[ng-click*="activateSkin"]');
+    for (let elem of elements) {
+        const scope = angular.element(elem).scope();
+        if (scope && scope.activateSkin) {
+            // Use single $apply call to minimize digest cycles
+            scope.$apply(() => {
+                if (scope.selectSkin) {
+                    scope.selectSkin(skin);
+                }
+                scope.activateSkin(skin);
+            });
+            return true;
+        }
+    }
+
+    // Fallback method
+    const skinsElement = document.querySelector('[ng-repeat*="skin in group.skins"]');
+    if (skinsElement) {
+        const scope = angular.element(skinsElement).scope();
+        let parentScope = scope.$parent;
+        
+        while (parentScope) {
+            if (parentScope.activateSkin && parentScope.selectSkin) {
+                parentScope.$apply(() => {
+                    parentScope.selectSkin(skin);
+                    parentScope.activateSkin(skin);
+                });
+                return true;
+            }
+            parentScope = parentScope.$parent;
+        }
+    }
+    
+    return false;
+}
+
+function skinCycler_cycleNext() {
+    if (skinCycler_skinsList.length === 0) {
+        if (!skinCycler_initializeSkinsList()) {
+            logActivity("Skin Cycler: Failed to initialize skins list");
+            skinCycler_stop();
+            return;
+        }
+    }
+
+    if (skinCycler_skinsList.length <= 1) {
+        logActivity("Skin Cycler: Not enough skins to cycle");
+        return;
+    }
+
+    skinCycler_currentIndex = skinCycler_currentIndex + 1;
+    if (skinCycler_currentIndex >= skinCycler_skinsList.length) {
+        skinCycler_currentIndex = 1; // Skip first skin
+    }
+    
+    const skin = skinCycler_skinsList[skinCycler_currentIndex];
+    skinCycler_activateSkin(skin);
+}
+
+function skinCycler_start() {
+    if (skinCycler_active) return;
+    
+    if (!skinCycler_initializeSkinsList() || skinCycler_skinsList.length === 0) {
+        logActivity("Skin Cycler: No skins found! Visit skins page first.");
+        return;
+    }
+    
+    skinCycler_active = true;
+    logActivity(`Skin Cycler: STARTED (${skinCycler_skinsList.length} skins)`);
+    skinCycler_interval = setInterval(skinCycler_cycleNext, SKIN_CYCLE_SPEED);
+}
+
+function skinCycler_stop() {
+    if (!skinCycler_active) return;
+    
+    skinCycler_active = false;
+    if (skinCycler_interval) {
+        clearInterval(skinCycler_interval);
+        skinCycler_interval = null;
+    }
+    logActivity("Skin Cycler: STOPPED");
+}
+
+function skinCycler_toggle() {
+    if (skinCycler_active) {
+        skinCycler_stop();
+    } else {
+        skinCycler_start();
+    }
+}
+
 // Combined keyboard event listener
 document.addEventListener("keydown", (event) => {
-    // Auto Chain toggle - J key (English) or О key (Russian layout)
+    // Auto Chain toggle - J key
     if (isJKey(event)) {
         // Only toggle on initial press, ignore repeats
         if (!event.repeat) {
@@ -154,11 +288,21 @@ document.addEventListener("keydown", (event) => {
         }
     }
     
-    // K-Stick toggle - L/Д key
+    // K-Stick toggle - L key
     if (isLKey(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
         if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
             event.preventDefault();
             kStick_toggle();
+        }
+    }
+    
+    // Skin Cycler toggle - H key
+    if (isHKey(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+            if (!event.repeat) {
+                event.preventDefault();
+                skinCycler_toggle();
+            }
         }
     }
 });
@@ -166,6 +310,7 @@ document.addEventListener("keydown", (event) => {
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
     autoChain_stopSpamming();
+    skinCycler_stop();
     if (preventKKeyUp) {
         document.removeEventListener('keyup', preventKKeyUp, true);
     }
@@ -182,16 +327,24 @@ window.toggleKStick = function() {
     return `K-Stick is now ${kStuck ? 'BLOCKED' : 'UNBLOCKED'}`;
 };
 
+window.toggleSkinCycler = function() {
+    skinCycler_toggle();
+    return `Skin Cycler is now ${skinCycler_active ? 'ON' : 'OFF'}`;
+};
+
 window.getStatus = function() {
     return {
         autoChain: autoChain_active ? 'ON' : 'OFF',
-        kStick: kStuck ? 'BLOCKED' : 'UNBLOCKED'
+        kStick: kStuck ? 'BLOCKED' : 'UNBLOCKED',
+        skinCycler: skinCycler_active ? 'ON' : 'OFF'
     };
 };
 
 // Success message
 console.log('✅ Combined Script loaded successfully!');
 console.log('📋 Controls:');
-console.log('   • Press J/О to toggle Auto Chain (bomb spamming)');
-console.log('   • Press L/Д to toggle K-Stick (K key blocking)');
-console.log('🔧 Manual functions: toggleAutoChain(), toggleKStick(), getStatus()');
+console.log('   • Press J to toggle Auto Chain (bomb spamming)');
+console.log('   • Press L to toggle K-Stick (K key blocking)');
+console.log('   • Press H to toggle Skin Cycler');
+console.log('🔧 Manual functions: toggleAutoChain(), toggleKStick(), toggleSkinCycler(), getStatus()');
+console.log('⚠️  Skin Cycler: Visit skins page once before using!');
