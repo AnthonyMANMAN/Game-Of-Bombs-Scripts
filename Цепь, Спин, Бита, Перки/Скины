@@ -1,22 +1,459 @@
-// Auto Skin Cycler - Cycles through skins in background while playing
+// Auto Skin Cycler with UI - Cycles through selected skins with visual control panel
 // Paste this into your browser console while on the game page
 
 (function() {
     let cycling = false;
     let intervalId = null;
     let currentIndex = 0;
-    const cycleSpeed = 100; // Change skin every 100ms (very fast!)
+    let cycleSpeed = 100;
     let skinsList = [];
+    let selectedSkins = [];
+    let filterMode = 'all';
+
+    // Create UI
+    function createUI() {
+        const ui = document.createElement('div');
+        ui.id = 'skinCyclerUI';
+        ui.innerHTML = `
+            <style>
+                #skinCyclerUI {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    width: 320px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                    color: white;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    z-index: 999999;
+                    overflow: hidden;
+                }
+                #skinCyclerHeader {
+                    background: rgba(0,0,0,0.2);
+                    padding: 12px 15px;
+                    cursor: move;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    user-select: none;
+                }
+                #skinCyclerTitle {
+                    font-weight: 600;
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                #skinCyclerMinimize {
+                    background: rgba(255,255,255,0.2);
+                    border: none;
+                    color: white;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: background 0.2s;
+                }
+                #skinCyclerMinimize:hover {
+                    background: rgba(255,255,255,0.3);
+                }
+                #skinCyclerContent {
+                    padding: 15px;
+                    max-height: 500px;
+                    overflow-y: auto;
+                }
+                #skinCyclerContent.minimized {
+                    display: none;
+                }
+                .cycler-section {
+                    margin-bottom: 15px;
+                }
+                .cycler-label {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    opacity: 0.8;
+                    margin-bottom: 6px;
+                    font-weight: 600;
+                }
+                .cycler-button {
+                    background: rgba(255,255,255,0.2);
+                    border: none;
+                    color: white;
+                    padding: 10px 16px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                    width: 100%;
+                    margin-bottom: 6px;
+                }
+                .cycler-button:hover {
+                    background: rgba(255,255,255,0.3);
+                    transform: translateY(-1px);
+                }
+                .cycler-button.active {
+                    background: rgba(255,255,255,0.9);
+                    color: #667eea;
+                }
+                .cycler-status {
+                    background: rgba(0,0,0,0.2);
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                }
+                .cycler-input {
+                    background: rgba(255,255,255,0.2);
+                    border: 1px solid rgba(255,255,255,0.3);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    width: 100%;
+                    font-size: 13px;
+                    margin-bottom: 6px;
+                }
+                .cycler-input::placeholder {
+                    color: rgba(255,255,255,0.5);
+                }
+                .cycler-speed-control {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+                .cycler-speed-btn {
+                    flex: 1;
+                    padding: 6px;
+                    font-size: 11px;
+                }
+                #skinsList {
+                    max-height: 200px;
+                    overflow-y: auto;
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 6px;
+                    padding: 8px;
+                }
+                .skin-item {
+                    padding: 6px 8px;
+                    margin: 2px 0;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                .skin-item:hover {
+                    background: rgba(255,255,255,0.1);
+                }
+                .skin-item.selected {
+                    background: rgba(255,255,255,0.2);
+                }
+                .skin-item.current {
+                    background: rgba(255,255,255,0.3);
+                    font-weight: 600;
+                }
+                .skin-checkbox {
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                }
+                ::-webkit-scrollbar {
+                    width: 6px;
+                }
+                ::-webkit-scrollbar-track {
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 3px;
+                }
+                ::-webkit-scrollbar-thumb {
+                    background: rgba(255,255,255,0.3);
+                    border-radius: 3px;
+                }
+                ::-webkit-scrollbar-thumb:hover {
+                    background: rgba(255,255,255,0.4);
+                }
+            </style>
+            <div id="skinCyclerHeader">
+                <div id="skinCyclerTitle">
+                    🎨 Skin Cycler
+                </div>
+                <button id="skinCyclerMinimize">−</button>
+            </div>
+            <div id="skinCyclerContent">
+                <div class="cycler-section">
+                    <div class="cycler-status">
+                        <span>Status: <strong id="cyclerStatus">Stopped</strong></span>
+                        <span id="cyclerCount">0/0</span>
+                    </div>
+                    <button class="cycler-button" id="toggleBtn">▶ Start Cycling</button>
+                </div>
+                
+                <div class="cycler-section">
+                    <div class="cycler-label">Speed Control</div>
+                    <div class="cycler-speed-control">
+                        <button class="cycler-button cycler-speed-btn" data-speed="50">Fast (50ms)</button>
+                        <button class="cycler-button cycler-speed-btn active" data-speed="100">Normal (100ms)</button>
+                        <button class="cycler-button cycler-speed-btn" data-speed="200">Slow (200ms)</button>
+                    </div>
+                    <input type="number" class="cycler-input" id="customSpeed" placeholder="Custom speed (ms)" min="10" max="5000">
+                </div>
+                
+                <div class="cycler-section">
+                    <div class="cycler-label">Filter Mode</div>
+                    <button class="cycler-button active" id="modeAll">All Skins</button>
+                    <button class="cycler-button" id="modeWhitelist">Whitelist (Select Below)</button>
+                    <button class="cycler-button" id="modeBlacklist">Blacklist (Exclude Below)</button>
+                </div>
+                
+                <div class="cycler-section">
+                    <div class="cycler-label">Quick Filter</div>
+                    <input type="text" class="cycler-input" id="quickFilter" placeholder="Type to filter skins...">
+                </div>
+                
+                <div class="cycler-section">
+                    <div class="cycler-label">
+                        Skins List 
+                        <span style="float: right; opacity: 0.7; font-size: 10px;">
+                            <span id="selectedCount">0</span> selected
+                        </span>
+                    </div>
+                    <div id="skinsList"></div>
+                </div>
+                
+                <div class="cycler-section">
+                    <button class="cycler-button" id="reloadBtn">🔄 Reload Skins</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(ui);
+        
+        // Make draggable
+        makeDraggable(ui, ui.querySelector('#skinCyclerHeader'));
+        
+        // Setup event listeners
+        setupEventListeners();
+    }
+
+    function makeDraggable(element, handle) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        handle.onmousedown = dragMouseDown;
+
+        function dragMouseDown(e) {
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+            element.style.right = "auto";
+        }
+
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
+    }
+
+    function setupEventListeners() {
+        // Toggle button
+        document.getElementById('toggleBtn').addEventListener('click', toggleCycling);
+        
+        // Minimize button
+        document.getElementById('skinCyclerMinimize').addEventListener('click', () => {
+            const content = document.getElementById('skinCyclerContent');
+            const btn = document.getElementById('skinCyclerMinimize');
+            content.classList.toggle('minimized');
+            btn.textContent = content.classList.contains('minimized') ? '+' : '−';
+        });
+        
+        // Speed buttons
+        document.querySelectorAll('.cycler-speed-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.cycler-speed-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                setSpeed(parseInt(btn.dataset.speed));
+            });
+        });
+        
+        // Custom speed
+        document.getElementById('customSpeed').addEventListener('change', (e) => {
+            const speed = parseInt(e.target.value);
+            if (speed >= 10 && speed <= 5000) {
+                document.querySelectorAll('.cycler-speed-btn').forEach(b => b.classList.remove('active'));
+                setSpeed(speed);
+            }
+        });
+        
+        // Mode buttons
+        document.getElementById('modeAll').addEventListener('click', () => {
+            setMode('all');
+        });
+        document.getElementById('modeWhitelist').addEventListener('click', () => {
+            setMode('whitelist');
+        });
+        document.getElementById('modeBlacklist').addEventListener('click', () => {
+            setMode('blacklist');
+        });
+        
+        // Quick filter
+        document.getElementById('quickFilter').addEventListener('input', (e) => {
+            renderSkinsList(e.target.value);
+        });
+        
+        // Reload button
+        document.getElementById('reloadBtn').addEventListener('click', () => {
+            initializeSkinsList();
+            renderSkinsList();
+        });
+    }
+
+    function setMode(mode) {
+        filterMode = mode;
+        document.querySelectorAll('#modeAll, #modeWhitelist, #modeBlacklist').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('mode' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+        updateSelectedSkins();
+        updateUI();
+        renderSkinsList();
+    }
+
+    function setSpeed(ms) {
+        const wasRunning = cycling;
+        if (wasRunning) stopCycling();
+        cycleSpeed = ms;
+        if (wasRunning) startCycling();
+    }
+
+    function renderSkinsList(filter = '') {
+        const container = document.getElementById('skinsList');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        const filteredSkins = filter 
+            ? skinsList.filter((skin, idx) => idx > 0 && skin.name.toLowerCase().includes(filter.toLowerCase()))
+            : skinsList.filter((_, idx) => idx > 0);
+        
+        filteredSkins.forEach((skin, idx) => {
+            const actualIdx = skinsList.indexOf(skin);
+            const isSelected = selectedSkins.includes(skin);
+            const isCurrent = cycling && selectedSkins[currentIndex] === skin;
+            
+            const item = document.createElement('div');
+            item.className = `skin-item ${isSelected ? 'selected' : ''} ${isCurrent ? 'current' : ''}`;
+            item.innerHTML = `
+                <span>${skin.name}</span>
+                <input type="checkbox" class="skin-checkbox" ${isSelected ? 'checked' : ''} data-idx="${actualIdx}">
+            `;
+            
+            item.addEventListener('click', (e) => {
+                if (e.target.type === 'checkbox') return;
+                const checkbox = item.querySelector('.skin-checkbox');
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            });
+            
+            item.querySelector('.skin-checkbox').addEventListener('change', (e) => {
+                e.stopPropagation();
+                handleSkinSelection(actualIdx, e.target.checked);
+            });
+            
+            container.appendChild(item);
+        });
+    }
+
+    function handleSkinSelection(skinIdx, isChecked) {
+        const skin = skinsList[skinIdx];
+        
+        if (filterMode === 'whitelist') {
+            window.skinCyclerWhitelist = window.skinCyclerWhitelist || [];
+            if (isChecked) {
+                if (!window.skinCyclerWhitelist.includes(skin.name)) {
+                    window.skinCyclerWhitelist.push(skin.name);
+                }
+            } else {
+                window.skinCyclerWhitelist = window.skinCyclerWhitelist.filter(n => n !== skin.name);
+            }
+        } else if (filterMode === 'blacklist') {
+            window.skinCyclerBlacklist = window.skinCyclerBlacklist || [];
+            if (isChecked) {
+                window.skinCyclerBlacklist = window.skinCyclerBlacklist.filter(n => n !== skin.name);
+            } else {
+                if (!window.skinCyclerBlacklist.includes(skin.name)) {
+                    window.skinCyclerBlacklist.push(skin.name);
+                }
+            }
+        }
+        
+        updateSelectedSkins();
+        updateUI();
+        renderSkinsList(document.getElementById('quickFilter').value);
+    }
+
+    function updateSelectedSkins() {
+        if (filterMode === 'all') {
+            selectedSkins = skinsList.slice(1);
+        } else if (filterMode === 'whitelist') {
+            window.skinCyclerWhitelist = window.skinCyclerWhitelist || [];
+            selectedSkins = skinsList.filter((skin, idx) => {
+                if (idx === 0) return false;
+                return window.skinCyclerWhitelist.some(name => 
+                    skin.name.toLowerCase().includes(name.toLowerCase())
+                );
+            });
+        } else if (filterMode === 'blacklist') {
+            window.skinCyclerBlacklist = window.skinCyclerBlacklist || [];
+            selectedSkins = skinsList.filter((skin, idx) => {
+                if (idx === 0) return false;
+                return !window.skinCyclerBlacklist.some(name => 
+                    skin.name.toLowerCase().includes(name.toLowerCase())
+                );
+            });
+        }
+    }
+
+    function updateUI() {
+        const status = document.getElementById('cyclerStatus');
+        const count = document.getElementById('cyclerCount');
+        const selectedCount = document.getElementById('selectedCount');
+        const toggleBtn = document.getElementById('toggleBtn');
+        
+        if (status) status.textContent = cycling ? 'Running' : 'Stopped';
+        if (count) count.textContent = `${selectedSkins.length}/${skinsList.length - 1}`;
+        if (selectedCount) selectedCount.textContent = selectedSkins.length;
+        if (toggleBtn) {
+            toggleBtn.textContent = cycling ? '⏸ Stop Cycling' : '▶ Start Cycling';
+            toggleBtn.classList.toggle('active', cycling);
+        }
+    }
 
     function initializeSkinsList() {
-        // Get Angular scope to access skin data directly
         const angular = window.angular;
         if (!angular) {
             console.error('Angular not found!');
             return false;
         }
 
-        // Find the skins controller element
         const skinsElement = document.querySelector('[ng-repeat*="skin in group.skins"]');
         if (!skinsElement) {
             console.error('Skins element not found!');
@@ -29,7 +466,6 @@
             return false;
         }
 
-        // Get the parent scope that has the group data
         let parentScope = scope.$parent;
         while (parentScope && !parentScope.group) {
             parentScope = parentScope.$parent;
@@ -37,6 +473,7 @@
 
         if (parentScope && parentScope.group && parentScope.group.skins) {
             skinsList = parentScope.group.skins;
+            updateSelectedSkins();
             console.log(`Found ${skinsList.length} skins`);
             return true;
         }
@@ -49,29 +486,24 @@
         const angular = window.angular;
         if (!angular) return false;
 
-        // Find any element with the activateSkin function
         const elements = document.querySelectorAll('[ng-click*="activateSkin"]');
         for (let elem of elements) {
             const scope = angular.element(elem).scope();
             if (scope && scope.activateSkin) {
-                // First select the skin
                 if (scope.selectSkin) {
                     scope.$apply(function() {
                         scope.selectSkin(skin);
                     });
                 }
                 
-                // Then activate it
                 scope.$apply(function() {
                     scope.activateSkin(skin);
                 });
                 
-                console.log(`Activated skin: ${skin.name}`);
                 return true;
             }
         }
 
-        // Fallback: try to find the scope differently
         const skinsElement = document.querySelector('[ng-repeat*="skin in group.skins"]');
         if (skinsElement) {
             const scope = angular.element(skinsElement).scope();
@@ -83,7 +515,6 @@
                         parentScope.selectSkin(skin);
                         parentScope.activateSkin(skin);
                     });
-                    console.log(`Activated skin: ${skin.name}`);
                     return true;
                 }
                 parentScope = parentScope.$parent;
@@ -94,45 +525,31 @@
     }
 
     function cycleNext() {
-        if (skinsList.length === 0) {
-            if (!initializeSkinsList()) {
-                console.error('Failed to initialize skins list');
-                stopCycling();
-                return;
-            }
-        }
-
-        // Skip the first skin (index 0), cycle through 1 to length-1
-        if (skinsList.length <= 1) {
-            console.error('Not enough skins to cycle (need at least 2)');
+        if (selectedSkins.length === 0) {
+            stopCycling();
             return;
         }
 
-        currentIndex = currentIndex + 1;
-        if (currentIndex >= skinsList.length) {
-            currentIndex = 1; // Reset to 1 (skip 0)
-        }
+        currentIndex = (currentIndex + 1) % selectedSkins.length;
+        const skin = selectedSkins[currentIndex];
         
-        const skin = skinsList[currentIndex];
-        
-        if (activateSkinDirectly(skin)) {
-            console.log(`Cycled to skin ${currentIndex + 1}/${skinsList.length}`);
-        } else {
-            console.error('Failed to activate skin');
-        }
+        activateSkinDirectly(skin);
+        updateUI();
+        renderSkinsList(document.getElementById('quickFilter').value);
     }
 
     function startCycling() {
         if (cycling) return;
         
-        if (!initializeSkinsList() || skinsList.length === 0) {
-            console.error('No skins found! Make sure you are on the skins page first, then go back to game.');
+        if (selectedSkins.length === 0) {
+            alert('No skins selected! Please select at least one skin.');
             return;
         }
         
         cycling = true;
-        console.log(`Starting skin cycling with ${skinsList.length} skins (${cycleSpeed}ms interval)`);
+        currentIndex = -1;
         intervalId = setInterval(cycleNext, cycleSpeed);
+        updateUI();
     }
 
     function stopCycling() {
@@ -143,7 +560,7 @@
             clearInterval(intervalId);
             intervalId = null;
         }
-        console.log('Stopped skin cycling');
+        updateUI();
     }
 
     function toggleCycling() {
@@ -154,7 +571,7 @@
         }
     }
 
-    // Add keyboard shortcut (Ctrl+K to toggle)
+    // Keyboard shortcut
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.key === 'k') {
             e.preventDefault();
@@ -162,41 +579,15 @@
         }
     });
 
-    // Expose controls globally
-    window.skinCycler = {
-        start: startCycling,
-        stop: stopCycling,
-        toggle: toggleCycling,
-        setSpeed: function(ms) {
-            const wasRunning = cycling;
-            if (wasRunning) stopCycling();
-            cycleSpeed = ms;
-            if (wasRunning) startCycling();
-            console.log(`Cycle speed set to ${ms}ms`);
-        },
-        status: function() {
-            return cycling ? 'Running' : 'Stopped';
-        },
-        reload: function() {
-            initializeSkinsList();
-            console.log(`Reloaded ${skinsList.length} skins`);
-        }
-    };
-
-    console.log('=== Auto Skin Cycler Loaded ===');
-    console.log('IMPORTANT: Visit the skins page once first, then return to game!');
-    console.log('Commands:');
-    console.log('  skinCycler.start()  - Start cycling');
-    console.log('  skinCycler.stop()   - Stop cycling');
-    console.log('  skinCycler.toggle() - Toggle on/off');
-    console.log('  skinCycler.reload() - Reload skins list');
-    console.log('  Ctrl+K              - Keyboard toggle');
-    console.log('===============================');
+    // Initialize
+    console.log('🎨 Skin Cycler UI Loading...');
+    createUI();
     
-    // Try to auto-start
-    if (initializeSkinsList() && skinsList.length > 0) {
-        startCycling();
+    if (initializeSkinsList()) {
+        renderSkinsList();
+        updateUI();
+        console.log('✅ Skin Cycler UI Ready!');
     } else {
-        console.log('Visit the skins page once, then come back and run: skinCycler.start()');
+        console.log('⚠️ Visit the skins page first, then click Reload Skins');
     }
 })();
