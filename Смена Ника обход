@@ -1,0 +1,1 @@
+document.querySelectorAll('.out_modal, .out_modal_light').forEach(el => el.remove());
