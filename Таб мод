@@ -1,0 +1,157 @@
+/* Made by HASHARAHHA14 - Hope its useful in anyway leave this here :)
+   Blog: http://jbcompanyrules.blogspot.com
+   versions: 0.1.25-0.1.26 (Gameofbombs)
+   Updated: Pure DOM version, no game object, Russian UI, rank icons */
+
+// ── Canvas Setup ─────────────────────────────────────────────────
+var guiguy = document.createElement("canvas");
+guiguy.height = 120;
+guiguy.width = 240;
+guiguy.id = "theGui";
+guiguy.style = "position:fixed; left:380px; top:0px; z-index:9999;";
+document.body.appendChild(guiguy);
+
+var render = document.getElementById("theGui").getContext("2d");
+render.fillStyle = "white";
+render.font = "bold 11pt Arial";
+render.strokeStyle = "black";
+render.lineWidth = 2;
+
+// ── Sprite Icon Cache ─────────────────────────────────────────────
+// Cache loaded Image objects by URL so we don't reload the same sheet repeatedly
+var imageCache = {};
+
+function loadImage(url, callback) {
+    if (imageCache[url]) {
+        callback(imageCache[url]);
+        return;
+    }
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = function () {
+        imageCache[url] = img;
+        callback(img);
+    };
+    img.src = url;
+}
+
+// ── Read rank icon info from a leaderboard <li> row ───────────────
+function getRankIconInfo(row) {
+    var icon = row.querySelector('i.rank-icon-small');
+    if (!icon) return null;
+
+    var style = window.getComputedStyle(icon);
+
+    // background-image gives us: url("https://...")
+    var bgImage = style.backgroundImage;
+    var urlMatch = bgImage.match(/url\(["']?([^"')]+)["']?\)/);
+    if (!urlMatch) return null;
+    var url = urlMatch[1];
+
+    // background-position gives us: "0px -208px" etc
+    var bgPos = style.backgroundPosition || icon.style.backgroundPosition;
+    var posMatch = bgPos.match(/([-\d.]+)px\s+([-\d.]+)px/);
+    if (!posMatch) return null;
+
+    // background-position is negative offset into sprite sheet
+    // so sx = -x, sy = -y
+    var sx = -parseFloat(posMatch[1]);
+    var sy = -parseFloat(posMatch[2]);
+
+    // icon size — rank-icon-small is typically 16x16
+    var sw = icon.offsetWidth  || 16;
+    var sh = icon.offsetHeight || 16;
+
+    return { url: url, sx: sx, sy: sy, sw: sw, sh: sh };
+}
+
+// ── DOM Scrapers ──────────────────────────────────────────────────
+function getLeaderboard() {
+    var players = [];
+    var rows = document.querySelectorAll('#list-players li.ng-scope');
+
+    rows.forEach(function (row) {
+        if (row.classList.contains('ng-hide')) return;
+
+        var place    = row.querySelector('.place');
+        var nickname = row.querySelector('.nickname .ng-binding');
+        var kills    = row.querySelector('.kills-new-pvp');
+        var deaths   = row.querySelector('.deaths-new');
+        var rankInfo = getRankIconInfo(row);
+
+        if (nickname && nickname.innerText.trim() !== '') {
+            players.push({
+                place:    place    ? place.innerText.trim()                        : '?',
+                nickname: nickname ? nickname.innerText.replace(/\s+/g, ' ').trim() : '?',
+                kills:    kills    ? kills.innerText.trim()                        : '0',
+                deaths:   deaths   ? deaths.innerText.trim()                       : '0',
+                rankIcon: rankInfo
+            });
+        }
+    });
+
+    return players;
+}
+
+function getMyStats() {
+    var me = document.querySelector('#list-players li.highlighted');
+    if (!me) return null;
+
+    return {
+        place:    me.querySelector('.place')         ? me.querySelector('.place').innerText.trim()         : '?',
+        kills:    me.querySelector('.kills-new-pvp') ? me.querySelector('.kills-new-pvp').innerText.trim() : '0',
+        deaths:   me.querySelector('.deaths-new')    ? me.querySelector('.deaths-new').innerText.trim()    : '0',
+        rankIcon: getRankIconInfo(me)
+    };
+}
+
+// ── Draw Helpers ──────────────────────────────────────────────────
+function drawOutlinedText(text, x, y) {
+    render.strokeText(text, x, y);
+    render.fillText(text, x, y);
+}
+
+// Draw a rank icon at canvas position (dx, dy)
+// iconSize = how big to render it on the canvas (default 14)
+function drawRankIcon(rankInfo, dx, dy, iconSize) {
+    if (!rankInfo) return;
+    iconSize = iconSize || 14;
+    loadImage(rankInfo.url, function (img) {
+        render.drawImage(
+            img,
+            rankInfo.sx, rankInfo.sy, rankInfo.sw, rankInfo.sh,  // source crop
+            dx, dy, iconSize, iconSize                            // destination
+        );
+    });
+}
+
+// ── Main Loop ─────────────────────────────────────────────────────
+setInterval(function () {
+    render.clearRect(0, 0, 240, 120);
+
+    // ── My stats row ─────────────────────────────────────────────
+    var me = getMyStats();
+    if (me) {
+        drawRankIcon(me.rankIcon, 10, 6, 14);
+        drawOutlinedText("Место: "     + me.place,  28, 18);
+        drawOutlinedText("Убийства: "  + me.kills,  28, 34);
+    } else {
+        drawOutlinedText("Место:    --", 28, 18);
+        drawOutlinedText("Убийства: --", 28, 34);
+    }
+
+    // ── Top 3 ─────────────────────────────────────────────────────
+    var board = getLeaderboard();
+
+    [0, 1, 2].forEach(function (i) {
+        var yBase   = 54 + i * 20;
+        var prefix  = (i + 1) + "-й: ";
+        var name    = board[i] ? board[i].nickname : "---";
+        var kills   = board[i] ? board[i].kills    : "0";
+        var icon    = board[i] ? board[i].rankIcon  : null;
+
+        drawRankIcon(icon, 10, yBase - 12, 14);
+        drawOutlinedText(prefix + name + " (" + kills + "у)", 28, yBase);
+    });
+
+}, 650);
