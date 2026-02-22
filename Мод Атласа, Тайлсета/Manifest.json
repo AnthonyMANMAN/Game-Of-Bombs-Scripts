@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "GOB Atlas Swap",
+  "description": "Replaces atlas images on gameofbombs.com",
+  "version": "0.1",
+  "content_scripts": [
+  {
+    "matches": ["*://gameofbombs.com/*"],
+    "js": ["swap.js"],
+    "run_at": "document_start",
+    "world": "MAIN"
+  }
+]
+}
