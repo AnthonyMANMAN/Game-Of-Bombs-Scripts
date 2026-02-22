@@ -1,7 +1,8 @@
 /* Made by HASHARAHHA14 - Hope its useful in anyway leave this here :)
    Blog: http://jbcompanyrules.blogspot.com
-   versions: 0.1.25-0.1.26 (Gameofbombs)
-   Updated: Pure DOM version, no game object, Russian UI, rank icons */
+   versions: newest GoB version
+   updated by Afoonie: works on newest version, updated to proper atlas drawing, removed redundant symbols
+   Типа лидерборд чтоб было видно на экране без нажатия таба
 
 // ── Canvas Setup ─────────────────────────────────────────────────
 var guiguy = document.createElement("canvas");
