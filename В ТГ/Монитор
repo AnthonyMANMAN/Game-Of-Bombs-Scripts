@@ -13,8 +13,8 @@
     'use strict';
 
     // ⚠️ CONFIGURE THESE VALUES:
-    const BOT_TOKEN = '7860609958:AAGSCiD2BFAfnUO6hWY-GW-VbKjVp2nifPY';
-    const CHAT_ID = '-1002599400013';
+    const BOT_TOKEN = '8549384361:AAGEWldNkI_zw2TT1bToQmCPkRJkAS6XeAA';
+    const CHAT_ID = '-5230757934';
 
     let sentMessages = {};
     let observer = null;
