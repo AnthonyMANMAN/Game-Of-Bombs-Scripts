@@ -447,7 +447,6 @@
 
         let isProcessing = false;
 
-        // Use faster interval from first script (500ms vs 12000ms)
         serverCycleInterval = setInterval(async () => {
             if (isProcessing) return;
 
@@ -456,7 +455,6 @@
             if (targetServer && switchToServer(targetServer)) {
                 isProcessing = true;
 
-                // Use shorter delays from first script (1500ms vs 2000-3000ms)
                 setTimeout(async () => {
                     const newServer = getCurrentServer();
                     if (newServer !== currentServer) {
@@ -514,7 +512,6 @@
         if (window.globalMessageStore[globalKey]) {
             const lastSent = window.globalMessageStore[globalKey];
             if (now - lastSent.timestamp < maxAge) {
-                // Check if it was sent by a different user instance
                 if (lastSent.userId !== USER_ID) {
                     console.log(`🔄 Message already sent by another instance (${lastSent.userId}):`, messageText);
                     return true;
@@ -536,16 +533,11 @@
     function formatMessageWithColoredDots(messageText) {
         let formattedMessage = messageText;
 
-        // Check for plutonium (green dot)
         if (/плутоний|plutonium/i.test(messageText)) {
             formattedMessage = '🟢 ' + formattedMessage;
-        }
-        // Check for spider (red dot)
-        else if (/паук|spider/i.test(messageText)) {
+        } else if (/паук|spider/i.test(messageText)) {
             formattedMessage = '🔴 ' + formattedMessage;
-        }
-        // Check for hamster (blue dot)
-        else if (/хомяк|hamster/i.test(messageText)) {
+        } else if (/хомяк|hamster/i.test(messageText)) {
             formattedMessage = '🔵 ' + formattedMessage;
         }
 
@@ -559,7 +551,7 @@
 
         const now = new Date();
         const maxAge = 2 * 60 * 1000; // 2 minutes max age
-        const today = now.toDateString(); // Current date for comparison
+        const today = now.toDateString();
 
         const store = window.lastSentMessagesStore;
 
@@ -570,10 +562,14 @@
         messages.forEach(message => {
             const messageText = message.textContent || message.innerText;
 
-            // Use more specific filtering
-            if (!/SERVER:|Mac_:|_Marihuana_:/i.test(messageText)) return;
+            // ✅ Only track SERVER: messages OR any message containing -tg / -тг
+            // ❌ Removed: Mac_: and _Marihuana_: username tracking
+            const isServerMessage = /SERVER:/i.test(messageText);
+            const hasTgKeyword = /-tg|-тг/i.test(messageText);
 
-            // ENHANCED: Filter out messages containing "ignored" (case-insensitive)
+            if (!isServerMessage && !hasTgKeyword) return;
+
+            // Filter out messages containing "ignored"
             if (/ignored/i.test(messageText)) {
                 console.log('⚠️ Skipping ignored message:', messageText.substring(0, 50));
                 return;
@@ -588,7 +584,6 @@
                     const msgTime = new Date(now);
                     msgTime.setHours(hh, mm, 0, 0);
 
-                    // Check if message is from today
                     if (msgTime.toDateString() !== today) {
                         console.log(`⏰ Skipping old message from different date:`, messageText.substring(0, 50));
                         return;
@@ -601,17 +596,12 @@
 
             let cleanedMessage = messageText.replace(/\s+/g, ' ').trim();
 
-            // Apply colored dot formatting
             cleanedMessage = formatMessageWithColoredDots(cleanedMessage);
 
             if (/сообщ\. проигнор/i.test(cleanedMessage)) return;
 
-            // Check global duplicate prevention
-            if (isMessageAlreadySentGlobally(serverName, cleanedMessage)) {
-                return; // Skip if already sent by another instance
-            }
+            if (isMessageAlreadySentGlobally(serverName, cleanedMessage)) return;
 
-            // Enhanced time-based duplicate prevention with date
             const messageKey = `${cleanedMessage}|${today}`;
             const lastTime = store[serverName][messageKey];
             if (lastTime && now - lastTime < maxAge) return;
@@ -627,7 +617,7 @@
 
             if (success) {
                 totalMessagesSent += serverMessages.length;
-                updateStatus(); // Update the counter in UI
+                updateStatus();
             }
         }
     }
