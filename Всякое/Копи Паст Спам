@@ -1,0 +1,50 @@
+let running = false;
+let interval = null;
+
+function pressEnter(el) {
+  ['keydown','keypress','keyup'].forEach(type => {
+    el.dispatchEvent(new KeyboardEvent(type, {
+      key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+      bubbles: true, cancelable: true
+    }));
+  });
+}
+
+async function fire() {
+  const el = document.activeElement;
+  const txt = await navigator.clipboard.readText();
+
+  // Enter before
+  pressEnter(el);
+  await new Promise(r => setTimeout(r, 400));
+
+  // Paste
+  if (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+    document.execCommand('insertText', false, txt);
+  }
+  el.dispatchEvent(new InputEvent('input', { bubbles: true, data: txt }));
+  await new Promise(r => setTimeout(r, 400));
+
+  // Enter after
+  pressEnter(el);
+  await new Promise(r => setTimeout(r, 800));
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === "'" && !e.repeat) {
+    running = !running;
+    console.log(running ? '▶ ON' : '⏹ OFF');
+    if (running) {
+      interval = setInterval(fire, 2000);
+    } else {
+      clearInterval(interval);
+    }
+  }
+  if (e.key === 'Escape') {
+    running = false;
+    clearInterval(interval);
+    console.log('✖ QUIT');
+  }
+});
+
+console.log("' = toggle | ESC = quit");
