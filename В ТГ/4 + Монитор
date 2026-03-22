@@ -1,0 +1,453 @@
+// ============================================================
+//  GoB Bots — Puppeteer multi-account server-cycling bot
+//  Usage:
+//    npm install puppeteer
+//    node gob_bots.js
+// ============================================================
+
+const puppeteer = require('puppeteer');
+const https     = require('https');
+
+// ── CONFIG ───────────────────────────────────────────────────
+const accounts = [
+    { email: 'testbot1', pwd: '123123' },
+    { email: 'testbot2', pwd: '123123' },
+    { email: 'testbot3', pwd: '123123' },
+    { email: 'testbot4', pwd: '123123' },
+];
+
+const TARGET_SERVERS   = ['US', 'EU', 'RU', 'BR', 'AU', 'JP'];
+const GAME_URL         = 'https://gameofbombs.com';
+const BOMBS_PER_SERVER = 1;        // how many bombs to place before moving to next server
+const HEADLESS         = true;     // set false to watch
+
+// ── Telegram config (monitor runs on testbot1 only) ──────────
+const BOT_TOKEN      = '8549384361:AAGEWldNkI_zw2TT1bToQmCPkRJkAS6XeAA';
+const CHAT_ID        = '-5230757934';
+const MSG_MAX_AGE_MS = 2 * 60 * 1000;
+// ─────────────────────────────────────────────────────────────
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rand  = (lo, hi) => lo + Math.random() * (hi - lo);
+
+// ── Logging ──────────────────────────────────────────────────
+function log(botId, level, msg) {
+    const ts  = new Date().toTimeString().slice(0, 8);
+    const tag = level === 'ERR' ? '\x1b[31m[ERR]\x1b[0m'
+              : level === 'OK'  ? '\x1b[32m[OK ]\x1b[0m'
+              : level === 'DBG' ? '\x1b[90m[DBG]\x1b[0m'
+              :                   '\x1b[36m[INF]\x1b[0m';
+    console.log(`${ts} Bot-${botId} ${tag} ${msg}`);
+}
+
+// ── Page helpers ─────────────────────────────────────────────
+
+async function safeClick(page, botId, selector, desc, delayMs = 0) {
+    try {
+        await page.waitForSelector(selector, { visible: true, timeout: 15_000 });
+        await page.click(selector);
+        log(botId, 'OK', desc);
+        if (delayMs) await sleep(rand(delayMs * 0.7, delayMs * 1.3));
+        return true;
+    } catch (e) {
+        log(botId, 'ERR', `${desc}: ${e.message.split('\n')[0]}`);
+        return false;
+    }
+}
+
+async function safeFill(page, botId, selector, text, desc) {
+    try {
+        await page.waitForSelector(selector, { visible: true, timeout: 15_000 });
+        await page.$eval(selector, (el, val) => {
+            const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+            nativeSetter.call(el, val);
+            el.dispatchEvent(new Event('input',  { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }, text);
+        log(botId, 'OK', desc);
+        return true;
+    } catch (e) {
+        log(botId, 'ERR', `${desc}: ${e.message.split('\n')[0]}`);
+        return false;
+    }
+}
+
+// ── Server helpers (from gob-monitor) ────────────────────────
+
+async function getAvailableServers(page) {
+    try {
+        return await page.evaluate(() => {
+            const seen = new Set();
+            return [
+                ...document.querySelectorAll('#server-select .server-list li:not(.down) h2'),
+                ...document.querySelectorAll('.server-list li:not(.down) h2'),
+            ].map(el => el.textContent.trim()).filter(n => {
+                if (!n || n === 'DEV' || seen.has(n)) return false;
+                seen.add(n); return true;
+            });
+        });
+    } catch (_) { return []; }
+}
+
+async function getCurrentServer(page) {
+    try {
+        return await page.evaluate(() => {
+            const s1 = document.querySelector('#server-select .server-list li.selected h2');
+            if (s1) return s1.textContent.trim().toUpperCase();
+            const s2 = document.querySelector('.server-list .selected h2');
+            if (s2) return s2.textContent.trim().toUpperCase();
+            const s3 = document.querySelector('.butt_left_menu.ng-binding .colorRed');
+            if (s3) return s3.textContent.trim().toUpperCase();
+            return 'UNKNOWN';
+        });
+    } catch (_) { return 'UNKNOWN'; }
+}
+
+async function jsClickServer(page, serverName) {
+    try {
+        return await page.evaluate((name) => {
+            for (const sel of ['#server-select .server-list li:not(.down)', '.server-list li:not(.down)']) {
+                for (const li of document.querySelectorAll(sel)) {
+                    const h2 = li.querySelector('h2');
+                    if (h2 && h2.textContent.trim() === name) {
+                        if (li.classList.contains('selected')) return 'already';
+                        li.click(); return 'clicked';
+                    }
+                }
+            }
+            return 'not-found';
+        }, serverName);
+    } catch (_) { return 'error'; }
+}
+
+async function isRespawnVisible(page) {
+    try {
+        const btn = await page.$(
+            'div.but_game div.board-panel[ng-show*="respawn"] ' +
+            'button.button_style.buy_border.ng-binding:not(.ng-hide)'
+        );
+        if (!btn) return false;
+        return await btn.evaluate(el => el.offsetParent !== null);
+    } catch (_) { return false; }
+}
+
+async function isAlive(page) {
+    return !(await isRespawnVisible(page));
+}
+
+// ── Telegram helpers (bot 1 only) ────────────────────────────
+
+const sentMessages = {};   // serverName → Map<text, timestamp>
+
+function sendToTelegram(text) {
+    return new Promise(resolve => {
+        const body = JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'HTML' });
+        const options = {
+            hostname: 'api.telegram.org',
+            path    : `/bot${BOT_TOKEN}/sendMessage`,
+            method  : 'POST',
+            headers : {
+                'Content-Type'  : 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+            },
+        };
+        const req = https.request(options, res => {
+            res.on('data', () => {});
+            res.on('end', () => resolve(res.statusCode === 200));
+        });
+        req.on('error', () => resolve(false));
+        req.write(body);
+        req.end();
+    });
+}
+
+function formatChatMessage(text) {
+    if (/плутоний|plutonium/i.test(text)) return '🟢 ' + text;
+    if (/паук|spider/i.test(text))        return '🔴 ' + text;
+    if (/хомяк|hamster/i.test(text))      return '🔵 ' + text;
+    return text;
+}
+
+async function readChatMessages(page) {
+    try {
+        return await page.evaluate(() => {
+            const now    = new Date();
+            const maxAge = 2 * 60 * 1000;
+            const chat   =
+                document.getElementById('listChat') ||
+                document.querySelector('.chat-list') ||
+                document.querySelector('ul.chat');
+            if (!chat) return [];
+            const passed = [];
+            chat.querySelectorAll('li').forEach(li => {
+                const raw = (li.textContent || '').trim().replace(/\s+/g, ' ');
+                if (!/SERVER:/i.test(raw) && !/-tg|-тг/i.test(raw)) return;
+                if (/ignored|сообщ\. проигнор/i.test(raw)) return;
+                const timeEl = li.querySelector('.time');
+                if (timeEl) {
+                    const [hh, mm] = timeEl.textContent.trim().split(':').map(Number);
+                    if (!isNaN(hh) && !isNaN(mm)) {
+                        const t = new Date(now);
+                        t.setHours(hh, mm, 0, 0);
+                        const age = now - t;
+                        if (age < 0 || age > maxAge) return;
+                    }
+                }
+                passed.push(raw);
+            });
+            return passed;
+        });
+    } catch (_) { return []; }
+}
+
+async function checkAndForwardChat(page, serverName) {
+    const msgs = await readChatMessages(page);
+    if (!sentMessages[serverName]) sentMessages[serverName] = new Map();
+    const store = sentMessages[serverName];
+    const now   = Date.now();
+    const fresh = [];
+
+    for (const raw of msgs) {
+        const text = formatChatMessage(raw);
+        const last = store.get(text);
+        if (last && now - last < MSG_MAX_AGE_MS) continue;
+        store.set(text, now);
+        fresh.push(text);
+    }
+
+    if (fresh.length === 0) return;
+    const ok = await sendToTelegram(`🎮 ${serverName}\n${fresh.join('\n')}`);
+    if (ok) log(1, 'OK', `Telegram: forwarded ${fresh.length} msg(s) from ${serverName}`);
+    else    log(1, 'ERR', `Telegram: send failed for ${serverName}`);
+}
+
+// ── Login ─────────────────────────────────────────────────────
+
+async function loginSequence(page, botId, creds) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            await page.goto(GAME_URL, { waitUntil: 'networkidle2', timeout: 30_000 });
+            await sleep(1000);
+
+            // Open login tab
+            if (!await safeClick(page, botId, '.signin', 'open login tab', 800)) continue;
+
+            // Fill credentials
+            if (!await safeFill(page, botId, 'form.login input[name="email"]', creds.email, 'fill email')) continue;
+            if (!await safeFill(page, botId, 'form.login input[name="pwd"]',   creds.pwd,   'fill password')) continue;
+
+            // Submit
+            if (!await safeClick(page, botId, 'form.login button.reg', 'click login', 1500)) continue;
+
+            // Wait for server dropdown to appear (confirms logged in)
+            await page.waitForSelector('div.butt_left_menu.ng-binding[dropdown-toggle]',
+                { visible: true, timeout: 12_000 });
+
+            log(botId, 'OK', `Logged in as ${creds.email}`);
+            return true;
+        } catch (e) {
+            log(botId, 'ERR', `Login attempt ${attempt} failed: ${e.message.split('\n')[0]}`);
+            await sleep(2000);
+        }
+    }
+    return false;
+}
+
+// ── Switch server & enter game ────────────────────────────────
+
+async function switchToServer(page, botId, serverName) {
+    log(botId, 'INF', `Switching to server: ${serverName}`);
+
+    // Try clicking server directly (works if dropdown already open)
+    let result = await jsClickServer(page, serverName);
+
+    if (result === 'not-found') {
+        // Open the server dropdown first
+        if (!await safeClick(page, botId,
+            'div.butt_left_menu.ng-binding[dropdown-toggle]',
+            'open server dropdown', 800)) return false;
+        await sleep(600);
+        result = await jsClickServer(page, serverName);
+    }
+
+    if (result === 'not-found') {
+        log(botId, 'ERR', `Server ${serverName} not in list`);
+        return false;
+    }
+
+    if (result === 'clicked') await sleep(1200);
+
+    // Select Mixed room
+    try {
+        await page.waitForSelector('ul.room-list li.mixed', { visible: true, timeout: 10_000 });
+        await page.click('ul.room-list li.mixed');
+        log(botId, 'OK', `Clicked Mixed room on ${serverName}`);
+    } catch (e) {
+        log(botId, 'ERR', `Mixed room not found on ${serverName}: ${e.message.split('\n')[0]}`);
+        return false;
+    }
+
+    // Wait until we're in a game (play button or canvas visible)
+    try {
+        await page.waitForSelector('.button_style.red_evil_border.ng-binding', { visible: true, timeout: 15_000 });
+        log(botId, 'OK', `In game on ${serverName}`);
+        return true;
+    } catch (e) {
+        log(botId, 'ERR', `Game didn't load on ${serverName}`);
+        return false;
+    }
+}
+
+// ── Respawn ───────────────────────────────────────────────────
+
+async function tryRespawn(page, botId) {
+    try {
+        await page.click(
+            'div.but_game div.board-panel[ng-show*="respawn"] ' +
+            'button.button_style.buy_border.ng-binding:not(.ng-hide)'
+        );
+        log(botId, 'OK', 'Respawned');
+        await sleep(rand(600, 1200));
+        return true;
+    } catch (e) {
+        log(botId, 'ERR', `Respawn failed: ${e.message.split('\n')[0]}`);
+        return false;
+    }
+}
+
+// ── Spawn in, place bombs, then return so we can move to next server ──
+
+async function spawnAndBomb(page, botId, serverName) {
+    log(botId, 'INF', `Spawning on ${serverName}`);
+
+    // Bot 1 reads chat and forwards relevant messages to Telegram
+    if (botId === 1) await checkAndForwardChat(page, serverName);
+
+    // If we're on the respawn screen, click respawn first
+    if (await isRespawnVisible(page)) {
+        log(botId, 'INF', 'On respawn screen — respawning');
+        if (!await tryRespawn(page, botId)) return;
+        // Short wait to make sure we're actually in the game world
+        await sleep(rand(800, 1500));
+    } else {
+        // Already spawned in — place a bomb right away before the loop
+        log(botId, 'DBG', `Already alive on ${serverName} — placing immediate bomb`);
+        await page.keyboard.press('k');
+        await sleep(rand(200, 400));
+    }
+
+    // Place the configured number of bombs
+    for (let i = 0; i < BOMBS_PER_SERVER; i++) {
+        try {
+            // If we died mid-placement, respawn and place remaining
+            if (await isRespawnVisible(page)) {
+                log(botId, 'INF', 'Died during bomb placement — respawning');
+                if (!await tryRespawn(page, botId)) break;
+                await sleep(rand(600, 1000));
+            }
+            await page.keyboard.press('k');
+            log(botId, 'DBG', `Bomb ${i + 1}/${BOMBS_PER_SERVER} placed on ${serverName}`);
+            await sleep(rand(200, 400));
+        } catch (e) {
+            log(botId, 'ERR', `Bomb placement error: ${e.message.split('\n')[0]}`);
+            break;
+        }
+    }
+
+    log(botId, 'INF', `Done on ${serverName} — moving to next server`);
+}
+
+// ── Bot worker ────────────────────────────────────────────────
+
+async function botWorker(botId, creds) {
+    log(botId, 'INF', `===== START (${creds.email}) =====`);
+
+    let serverIdx = botId % TARGET_SERVERS.length;   // stagger start server
+
+    while (true) {
+        let browser;
+        try {
+            browser = await puppeteer.launch({
+                headless: HEADLESS,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+            });
+            const page = await browser.newPage();
+            await page.setViewport({ width: 860, height: 600 });
+            page.setDefaultTimeout(20_000);
+
+            // Login
+            if (!await loginSequence(page, botId, creds)) {
+                throw new Error('Login failed after 3 attempts');
+            }
+
+            // Server-cycling loop
+            while (true) {
+                const available = await getAvailableServers(page);
+                const targets   = TARGET_SERVERS.filter(s => available.includes(s));
+                const pool      = targets.length > 0 ? targets : TARGET_SERVERS;
+
+                const server = pool[serverIdx % pool.length];
+                serverIdx++;
+
+                log(botId, 'INF', `Next: ${server} (available: [${available.join(', ')}])`);
+
+                const entered = await switchToServer(page, botId, server);
+                if (entered) {
+                    await spawnAndBomb(page, botId, server);
+                } else {
+                    log(botId, 'ERR', `Skipping ${server}`);
+                    await sleep(3000);
+                }
+
+                await sleep(rand(1500, 3000));
+            }
+
+        } catch (e) {
+            log(botId, 'ERR', `Critical: ${e.message}`);
+        } finally {
+            if (browser) {
+                try { await browser.close(); } catch (_) {}
+            }
+        }
+
+        log(botId, 'INF', 'Restarting in 10s…');
+        await sleep(10_000);
+    }
+}
+
+// ── Supervisor ────────────────────────────────────────────────
+
+const stats = {};   // botId → { server, bombs, deaths }
+
+function initStats(botId) {
+    stats[botId] = { server: 'init', deaths: 0 };
+}
+
+function supervisor() {
+    setInterval(() => {
+        console.log('\n==== Bot Status ====');
+        for (const [id, s] of Object.entries(stats)) {
+            console.log(`  Bot-${id}: ${s.server} | Deaths: ${s.deaths}`);
+        }
+        console.log('====================\n');
+    }, 30_000);
+}
+
+// ── Main ──────────────────────────────────────────────────────
+
+(async () => {
+    console.log(`=== GoB Bots starting — ${accounts.length} accounts | Servers: ${TARGET_SERVERS.join(', ')} | ${BOMBS_PER_SERVER} bomb(s) per server ===`);
+
+    supervisor();
+
+    // Stagger bot launches so they don't hammer the site simultaneously
+    for (let i = 0; i < accounts.length; i++) {
+        const botId = i + 1;
+        initStats(botId);
+        botWorker(botId, accounts[i]);   // fire-and-forget (each manages its own loop)
+        await sleep(rand(1000, 3000));
+    }
+
+    // Keep process alive
+    await new Promise(() => {});
+})();
