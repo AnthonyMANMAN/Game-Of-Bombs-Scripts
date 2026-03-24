@@ -808,7 +808,7 @@ console.log('✓ Модальные окна удалены');`
         // Main container positioned left of other scripts
         const container = document.createElement('div');
         container.id = 'gob-monitor-ui';
-        container.style.cssText = `
+        container.style.cssText = \`
             position: fixed;
             top: 10px;
             right: 430px;
@@ -824,33 +824,33 @@ console.log('✓ Модальные окна удалены');`
             border: 1px solid rgba(255, 255, 255, 0.1);
             animation: slideIn 0.3s ease-out;
             transition: all 0.3s ease;
-        `;
+        \`;
         container.classList.add('gob-ui-glass');
 
         // Header
         const header = document.createElement('div');
-        header.innerHTML = `
+        header.innerHTML = \`
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 12px; height: 12px; background: linear-gradient(45deg, #4CAF50, #45a049); border-radius: 50%; animation: pulse 2s infinite;"></div>
                 <span style="font-weight: 600; font-size: 16px;">Монитор</span>
             </div>
-        `;
-        header.style.cssText = `
+        \`;
+        header.style.cssText = \`
             background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(56, 142, 60, 0.2));
             padding: 16px 20px;
             border-radius: 16px 16px 0 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
-        `;
+        \`;
         container.appendChild(header);
 
         const contentArea = document.createElement('div');
         contentArea.id = 'gob-content-area';
-        contentArea.style.cssText = `padding: 16px 20px;`;
+        contentArea.style.cssText = \`padding: 16px 20px;\`;
 
         // Status display with user ID
         const status = document.createElement('div');
-        status.style.cssText = `
+        status.style.cssText = \`
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -860,22 +860,22 @@ console.log('✓ Модальные окна удалены');`
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             transition: all 0.2s ease;
-        `;
+        \`;
 
         const statusLabel = document.createElement('span');
         statusLabel.textContent = 'Статус:';
-        statusLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
+        statusLabel.style.cssText = \`font-weight: 500; font-size: 13px; color: #E0E0E0;\`;
 
         const statusValue = document.createElement('span');
         statusValue.id = 'gob-status-value';
         statusValue.textContent = '🔄 Инициализация...';
-        statusValue.style.cssText = `
+        statusValue.style.cssText = \`
             font-weight: 600; font-size: 11px; color: #4CAF50;
             background: rgba(76, 175, 80, 0.2); padding: 4px 8px;
             border-radius: 6px; border: 1px solid rgba(76, 175, 80, 0.3);
             transition: all 0.2s ease; text-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
             min-width: 80px; text-align: center;
-        `;
+        \`;
 
         status.appendChild(statusLabel);
         status.appendChild(statusValue);
@@ -883,49 +883,49 @@ console.log('✓ Модальные окна удалены');`
 
         // User ID display
         const userIdDiv = document.createElement('div');
-        userIdDiv.style.cssText = `
+        userIdDiv.style.cssText = \`
             margin-bottom: 12px; padding: 8px;
             background: rgba(255, 255, 255, 0.05); border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             font-size: 10px; color: #888; text-align: center;
-        `;
-        userIdDiv.textContent = `ID: ${USER_ID}`;
+        \`;
+        userIdDiv.textContent = \` ID: ${USER_ID} \`;
         contentArea.appendChild(userIdDiv);
 
         // Server selection
         const serverSection = document.createElement('div');
-        serverSection.style.cssText = `
+        serverSection.style.cssText = \`
             margin-bottom: 12px; padding: 12px;
             background: rgba(255, 255, 255, 0.05); border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-        `;
+        \`;
 
         const serverLabel = document.createElement('div');
         serverLabel.textContent = 'Целевые серверы:';
-        serverLabel.style.cssText = `font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;`;
+        serverLabel.style.cssText = \`font-weight: 500; margin-bottom: 8px; color: #E0E0E0; font-size: 13px;\`;
 
         const serverCheckboxes = document.createElement('div');
-        serverCheckboxes.style.cssText = `display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;`;
+        serverCheckboxes.style.cssText = \`display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;\`;
 
         ['US', 'EU', 'RU', 'BR', 'AU', 'JP'].forEach(server => {
             const checkboxContainer = document.createElement('label');
-            checkboxContainer.style.cssText = `
+            checkboxContainer.style.cssText = \`
                 display: flex; align-items: center; cursor: pointer; padding: 6px;
                 border-radius: 6px; transition: all 0.2s ease;
                 background: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.1);
-            `;
+            \`;
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = server;
             checkbox.checked = targetServerNames.includes(server);
-            checkbox.style.cssText = `margin-right: 6px; accent-color: #4CAF50;`;
+            checkbox.style.cssText = \`margin-right: 6px; accent-color: #4CAF50;\`;
             checkbox.addEventListener('change', updateTargetServers);
 
             const label = document.createElement('span');
             label.textContent = server;
-            label.style.cssText = `font-size: 12px; color: #E0E0E0; font-weight: 500;`;
+            label.style.cssText = \`font-size: 12px; color: #E0E0E0; font-weight: 500;\`;
 
             checkboxContainer.appendChild(checkbox);
             checkboxContainer.appendChild(label);
@@ -938,51 +938,51 @@ console.log('✓ Модальные окна удалены');`
 
         // Control buttons
         const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = `display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;`;
+        buttonContainer.style.cssText = \`display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;\`;
 
         const startButton = document.createElement('button');
         startButton.id = 'gob-start-btn';
-        startButton.innerHTML = `
+        startButton.innerHTML = \`
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <span>▶️</span><span>Начать мониторинг</span>
             </div>
-        `;
-        startButton.style.cssText = `
+        \`;
+        startButton.style.cssText = \`
             background: linear-gradient(135deg, #4CAF50, #45a049);
             color: white; border: none; border-radius: 10px; padding: 12px 16px;
             cursor: pointer; font-weight: 600; font-size: 13px;
             transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-        `;
+        \`;
         startButton.classList.add('gob-ui-button-hover');
         startButton.onclick = toggleServerCycle;
 
         const stopButton = document.createElement('button');
-        stopButton.innerHTML = `
+        stopButton.innerHTML = \`
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <span>⏹️</span><span>Стоп</span>
             </div>
-        `;
-        stopButton.style.cssText = `
+        \`;
+        stopButton.style.cssText = \`
             background: linear-gradient(135deg, #ff4757, #ff3838);
             color: white; border: none; border-radius: 10px; padding: 12px 16px;
             cursor: pointer; font-weight: 600; font-size: 13px;
             transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
-        `;
+        \`;
         stopButton.classList.add('gob-ui-button-hover');
         stopButton.onclick = stopServerCycle;
 
         const checkButton = document.createElement('button');
-        checkButton.innerHTML = `
+        checkButton.innerHTML = \`
             <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <span>🔍</span><span>Проверить текущий</span>
             </div>
-        `;
-        checkButton.style.cssText = `
+        \`;
+        checkButton.style.cssText = \`
             background: linear-gradient(135deg, #4299e1, #3182ce);
             color: white; border: none; border-radius: 10px; padding: 12px 16px;
             cursor: pointer; font-weight: 600; font-size: 13px;
             transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
-        `;
+        \`;
         checkButton.classList.add('gob-ui-button-hover');
         checkButton.onclick = checkCurrentServer;
 
@@ -993,26 +993,26 @@ console.log('✓ Модальные окна удалены');`
 
         // Statistics
         const stats = document.createElement('div');
-        stats.style.cssText = `
+        stats.style.cssText = \`
             display: flex; justify-content: space-between; align-items: center;
             padding: 12px; background: rgba(255, 255, 255, 0.05);
             border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1);
-        `;
+        \`;
 
         const statsLabel = document.createElement('span');
         statsLabel.textContent = 'Отправлено:';
-        statsLabel.style.cssText = `font-weight: 500; font-size: 13px; color: #E0E0E0;`;
+        statsLabel.style.cssText = \`font-weight: 500; font-size: 13px; color: #E0E0E0;\`;
 
         const statsValue = document.createElement('span');
         statsValue.id = 'gob-message-count';
         statsValue.textContent = '0';
-        statsValue.style.cssText = `
+        statsValue.style.cssText = \`
             font-weight: 600; font-size: 11px; color: #4CAF50;
             background: rgba(76, 175, 80, 0.2); padding: 4px 8px;
             border-radius: 6px; border: 1px solid rgba(76, 175, 80, 0.3);
             text-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
             min-width: 32px; text-align: center;
-        `;
+        \`;
 
         stats.appendChild(statsLabel);
         stats.appendChild(statsValue);
@@ -1023,13 +1023,13 @@ console.log('✓ Модальные окна удалены');`
         // Minimize/maximize button
         const toggleButton = document.createElement('button');
         toggleButton.innerHTML = '−';
-        toggleButton.style.cssText = `
+        toggleButton.style.cssText = \`
             position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
             background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 50%; color: #ffffff; font-size: 16px; font-weight: bold;
             cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: all 0.2s ease; backdrop-filter: blur(10px);
-        `;
+        \`;
 
         toggleButton.addEventListener('click', () => {
             minimized = !minimized;
@@ -1064,7 +1064,7 @@ console.log('✓ Модальные окна удалены');`
             statusEl.style.color = '#FFD700';
         } else {
             const cyclingStatus = serverCycleInterval ? '🔄 Циклируется' : '⏸️ Остановлено';
-            const serverInfo = currentServer ? `на ${currentServer}` : '';
+            const serverInfo = currentServer ? \`на ${currentServer}\` : '';
 
             statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
             statusEl.style.color = serverCycleInterval ? '#4CAF50' : '#FF5252';
@@ -1098,17 +1098,17 @@ console.log('✓ Модальные окна удалены');`
 
         const startBtn = document.getElementById('gob-start-btn');
         if (startBtn) {
-            startBtn.innerHTML = `
+            startBtn.innerHTML = \`
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <span>▶️</span><span>Начать мониторинг</span>
                 </div>
-            `;
+            \`;
         }
     }
 
     async function checkCurrentServer() {
         const server = getCurrentServer();
-        updateStatus(`🔍 Проверка ${server}...`);
+        updateStatus(\`🔍 Проверка ${server}...\`);
 
         try {
             await checkAndSendServerMessages(server);
@@ -1177,11 +1177,11 @@ console.log('✓ Модальные окна удалены');`
 
         const startBtn = document.getElementById('gob-start-btn');
         if (startBtn) {
-            startBtn.innerHTML = `
+            startBtn.innerHTML = \`
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <span>⏸️</span><span>Пауза мониторинга</span>
                 </div>
-            `;
+            \`;
         }
 
         let isProcessing = false;
@@ -1240,7 +1240,7 @@ console.log('✓ Модальные окна удалены');`
 
     // Global duplicate prevention with user IDs
     function createGlobalMessageKey(serverName, messageText) {
-        return `${serverName}|${messageText}`;
+        return \`${serverName}|${messageText}\`;
     }
 
     function isMessageAlreadySentGlobally(serverName, messageText) {
@@ -1324,7 +1324,7 @@ console.log('✓ Модальные окна удалены');`
                     msgTime.setHours(hh, mm, 0, 0);
 
                     if (msgTime.toDateString() !== today) {
-                        console.log(`⏰ Skipping old message from different date:`, messageText.substring(0, 50));
+                        console.log(\`⏰ Skipping old message from different date:\`, messageText.substring(0, 50));
                         return;
                     }
 
@@ -1341,7 +1341,7 @@ console.log('✓ Модальные окна удалены');`
 
             if (isMessageAlreadySentGlobally(serverName, cleanedMessage)) return;
 
-            const messageKey = `${cleanedMessage}|${today}`;
+            const messageKey = \`${cleanedMessage}|${today}\`;
             const lastTime = store[serverName][messageKey];
             if (lastTime && now - lastTime < maxAge) return;
 
@@ -1351,7 +1351,7 @@ console.log('✓ Модальные окна удалены');`
         });
 
         if (serverMessages.length > 0) {
-            const combinedMessage = `🎮 ${serverName} [${USER_ID.substring(0, 6)}]\n${serverMessages.join('\n')}`;
+            const combinedMessage = \`🎮 ${serverName} [${USER_ID.substring(0, 6)}]\n${serverMessages.join('\n')}\`;
             const success = await sendToTelegram(combinedMessage);
 
             if (success) {
@@ -1363,7 +1363,7 @@ console.log('✓ Модальные окна удалены');`
 
     async function sendToTelegram(message) {
         try {
-            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            const response = await fetch(\`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage\`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
