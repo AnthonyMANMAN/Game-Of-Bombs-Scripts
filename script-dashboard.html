@@ -785,7 +785,7 @@ console.log('✓ Модальные окна удалены');`
 
         // Unified CSS styles
         const style = document.createElement('style');
-        style.textContent = `
+        style.textContent = \`
             @keyframes slideIn {
                 from { transform: translateX(-100%); opacity: 0; }
                 to { transform: translateX(0); opacity: 1; }
@@ -802,7 +802,7 @@ console.log('✓ Модальные окна удалены');`
                 transform: translateY(-2px);
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             }
-        `;
+        \`;
         document.head.appendChild(style);
 
         // Main container positioned left of other scripts
