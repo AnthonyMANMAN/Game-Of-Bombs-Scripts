@@ -213,7 +213,7 @@
 <script>
 const PRELOADED = [
   {
-    id:'builtin_world_grid',name:'World Grid Overlay',
+    id:'builtin_world_grid',name:'Координаты в Блоке',
     description:'Hooks into the layer0 canvas to draw a red 32px world grid with wrapped tile coordinates (0-31). Also tracks all drawImage calls to detect block positions. Use toggleWorldGrid(), getBlockAt(x,y), getAllBlocks().',
     trigger:'manual',tags:['canvas','debug','grid'],runCount:0,created:1700000000000,builtin:true,
     code:`(() => {
@@ -289,7 +289,7 @@ const PRELOADED = [
 })()`
   },
   {
-    id:'builtin_combined_en',name:'Combined: Auto Chain + K-Stick + Skin Cycler (EN)',
+    id:'builtin_combined_en',name:'Англ Вариант 3х скриптов',
     description:'English layout only. J = toggle Auto Chain (50 bombs/sec), L = toggle K-Stick (hold K down), H = toggle Skin Cycler. Also exposes toggleAutoChain(), toggleKStick(), toggleSkinCycler(), getStatus() in console.',
     trigger:'manual',tags:['autochain','kstick','skincycler','english'],runCount:0,created:1700000001000,builtin:true,
     code:`// Combined: Auto Chain + K-Stick + Skin Cycler (EN)
@@ -367,7 +367,7 @@ window.getStatus=()=>({autoChain:autoChain_active?"ON":"OFF",kStick:kStuck?"BLOC
 console.log('Combined (EN) loaded! J=AutoChain | L=K-Stick | H=SkinCycler');`
   },
   {
-    id:'builtin_combined_ru',name:'Combined: Auto Chain + K-Stick + Skin Cycler (EN+RU)',
+    id:'builtin_combined_ru',name:'Ру вариант 3х скриптов',
     description:'English + Russian keyboard layout support. J/О = Auto Chain, L/Д = K-Stick (blocks Л too), H/Р = Skin Cycler. Identical to EN version but Cyrillic key detection added.',
     trigger:'manual',tags:['autochain','kstick','skincycler','russian','english'],runCount:0,created:1700000002000,builtin:true,
     code:`// Combined: Auto Chain + K-Stick + Skin Cycler (EN + RU)
@@ -445,7 +445,7 @@ window.getStatus=()=>({autoChain:autoChain_active?"ON":"OFF",kStick:kStuck?"BLOC
 console.log('Combined (EN+RU) loaded! J/О=AutoChain | L/Д=K-Stick | H/Р=SkinCycler');`
   },
   {
-    id:'builtin_skin_cycler_ui',name:'Skin Cycler (Floating UI)',
+    id:'builtin_skin_cycler_ui',name:'Цикл Скинов',
     description:'Lightweight skin cycler with a floating panel UI. Select which skins to include, adjust cycle speed (ms), use ALL/NONE/RELOAD buttons. Ctrl+K to toggle. Highlights currently active skin.',
     trigger:'manual',tags:['skincycler','ui','angular','floating'],runCount:0,created:1700000003000,builtin:true,
     code:`(function(){
@@ -551,7 +551,7 @@ startScript();`
 console.log('✓ Модальные окна удалены');`
   },
   {
-    id:'builtin_websocket_ping',name:'WebSocket +50ms Пинг',
+    id:'builtin_websocket_ping',name:'Добавка к Пингу',
     description:'Добавляет искусственную задержку 50ms ко всем исходящим WebSocket-сообщениям путём перехвата WebSocket.prototype.send. Полезно для тестирования поведения игры при высоком пинге.',
     trigger:'manual',tags:['websocket','ping','lag','network'],runCount:0,created:1700000007000,builtin:true,
     code:`(function() {
