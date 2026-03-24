@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -52,36 +53,8 @@
 
   .main { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 54px); }
 
-  /* === THEMED SCROLLBAR (SCRIPT LIST) === */
-.script-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-
-  /* Firefox */
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
-}
-
-/* Chrome / Edge / WebKit */
-.script-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.script-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.script-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(0,212,255,0.7),
-    rgba(0,212,255,0.3)
-  );
-  border-radius: 4px;
-  box-shadow: 0 0 6px rgba(0,212,255,0.4);
-  transition: all 0.2s ease;
-}
+  .sidebar { width: 270px; min-width: 270px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-top { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
   .search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 8px 11px; color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 11px; outline: none; transition: border 0.15s; }
   .search-input:focus { border-color: var(--accent); box-shadow: 0 0 6px rgba(0,212,255,0.2); }
   .search-input::placeholder { color: var(--muted); }
@@ -503,7 +476,7 @@ console.log('Combined (EN+RU) loaded! J/О=AutoChain | L/Д=K-Stick | H/Р=SkinC
 })()`
   },
   {
-    id:'builtin_key_broadcaster',name:'Два Окна',
+    id:'builtin_key_broadcaster',name:'Key Broadcaster (Multi-Tab IndexedDB)',
     description:'Syncs keyboard input across browser tabs via IndexedDB. Mirrors W/A/S/D/K and arrow keys in real-time. V key toggles on/off. Shows a green/red indicator. Supports Russian layout (Ц/Ф/Ы/В etc.).',
     trigger:'manual',tags:['multitab','keysync','indexeddb','russian'],runCount:0,created:1700000004000,builtin:true,
     code:`let db;const dbName="gameOfBombsKeyEvents",storeName="keyEvents",windowId=Math.random().toString(36).substring(2,15);
@@ -513,8 +486,8 @@ const ruMap={'ц':'w','ф':'a','ы':'s','в':'d','л':'k','к':'r','с':'c','я'
 const mapKey=k=>ruMap[k.toLowerCase()]||k;
 function getKeyCode(k){const mk=mapKey(k.toLowerCase());if(mk.startsWith('arrow')){return{arrowup:38,arrowright:39,arrowdown:40,arrowleft:37}[mk]||0;}if(mk.length===1)return mk.toUpperCase().charCodeAt(0);if(mk===' ')return 32;return 0;}
 function getCodeStr(k){const mk=mapKey(k.toLowerCase());if(mk.startsWith('arrow'))return mk;if(mk===' ')return'Space';if(mk.length===1)return'Key'+mk.toUpperCase();return'';}
-function createIndicator(){const d=document.createElement('div');d.id='kbi';Object.assign(d.style,{position:'fixed',bottom:'10px',right:'10px',backgroundColor:'rgba(0,128,0,0.7)',color:'white',padding:'5px 10px',borderRadius:'5px',fontFamily:'monospace',fontSize:'12px',zIndex:'9999',pointerEvents:'none',transition:'background-color 0.3s'});d.textContent='Два Окна: ON';document.body.appendChild(d);return d;}
-function updateInd(){const d=document.getElementById('kbi')||createIndicator();d.style.backgroundColor=isEnabled?'rgba(0,128,0,0.7)':'rgba(128,0,0,0.7)';d.textContent='Два Окна: '+(isEnabled?'ON':'OFF');}
+function createIndicator(){const d=document.createElement('div');d.id='kbi';Object.assign(d.style,{position:'fixed',bottom:'10px',right:'10px',backgroundColor:'rgba(0,128,0,0.7)',color:'white',padding:'5px 10px',borderRadius:'5px',fontFamily:'monospace',fontSize:'12px',zIndex:'9999',pointerEvents:'none',transition:'background-color 0.3s'});d.textContent='Key Broadcaster: ON';document.body.appendChild(d);return d;}
+function updateInd(){const d=document.getElementById('kbi')||createIndicator();d.style.backgroundColor=isEnabled?'rgba(0,128,0,0.7)':'rgba(128,0,0,0.7)';d.textContent='Key Broadcaster: '+(isEnabled?'ON':'OFF');}
 function openDatabase(){const req=indexedDB.open(dbName,2);req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(storeName)){const s=d.createObjectStore(storeName,{keyPath:"id"});s.createIndex("timestamp","timestamp",{unique:false});}};req.onsuccess=e=>{db=e.target.result;startServices();};req.onerror=e=>console.error("IndexedDB error:",e.target.error);}
 function startServices(){stopServices();if(isEnabled&&db){lastProcessedTimestamp=Date.now();pollingInterval=setInterval(checkForNewEvents,16);cleanupInterval=setInterval(cleanupOldEvents,1000);}}
 function stopServices(){if(pollingInterval){clearInterval(pollingInterval);pollingInterval=null;}if(cleanupInterval){clearInterval(cleanupInterval);cleanupInterval=null;}Object.keys(keyStates).forEach(k=>{keyStates[k]=false;});}
@@ -529,7 +502,7 @@ openDatabase();createIndicator();
 console.log('Key Broadcaster loaded. V = toggle ON/OFF');`
   },
   {
-    id:'builtin_auto_respawn',name:'Фарм Киллов',
+    id:'builtin_auto_respawn',name:'Auto Respawn + Movement Nudge',
     description:'Watches for the Respawn [Space] button and auto-clicks it when visible. 3 seconds after respawn, performs a left→right arrow key nudge. Z key toggles on/off.',
     trigger:'auto',tags:['respawn','movement','automation'],runCount:0,created:1700000005000,builtin:true,
     code:`const scoreboard=document.getElementById("scoreboard-new");
