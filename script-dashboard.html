@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Script Dashboard</title>
+<title>Панель скриптов</title>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -155,29 +155,29 @@
 
 <header>
   <div class="logo">
-    ◈ SCRIPT.DASH
+    ◈ ПАНЕЛЬ.СКРИПТОВ
     <span class="logo-badge">GAME OF BOMBS</span>
   </div>
   <div class="header-right">
     <div class="stats-bar">
-      <span>SCRIPTS: <span id="statTotal">0</span></span>
-      <span>AUTO: <span id="statAuto">0</span></span>
-      <span>MANUAL: <span id="statManual">0</span></span>
+      <span>СКРИПТОВ: <span id="statTotal">0</span></span>
+      <span>АВТО: <span id="statAuto">0</span></span>
+      <span>РУЧНЫХ: <span id="statManual">0</span></span>
     </div>
-    <button class="btn btn-ghost" onclick="exportScripts()">⬇ EXPORT</button>
-    <label class="btn btn-ghost" style="cursor:pointer">⬆ IMPORT<input type="file" accept=".json" style="display:none" onchange="importScripts(event)"></label>
-    <button class="btn btn-primary" onclick="newScript()">＋ NEW</button>
+    <button class="btn btn-ghost" onclick="exportScripts()">⬇ ЭКСПОРТ</button>
+    <label class="btn btn-ghost" style="cursor:pointer">⬆ ИМПОРТ<input type="file" accept=".json" style="display:none" onchange="importScripts(event)"></label>
+    <button class="btn btn-primary" onclick="newScript()">＋ НОВЫЙ</button>
   </div>
 </header>
 
 <div class="main">
   <div class="sidebar">
     <div class="sidebar-top">
-      <input class="search-input" type="text" placeholder="// search scripts..." oninput="filterScripts(this.value)">
+      <input class="search-input" type="text" placeholder="// поиск скриптов..." oninput="filterScripts(this.value)">
       <div class="filter-row">
-        <button class="filter-chip active" onclick="setFilter('all',this)">ALL</button>
-        <button class="filter-chip" onclick="setFilter('auto',this)">AUTO</button>
-        <button class="filter-chip" onclick="setFilter('manual',this)">MANUAL</button>
+        <button class="filter-chip active" onclick="setFilter('all',this)">ВСЕ</button>
+        <button class="filter-chip" onclick="setFilter('auto',this)">АВТО</button>
+        <button class="filter-chip" onclick="setFilter('manual',this)">РУЧНЫЕ</button>
       </div>
     </div>
     <div class="script-list" id="scriptList"></div>
@@ -187,8 +187,8 @@
       <div class="panel-empty-icon">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
       </div>
-      <p>SELECT A SCRIPT</p>
-      <span>// scripts saved in localStorage</span>
+      <p>ВЫБЕРИТЕ СКРИПТ</p>
+      <span>// скрипты сохраняются в localStorage</span>
     </div>
   </div>
 </div>
@@ -196,14 +196,14 @@
 <div class="copy-overlay" id="copyOverlay" onclick="closeCopyModal(event)">
   <div class="copy-modal">
     <div class="copy-modal-header">
-      <div class="copy-modal-title" id="copyModalTitle">▶ READY TO RUN</div>
+      <div class="copy-modal-title" id="copyModalTitle">▶ ГОТОВ К ЗАПУСКУ</div>
       <button class="close-btn" onclick="closeCopyModal()">✕</button>
     </div>
-    <div class="copy-hint">Open DevTools (<strong>F12</strong>) → <strong>Console</strong> tab → paste → press <strong>Enter</strong></div>
+    <div class="copy-hint">Откройте DevTools (<strong>F12</strong>) → вкладка <strong>Консоль</strong> → вставьте → нажмите <strong>Enter</strong></div>
     <div class="copy-modal-code" id="copyModalCode"></div>
     <div class="copy-modal-footer">
-      <button class="btn btn-ghost" onclick="closeCopyModal()">CLOSE</button>
-      <button class="btn btn-run" onclick="copyModalCode()">⎘ COPY TO CLIPBOARD</button>
+      <button class="btn btn-ghost" onclick="closeCopyModal()">ЗАКРЫТЬ</button>
+      <button class="btn btn-run" onclick="copyModalCode()">⎘ КОПИРОВАТЬ В БУФЕР</button>
     </div>
   </div>
 </div>
@@ -542,6 +542,28 @@ document.addEventListener('keydown',e=>{
 });
 console.log("Auto-respawn loaded. Z = toggle. Currently: ENABLED");
 startScript();`
+  },
+  {
+    id:'builtin_remove_modals',name:'Удалить модальные окна (out_modal)',
+    description:'Удаляет все элементы с классами .out_modal и .out_modal_light со страницы. Полезно для очистки нежелательных всплывающих окон и оверлеев в Game of Bombs.',
+    trigger:'manual',tags:['ui','cleanup','modals'],runCount:0,created:1700000006000,builtin:true,
+    code:`document.querySelectorAll('.out_modal, .out_modal_light').forEach(el => el.remove());
+console.log('✓ Модальные окна удалены');`
+  },
+  {
+    id:'builtin_websocket_ping',name:'WebSocket +50ms Пинг',
+    description:'Добавляет искусственную задержку 50ms ко всем исходящим WebSocket-сообщениям путём перехвата WebSocket.prototype.send. Полезно для тестирования поведения игры при высоком пинге.',
+    trigger:'manual',tags:['websocket','ping','lag','network'],runCount:0,created:1700000007000,builtin:true,
+    code:`(function() {
+  const PING = 50;
+  const originalSend = WebSocket.prototype.send;
+  
+  WebSocket.prototype.send = function(data) {
+    setTimeout(() => originalSend.call(this, data), PING);
+  };
+  
+  console.log('✓ +50ms ping added to WebSocket messages');
+})()`
   }
 ];
 
@@ -571,8 +593,8 @@ function filteredScripts(){return scripts.filter(s=>{const mf=currentFilter==='a
 function renderList(){
   const list=document.getElementById('scriptList');
   const items=filteredScripts();
-  if(!items.length){list.innerHTML='<div class="empty-list">// no scripts found</div>';updateStats();return;}
-  list.innerHTML=items.map(s=>`<div class="script-item ${s.id===activeId?'active':''}" onclick="selectScript('${s.id}')"><div class="script-item-name">${escHtml(s.name)}</div>${s.description?`<div class="script-item-desc">${escHtml(s.description)}</div>`:''}<div class="script-item-tags"><span class="tag ${s.trigger==='auto'?'tag-auto':'tag-manual'}">${s.trigger}</span>${(s.tags||[]).map(t=>`<span class="tag tag-custom">${escHtml(t)}</span>`).join('')}</div></div>`).join('');
+  if(!items.length){list.innerHTML='<div class="empty-list">// скрипты не найдены</div>';updateStats();return;}
+  list.innerHTML=items.map(s=>`<div class="script-item ${s.id===activeId?'active':''}" onclick="selectScript('${s.id}')"><div class="script-item-name">${escHtml(s.name)}</div>${s.description?`<div class="script-item-desc">${escHtml(s.description)}</div>`:''}<div class="script-item-tags"><span class="tag ${s.trigger==='auto'?'tag-auto':'tag-manual'}">${s.trigger==='auto'?'авто':'ручной'}</span>${(s.tags||[]).map(t=>`<span class="tag tag-custom">${escHtml(t)}</span>`).join('')}</div></div>`).join('');
   updateStats();
 }
 
@@ -586,28 +608,28 @@ function renderView(s){
       <div class="panel-title">
         <div class="panel-name">${escHtml(s.name)}</div>
         <div class="panel-meta">
-          <span class="tag ${s.trigger==='auto'?'tag-auto':'tag-manual'}">${s.trigger}</span>
+          <span class="tag ${s.trigger==='auto'?'tag-auto':'tag-manual'}">${s.trigger==='auto'?'авто':'ручной'}</span>
           ${(s.tags||[]).map(t=>`<span class="tag tag-custom">${escHtml(t)}</span>`).join('')}
-          <span class="run-badge">▶ ${rc} RUN${rc!==1?'S':''}</span>
+          <span class="run-badge">▶ ${rc} ЗАПУСК${rc===1?'':rc>=2&&rc<=4?'А':'ОВ'}</span>
         </div>
       </div>
       <div class="panel-actions">
         ${!s.builtin?`<button class="btn btn-danger" onclick="deleteScript('${s.id}')">✕</button>`:''}
-        <button class="btn btn-ghost" onclick="editScript('${s.id}')">✎ EDIT</button>
-        <button class="btn btn-copy" onclick="showCopyModal('${s.id}')">⎘ COPY</button>
-        <button class="btn btn-run" onclick="runScript('${s.id}')">▶ RUN</button>
+        <button class="btn btn-ghost" onclick="editScript('${s.id}')">✎ ИЗМЕНИТЬ</button>
+        <button class="btn btn-copy" onclick="showCopyModal('${s.id}')">⎘ КОПИРОВАТЬ</button>
+        <button class="btn btn-run" onclick="runScript('${s.id}')">▶ ЗАПУСТИТЬ</button>
       </div>
     </div>
     <div class="panel-body">
-      ${s.description?`<div><div class="field-label">Description</div><div class="desc-block">${escHtml(s.description)}</div></div>`:''}
-      <div><div class="field-label">Code</div><div class="code-block">${escHtml(s.code)}</div></div>
+      ${s.description?`<div><div class="field-label">Описание</div><div class="desc-block">${escHtml(s.description)}</div></div>`:''}
+      <div><div class="field-label">Код</div><div class="code-block">${escHtml(s.code)}</div></div>
     </div>`;
 }
 
 function runScript(id){const s=scripts.find(x=>x.id===id);if(!s)return;s.runCount=(s.runCount||0)+1;save();showCopyModal(id);}
 function showCopyModal(id){const s=scripts.find(x=>x.id===id);if(!s)return;document.getElementById('copyModalTitle').textContent='▶ '+s.name.toUpperCase();document.getElementById('copyModalCode').textContent=s.code;document.getElementById('copyOverlay').classList.add('open');}
 function closeCopyModal(e){if(!e||e.target===document.getElementById('copyOverlay'))document.getElementById('copyOverlay').classList.remove('open');}
-function copyModalCode(){navigator.clipboard.writeText(document.getElementById('copyModalCode').textContent).then(()=>toast('COPIED TO CLIPBOARD'));}
+function copyModalCode(){navigator.clipboard.writeText(document.getElementById('copyModalCode').textContent).then(()=>toast('СКОПИРОВАНО В БУФЕР'));}
 
 function newScript(){activeId=null;editingId=null;formTags=[];renderList();renderForm(null);}
 function editScript(id){editingId=id;const s=scripts.find(x=>x.id===id);formTags=s?[...(s.tags||[])]:[];renderForm(s);}
@@ -616,21 +638,21 @@ function renderForm(s){
   const isNew=!s;
   document.getElementById('panel').innerHTML=`
     <div class="panel-header">
-      <div class="panel-title"><div class="panel-name">${isNew?'// NEW SCRIPT':'// EDIT: '+escHtml(s.name)}</div></div>
+      <div class="panel-title"><div class="panel-name">${isNew?'// НОВЫЙ СКРИПТ':'// ИЗМЕНИТЬ: '+escHtml(s.name)}</div></div>
       <div class="panel-actions">
-        ${!isNew?`<button class="btn btn-ghost" onclick="selectScript('${s.id}')">CANCEL</button>`:''}
-        <button class="btn btn-primary" onclick="saveForm()">✓ SAVE</button>
+        ${!isNew?`<button class="btn btn-ghost" onclick="selectScript('${s.id}')">ОТМЕНА</button>`:''}
+        <button class="btn btn-primary" onclick="saveForm()">✓ СОХРАНИТЬ</button>
       </div>
     </div>
     <div class="panel-body">
-      <div><div class="field-label">Script Name</div><input id="f_name" class="text-input" placeholder="e.g. World Grid Overlay" value="${s?escAttr(s.name):''}"></div>
-      <div><div class="field-label">Description</div><input id="f_desc" class="text-input" placeholder="What does this script do?" value="${s?escAttr(s.description||''):''}"></div>
-      <div><div class="field-label">Trigger Type</div><div class="trigger-group">
-        <label class="trigger-option ${(!s||s.trigger==='manual')?'sel-manual':''}"><input type="radio" name="trigger" value="manual" ${(!s||s.trigger==='manual')?'checked':''} onchange="updateTriggerStyle()"><span class="trigger-label">MANUAL</span><span class="trigger-sublabel">run on demand</span></label>
-        <label class="trigger-option ${s&&s.trigger==='auto'?'sel-auto':''}"><input type="radio" name="trigger" value="auto" ${s&&s.trigger==='auto'?'checked':''} onchange="updateTriggerStyle()"><span class="trigger-label">AUTO-RUN</span><span class="trigger-sublabel">on page load</span></label>
+      <div><div class="field-label">Название скрипта</div><input id="f_name" class="text-input" placeholder="напр. World Grid Overlay" value="${s?escAttr(s.name):''}"></div>
+      <div><div class="field-label">Описание</div><input id="f_desc" class="text-input" placeholder="Что делает этот скрипт?" value="${s?escAttr(s.description||''):''}"></div>
+      <div><div class="field-label">Тип запуска</div><div class="trigger-group">
+        <label class="trigger-option ${(!s||s.trigger==='manual')?'sel-manual':''}"><input type="radio" name="trigger" value="manual" ${(!s||s.trigger==='manual')?'checked':''} onchange="updateTriggerStyle()"><span class="trigger-label">РУЧНОЙ</span><span class="trigger-sublabel">запуск по требованию</span></label>
+        <label class="trigger-option ${s&&s.trigger==='auto'?'sel-auto':''}"><input type="radio" name="trigger" value="auto" ${s&&s.trigger==='auto'?'checked':''} onchange="updateTriggerStyle()"><span class="trigger-label">АВТО-ЗАПУСК</span><span class="trigger-sublabel">при загрузке страницы</span></label>
       </div></div>
-      <div><div class="field-label">Tags</div><div class="tag-input-row"><input id="tagInput" placeholder="add tag + Enter" onkeydown="addTagOnEnter(event)"><button class="btn btn-ghost" style="padding:7px 12px;font-size:10px" onclick="addTag()">ADD</button></div><div class="tag-list" id="tagList">${renderTagList()}</div></div>
-      <div><div class="field-label">Code</div><textarea id="f_code" class="textarea-input textarea-code" placeholder="// paste your JavaScript here...">${s?escHtml(s.code):''}</textarea></div>
+      <div><div class="field-label">Теги</div><div class="tag-input-row"><input id="tagInput" placeholder="добавить тег + Enter" onkeydown="addTagOnEnter(event)"><button class="btn btn-ghost" style="padding:7px 12px;font-size:10px" onclick="addTag()">ДОБАВИТЬ</button></div><div class="tag-list" id="tagList">${renderTagList()}</div></div>
+      <div><div class="field-label">Код</div><textarea id="f_code" class="textarea-input textarea-code" placeholder="// вставьте JavaScript код сюда...">${s?escHtml(s.code):''}</textarea></div>
     </div>`;
 }
 
@@ -643,30 +665,30 @@ function removeTag(i){formTags.splice(i,1);document.getElementById('tagList').in
 function saveForm(){
   const name=document.getElementById('f_name').value.trim();
   const code=document.getElementById('f_code').value.trim();
-  if(!name){toast('ENTER A SCRIPT NAME');return;}
-  if(!code){toast('ENTER SOME CODE');return;}
+  if(!name){toast('ВВЕДИТЕ НАЗВАНИЕ СКРИПТА');return;}
+  if(!code){toast('ВВЕДИТЕ КОД');return;}
   const trigger=document.querySelector('input[name="trigger"]:checked')?.value||'manual';
   const desc=document.getElementById('f_desc').value.trim();
   if(editingId){
     const s=scripts.find(x=>x.id===editingId);
     if(s){s.name=name;s.code=code;s.trigger=trigger;s.description=desc;s.tags=[...formTags];s.builtin=false;}
-    activeId=editingId;editingId=null;toast('SCRIPT UPDATED');
+    activeId=editingId;editingId=null;toast('СКРИПТ ОБНОВЛЁН');
   }else{
     const s={id:'sc_'+Date.now(),name,code,trigger,description:desc,tags:[...formTags],runCount:0,created:Date.now()};
-    scripts.push(s);activeId=s.id;toast('SCRIPT SAVED');
+    scripts.push(s);activeId=s.id;toast('СКРИПТ СОХРАНЁН');
   }
   save();renderList();selectScript(activeId);
 }
 
 function deleteScript(id){
-  if(!confirm('Delete this script?'))return;
+  if(!confirm('Удалить этот скрипт?'))return;
   scripts=scripts.filter(x=>x.id!==id);activeId=null;save();renderList();
-  document.getElementById('panel').innerHTML='<div class="panel-empty"><div class="panel-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><p>SCRIPT DELETED</p><span>// select or create a new script</span></div>';
-  toast('SCRIPT DELETED');
+  document.getElementById('panel').innerHTML='<div class="panel-empty"><div class="panel-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><p>СКРИПТ УДАЛЁН</p><span>// выберите или создайте новый скрипт</span></div>';
+  toast('СКРИПТ УДАЛЁН');
 }
 
-function exportScripts(){const b=new Blob([JSON.stringify(scripts,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='scriptdash-gob.json';a.click();toast('EXPORTED');}
-function importScripts(e){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const data=JSON.parse(ev.target.result);if(!Array.isArray(data))throw new Error();let added=0;const ids=new Set(scripts.map(s=>s.id));data.forEach(s=>{if(!ids.has(s.id)){scripts.push(s);added++;}});save();renderList();toast('IMPORTED '+added+' SCRIPT'+(added!==1?'S':''));}catch{toast('INVALID FILE');}};r.readAsText(file);e.target.value='';}
+function exportScripts(){const b=new Blob([JSON.stringify(scripts,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='scriptdash-gob.json';a.click();toast('ЭКСПОРТИРОВАНО');}
+function importScripts(e){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const data=JSON.parse(ev.target.result);if(!Array.isArray(data))throw new Error();let added=0;const ids=new Set(scripts.map(s=>s.id));data.forEach(s=>{if(!ids.has(s.id)){scripts.push(s);added++;}});save();renderList();toast('ИМПОРТИРОВАНО '+added+' СКРИПТ'+(added===1?'':added>=2&&added<=4?'А':'ОВ'));}catch{toast('НЕВЕРНЫЙ ФАЙЛ');}};r.readAsText(file);e.target.value='';}
 
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
