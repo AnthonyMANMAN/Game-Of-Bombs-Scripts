@@ -2,7 +2,7 @@
    Blog: http://jbcompanyrules.blogspot.com
    versions: newest GoB version
    updated by Afoonie: works on newest version, updated to proper atlas drawing, removed redundant symbols
-   Типа лидерборд чтоб было видно на экране без нажатия таба
+   Типа лидерборд чтоб было видно на экране без нажатия таба */
 
 // ── Canvas Setup ─────────────────────────────────────────────────
 var guiguy = document.createElement("canvas");
