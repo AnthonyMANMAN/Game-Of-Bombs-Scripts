@@ -1066,7 +1066,7 @@ console.log('✓ Модальные окна удалены');`
             const cyclingStatus = serverCycleInterval ? '🔄 Циклируется' : '⏸️ Остановлено';
             const serverInfo = currentServer ? \`на ${currentServer}\` : '';
 
-            statusEl.textContent = `${cyclingStatus} ${serverInfo}`;
+            statusEl.textContent = \`${cyclingStatus} ${serverInfo}\`;
             statusEl.style.color = serverCycleInterval ? '#4CAF50' : '#FF5252';
         }
 
@@ -1252,7 +1252,7 @@ console.log('✓ Модальные окна удалены');`
             const lastSent = window.globalMessageStore[globalKey];
             if (now - lastSent.timestamp < maxAge) {
                 if (lastSent.userId !== USER_ID) {
-                    console.log(`🔄 Message already sent by another instance (${lastSent.userId}):`, messageText);
+                    console.log(\`🔄 Message already sent by another instance (${lastSent.userId}):\`, messageText);
                     return true;
                 }
             }
