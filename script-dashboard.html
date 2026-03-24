@@ -60,8 +60,8 @@
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  height: 100vh;       /* fill viewport height */
-  box-sizing: border-box; /* include borders in height */
+  height: 100vh;          /* full viewport height */
+  box-sizing: border-box; /* include border in height */
 }
 
 .sidebar-top {
@@ -70,16 +70,21 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex-shrink: 0;     /* top area fixed size */
+  flex-shrink: 0;         /* keep top fixed */
 }
 
-/* Script list scrolls fully */
+.script-list-wrapper {
+  flex: 1 1 auto;         /* fills remaining height */
+  overflow: hidden;       /* wrapper handles scroll */
+  display: flex;
+  flex-direction: column;
+}
+
 .script-list {
-  flex: 1 1 auto;        /* allow it to grow and shrink */
-  overflow-y: auto;
+  flex: 1 1 auto;         /* take full height of wrapper */
+  overflow-y: auto;       /* actual scrolling happens here */
   padding: 8px;
-  box-sizing: border-box; /* include padding in height so nothing is cut off */
-  margin-bottom: 0;       /* prevent extra spacing cutting off last item */
+  box-sizing: border-box;
 }
 
 /* Scrollbar styling */
@@ -91,7 +96,7 @@
   border-radius: 3px;
 }
 
-/* Script items stay the same */
+/* Script items (keep your styling intact) */
 .script-item {
   border-radius: 3px;
   padding: 10px 12px;
