@@ -889,7 +889,7 @@ console.log('✓ Модальные окна удалены');`
             border: 1px solid rgba(255, 255, 255, 0.1);
             font-size: 10px; color: #888; text-align: center;
         \`;
-        userIdDiv.textContent = \` ID: ${USER_ID} \`;
+        userIdDiv.textContent = \` ID: \${USER_ID} \`;
         contentArea.appendChild(userIdDiv);
 
         // Server selection
@@ -1064,9 +1064,9 @@ console.log('✓ Модальные окна удалены');`
             statusEl.style.color = '#FFD700';
         } else {
             const cyclingStatus = serverCycleInterval ? '🔄 Циклируется' : '⏸️ Остановлено';
-            const serverInfo = currentServer ? \`на ${currentServer}\` : '';
+            const serverInfo = currentServer ? \`на \${currentServer}\` : '';
 
-            statusEl.textContent = \`${cyclingStatus} ${serverInfo}\`;
+            statusEl.textContent = \`\${cyclingStatus} \${serverInfo}\`;
             statusEl.style.color = serverCycleInterval ? '#4CAF50' : '#FF5252';
         }
 
@@ -1108,7 +1108,7 @@ console.log('✓ Модальные окна удалены');`
 
     async function checkCurrentServer() {
         const server = getCurrentServer();
-        updateStatus(\`🔍 Проверка ${server}...\`);
+        updateStatus(\`🔍 Проверка \${server}...\`);
 
         try {
             await checkAndSendServerMessages(server);
@@ -1240,7 +1240,7 @@ console.log('✓ Модальные окна удалены');`
 
     // Global duplicate prevention with user IDs
     function createGlobalMessageKey(serverName, messageText) {
-        return \`${serverName}|${messageText}\`;
+        return \`\${serverName}|\${messageText}\`;
     }
 
     function isMessageAlreadySentGlobally(serverName, messageText) {
@@ -1252,7 +1252,7 @@ console.log('✓ Модальные окна удалены');`
             const lastSent = window.globalMessageStore[globalKey];
             if (now - lastSent.timestamp < maxAge) {
                 if (lastSent.userId !== USER_ID) {
-                    console.log(\`🔄 Message already sent by another instance (${lastSent.userId}):\`, messageText);
+                    console.log(\`🔄 Message already sent by another instance (\${lastSent.userId}):\`, messageText);
                     return true;
                 }
             }
@@ -1341,7 +1341,7 @@ console.log('✓ Модальные окна удалены');`
 
             if (isMessageAlreadySentGlobally(serverName, cleanedMessage)) return;
 
-            const messageKey = \`${cleanedMessage}|${today}\`;
+            const messageKey = \`\${cleanedMessage}|\${today}\`;
             const lastTime = store[serverName][messageKey];
             if (lastTime && now - lastTime < maxAge) return;
 
@@ -1351,7 +1351,7 @@ console.log('✓ Модальные окна удалены');`
         });
 
         if (serverMessages.length > 0) {
-            const combinedMessage = \`🎮 ${serverName} [${USER_ID.substring(0, 6)}]\n${serverMessages.join('\n')}\`;
+            const combinedMessage = \`🎮 \${serverName} [{\$USER_ID.substring(0, 6)}]\n\${serverMessages.join('\n')}\`;
             const success = await sendToTelegram(combinedMessage);
 
             if (success) {
@@ -1363,7 +1363,7 @@ console.log('✓ Модальные окна удалены');`
 
     async function sendToTelegram(message) {
         try {
-            const response = await fetch(\`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage\`, {
+            const response = await fetch(\`https://api.telegram.org/bot\${BOT_TOKEN}/sendMessage\`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
