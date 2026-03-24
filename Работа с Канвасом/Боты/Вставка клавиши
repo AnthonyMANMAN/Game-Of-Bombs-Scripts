@@ -18,7 +18,8 @@
       movementY: null,
       timeouts: { move: null, bomb: null },
       intervals: { check: null },
-      lastChangeTime: { x: null, y: null }
+      lastChangeTime: { x: null, y: null },
+      bombKey: { code: 76, key: 'l' }
     }
   };
   
@@ -54,12 +55,8 @@
           </div>
         </div>
         <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span style="color:#a0aec0">Bot (B):</span>
+          <span style="color:#a0aec0">Bot (Z):</span>
           <span id="bot-status" style="color:#F44336;font-weight:bold">OFF</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span style="color:#a0aec0">Bomb (Z/Я):</span>
-          <span id="bomb-status" style="color:#a0aec0;font-weight:bold">Ready</span>
         </div>
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;border-top:1px solid #4a5568;padding-top:8px">
           <span style="color:#a0aec0">Timer:</span>
@@ -69,26 +66,69 @@
           <span style="color:#a0aec0">Position:</span>
           <span id="coords-val" style="color:#63b3ed;font-weight:bold">x:--, y:--</span>
         </div>
-        <div style="display:flex;justify-content:space-between">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
           <span style="color:#a0aec0">Movement:</span>
           <span id="movement-val" style="color:#fbb6ce;font-weight:bold">Idle</span>
         </div>
-        <button id="clear-cache" style="width:100%;background:#805ad5;color:white;border:none;padding:6px;border-radius:4px;cursor:pointer;font:10px monospace;margin-top:8px">Clear Cache</button>
+        <div style="border-top:1px solid #4a5568;padding-top:8px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <span style="color:#a0aec0;white-space:nowrap">Bomb Key:</span>
+            <input id="bomb-key-input" type="text" maxlength="1" placeholder="l"
+              style="background:#1a202c;color:#f6e05e;border:1px solid #4a5568;border-radius:4px;padding:3px 6px;font:12px monospace;width:36px;text-align:center;cursor:text;user-select:text"
+            />
+            <span id="bomb-key-display" style="color:#f6e05e;font-weight:bold;font-size:11px">code: 76</span>
+          </div>
+          <div id="bomb-key-hint" style="color:#fc8181;font-size:10px;margin-top:4px;display:none">Press a key inside the box to set it</div>
+        </div>
+        <button id="clear-cache" style="width:100%;background:#805ad5;color:white;border:none;padding:6px;border-radius:4px;cursor:pointer;font:10px monospace;margin-top:4px">Clear Cache</button>
       </div>
     `;
     
     document.body.appendChild(ui);
     
+    const bombKeyInput = ui.querySelector('#bomb-key-input');
+    const bombKeyDisplay = ui.querySelector('#bomb-key-display');
+    const bombKeyHint = ui.querySelector('#bomb-key-hint');
+
+    bombKeyInput.addEventListener('focus', () => {
+      bombKeyHint.style.display = 'block';
+      bombKeyInput.value = '';
+    });
+
+    bombKeyInput.addEventListener('blur', () => {
+      bombKeyHint.style.display = 'none';
+      bombKeyInput.value = state.bot.bombKey.key;
+    });
+
+    bombKeyInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      const key = e.key;
+      const code = e.keyCode || e.which;
+
+      if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'Escape'].includes(key)) return;
+
+      state.bot.bombKey = { code, key };
+      bombKeyInput.value = key;
+      bombKeyDisplay.textContent = `code: ${code}`;
+      bombKeyHint.style.display = 'none';
+      bombKeyInput.blur();
+    });
+
+    bombKeyInput.value = state.bot.bombKey.key;
+
     return {
       spyStatus: ui.querySelector('#spy-status'),
       spyToggle: ui.querySelector('#spy-toggle'),
       botStatus: ui.querySelector('#bot-status'),
-      bombStatus: ui.querySelector('#bomb-status'),
       timerVal: ui.querySelector('#timer-val'),
       coordsVal: ui.querySelector('#coords-val'),
       movementVal: ui.querySelector('#movement-val'),
       closeBtn: ui.querySelector('#close-btn'),
       clearCache: ui.querySelector('#clear-cache'),
+      bombKeyInput,
+      bombKeyDisplay,
       container: ui
     };
   };
@@ -157,13 +197,12 @@
     
     if (direction.codes) {
       direction.codes.forEach(code => {
-        document.dispatchEvent(new KeyboardEvent(event, { keyCode: code, bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent(event, { keyCode: code }));
       });
     } else {
       document.dispatchEvent(new KeyboardEvent(event, { 
         keyCode: direction.code, 
-        key: direction.key,
-        bubbles: true
+        key: direction.key 
       }));
     }
   };
@@ -185,19 +224,12 @@
     return diagonals[Math.floor(Math.random() * 4)];
   };
   
-  // ==================== BOMB PLACEMENT ====================
-  // Game bomb key is Z (keyCode 90)
   const placeBomb = () => {
-    ui.bombStatus.textContent = '💣 PLACED';
-    ui.bombStatus.style.color = '#fc8181';
+    if (!state.bot.active) return;
+    const { code, key } = state.bot.bombKey;
+    document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: code, key }));
     setTimeout(() => {
-      ui.bombStatus.textContent = 'Ready';
-      ui.bombStatus.style.color = '#a0aec0';
-    }, 500);
-
-    document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 90, key: 'z', bubbles: true }));
-    setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keyup', { keyCode: 90, key: 'z', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { keyCode: code, key }));
     }, 100);
   };
   
@@ -365,16 +397,15 @@
   
   // ==================== EVENT HANDLERS ====================
   const handleKeyDown = (e) => {
-    const key = e.key.toLowerCase();
-
-    // B / И = toggle bot
-    if (key === 'b' || key === 'и') {
+    if (e.key.toLowerCase() === 'z' || e.key === 'я') {
       state.bot.active = !state.bot.active;
+      
       if (state.bot.active) {
         startBot();
       } else {
         stopBot();
       }
+      
       updateUI();
     }
   };
