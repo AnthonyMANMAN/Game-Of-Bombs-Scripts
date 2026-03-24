@@ -157,12 +157,13 @@
     
     if (direction.codes) {
       direction.codes.forEach(code => {
-        document.dispatchEvent(new KeyboardEvent(event, { keyCode: code }));
+        document.dispatchEvent(new KeyboardEvent(event, { keyCode: code, bubbles: true }));
       });
     } else {
       document.dispatchEvent(new KeyboardEvent(event, { 
         keyCode: direction.code, 
-        key: direction.key 
+        key: direction.key,
+        bubbles: true
       }));
     }
   };
@@ -185,8 +186,8 @@
   };
   
   // ==================== BOMB PLACEMENT ====================
+  // Game bomb key is Z (keyCode 90)
   const placeBomb = () => {
-    // Flash the bomb status indicator
     ui.bombStatus.textContent = '💣 PLACED';
     ui.bombStatus.style.color = '#fc8181';
     setTimeout(() => {
@@ -194,10 +195,9 @@
       ui.bombStatus.style.color = '#a0aec0';
     }, 500);
 
-    // Dispatch keydown then keyup for keyCode 75 (K = bomb key in game)
-    document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 75, bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 90, key: 'z', bubbles: true }));
     setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keyup', { keyCode: 75, bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { keyCode: 90, key: 'z', bubbles: true }));
     }, 100);
   };
   
@@ -367,13 +367,7 @@
   const handleKeyDown = (e) => {
     const key = e.key.toLowerCase();
 
-    // Z or Я = place bomb manually
-    if (key === 'z' || key === 'я') {
-      placeBomb();
-      return;
-    }
-
-    // B = toggle bot
+    // B / И = toggle bot
     if (key === 'b' || key === 'и') {
       state.bot.active = !state.bot.active;
       if (state.bot.active) {
