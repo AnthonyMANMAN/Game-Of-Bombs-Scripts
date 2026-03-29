@@ -100,8 +100,7 @@ async function angularFill(page, selector, value, desc, botId) {
     return false;
   }
 }
-
-// ─── Login ────────────────────────────────────────────────────────────────────
+//Login sequence
 async function loginSequence(page, botId, creds) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -116,15 +115,51 @@ async function loginSequence(page, botId, creds) {
         }
       }
       if (!navOk) { log('error', botId, 'All navigation attempts failed'); continue; }
-      await sleep(rand(1000, 2000));
+      await sleep(rand(1500, 2500)); // slightly longer settle time
 
-      const formVisible = await isVisible(page, 'form[name="lform"]', 2000);
+      // ── Try to open the login form ─────────────────────────────────────────
+      const formVisible = await isVisible(page, 'form[name="lform"]', 3000);
       if (!formVisible) {
+        log('info', botId, 'Login form not visible — attempting to open it');
+
+        // Try multiple ways to surface the login form
         await page.evaluate(() => {
-          const el = document.querySelector('.signin') || document.querySelector('[ng-click*="signin"]');
-          if (el) el.click();
+          const candidates = [
+            document.querySelector('.signin'),
+            document.querySelector('[ng-click*="signin"]'),
+            document.querySelector('[ng-click*="login"]'),
+            document.querySelector('a[href*="login"]'),
+            // button/link whose text contains "sign in" or "log in"
+            ...[...document.querySelectorAll('a, button, div')].filter(el =>
+              /sign\s*in|log\s*in/i.test(el.textContent)
+            ),
+          ].filter(Boolean);
+          if (candidates[0]) candidates[0].click();
         });
-        await sleep(800);
+        await sleep(1000);
+
+        // If still not visible, try a page reload — sometimes helps with stale Angular state
+        if (!await isVisible(page, 'form[name="lform"]', 2000)) {
+          log('warn', botId, 'Login form still missing after click — reloading page');
+          await page.reload({ timeout: 20000, waitUntil: 'networkidle2' });
+          await sleep(rand(1500, 2500));
+
+          // One more attempt to open it after reload
+          await page.evaluate(() => {
+            const el = document.querySelector('.signin') ||
+              document.querySelector('[ng-click*="signin"]') ||
+              document.querySelector('[ng-click*="login"]');
+            if (el) el.click();
+          });
+          await sleep(1000);
+        }
+      }
+
+      // ── Final check before filling ─────────────────────────────────────────
+      if (!await isVisible(page, 'form[name="lform"]', 3000)) {
+        log('warn', botId, `Attempt ${attempt + 1}: login form not found after all fallbacks`);
+        await sleep(2000);
+        continue;
       }
 
       if (!await angularFill(page, 'form[name="lform"] input[name="email"]', creds.email, 'email input', botId)) continue;
@@ -150,7 +185,6 @@ async function loginSequence(page, botId, creds) {
   }
   return false;
 }
-
 // ─── Enter game ───────────────────────────────────────────────────────────────
 async function enterGame(page, botId) {
   for (let attempt = 0; attempt < 3; attempt++) {
