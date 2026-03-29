@@ -391,45 +391,15 @@ async function performSpawnActions(page, botId) {
   return true;
 }
 
-// ─── Movement directions ───────────────────────────────────────────────────────
-const DIRECTIONS = ['w', 'a', 's', 'd'];
-const DIAGONALS  = [['w','a'], ['w','d'], ['s','a'], ['s','d']];
-
-async function performSmartMove(page, botId) {
-  const r = Math.random();
-
-  let chosenKeys;
-  if (r < 0.55) {
-    // 55% diagonal
-    chosenKeys = DIAGONALS[randInt(0, DIAGONALS.length - 1)];
-  } else if (r < 0.85) {
-    // 30% cardinal
-    chosenKeys = [DIRECTIONS[randInt(0, DIRECTIONS.length - 1)]];
-  } else {
-    // 15% pause/idle
-    await sleep(rand(300, 800));
-    return;
-  }
-
-  const duration = rand(400, 1400);
-
-  // Press keys down
-  for (const k of chosenKeys) await page.keyboard.down(k);
-  await sleep(duration);
-  // Release keys
-  for (const k of chosenKeys) { try { await page.keyboard.up(k); } catch {} }
-
-  touchActivity(botId);
-  await sleep(rand(80, 250));
-}
-// ─── Game loop ─────────────────────────────────────────────────────────────────
+// ─── Game loop ────────────────────────────────────────────────────────────────
 async function gameFlow(page, botId) {
   let lastBomb       = Date.now() - BOMB_INTERVAL;
   let lastAliveCheck = Date.now();
   const ALIVE_INT    = 8000;
-  const LOOP_SLEEP   = 300;   // tighter loop so movement feels responsive
-  const STALL_MS     = 60000;
+  const LOOP_SLEEP   = 4000;
+  const STALL_MS     = 60000; // increased from 40s — give bots more time
 
+  // !! FIX: reset activity timer the moment we enter game flow
   touchActivity(botId);
 
   while (true) {
@@ -448,27 +418,34 @@ async function gameFlow(page, botId) {
             return false;
           }
 
-          touchActivity(botId);
-          await sleep(rand(500, 1000));
+          touchActivity(botId); // !! reset after respawn click
+
+          if (!await performSpawnActions(page, botId)) {
+            log('info', botId, 'Died during spawn actions');
+            continue;
+          }
+
+          log('info', botId, 'Spawn actions complete');
           state.status[botId] = 'alive';
+          touchActivity(botId);
+          await sleep(rand(800, 1500));
           lastBomb = Date.now() - BOMB_INTERVAL;
-          continue;
         }
       }
 
+      // ── Bomb placement ─────────────────────────────────────────────────────
       const alive = await isAliveQuick(page, botId);
-      if (!alive) { await sleep(LOOP_SLEEP); continue; }
-
-      // ── Movement ───────────────────────────────────────────────────────────
-      await performSmartMove(page, botId);
-
-      // ── Bomb placement (random interval 1–3s, Space key) ──────────────────
-      if (PLACE_BOMBS && Date.now() - lastBomb >= BOMB_INTERVAL) {
-        await page.keyboard.press('Space');   // Space instead of k
-        lastBomb = Date.now() + rand(0, 1000); // add up to 1s extra jitter
-        touchActivity(botId);
+      if (alive && PLACE_BOMBS && Date.now() - lastBomb >= BOMB_INTERVAL) {
+        await page.keyboard.press('k');
+        lastBomb = Date.now();
+        touchActivity(botId); // !! reset on every bomb
+        await sleep(rand(50, 220));
         log('debug', botId, 'Placed bomb');
-        await sleep(rand(50, 180));
+      }
+
+      // ── Optional movement ──────────────────────────────────────────────────
+      if (MOVEMENT && alive && Math.random() > 0.85) {
+        await performMovementSequence(page, botId);
       }
 
       // ── Stall detection ────────────────────────────────────────────────────
@@ -478,12 +455,15 @@ async function gameFlow(page, botId) {
         return false;
       }
 
+      await sleep(LOOP_SLEEP + rand(0, 120));
+
     } catch (e) {
       log('error', botId, `Game flow error: ${e.message}`);
       return false;
     }
   }
 }
+
 // ─── Bot worker ───────────────────────────────────────────────────────────────
 async function botWorker(botId, creds) {
   log('info', botId, '========== START ==========');
