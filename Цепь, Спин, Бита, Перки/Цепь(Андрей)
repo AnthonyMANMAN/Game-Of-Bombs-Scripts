@@ -32,33 +32,28 @@ toggle.addEventListener('change', () => {
   status.style.color     = spamming ? '#4a9' : '#666';
 });
 
-// --- Key blocker ---
-document.addEventListener('keydown', (e) => {
-  // Toggle on X (EN) or х (RU layout)
-  if (e.key === 'x' || e.key === 'X' || e.key === 'х' || e.key === 'Х') {
-    toggle.checked = !toggle.checked;
-    toggle.dispatchEvent(new Event('change'));
+// --- Key handler (toggle only, no blocker) ---
+document.addEventListener('keydown', e => {
+  if (e.key === 'x' || e.key === 'X' || e.key === 'ч' || e.key === 'Ч') {
+    if (!e.repeat) {
+      toggle.checked = !toggle.checked;
+      toggle.dispatchEvent(new Event('change'));
+    }
+    e.preventDefault();
   }
-  // Block z / я when spamming
-  if (spamming && (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')) {
-    e.stopImmediatePropagation();
-  }
-}, true);
-
-document.addEventListener('keyup', (e) => {
-  if (spamming && (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')) {
-    e.stopImmediatePropagation();
-  }
-}, true);
+});
 
 // --- Spammer ---
-function spamZ() {
-  if (spamming) {
-    const down = new KeyboardEvent('keydown', {
-      key: 'z', code: 'KeyZ', keyCode: 90, bubbles: true
-    });
-    document.activeElement.dispatchEvent(down);
-  }
-  requestAnimationFrame(spamZ);
-}
-requestAnimationFrame(spamZ);
+setInterval(() => {
+  if (!spamming) return;
+
+  document.dispatchEvent(new KeyboardEvent('keydown', {
+    keyCode: 90, key: 'z', code: 'KeyZ', bubbles: true
+  }));
+
+  setTimeout(() => {
+    document.dispatchEvent(new KeyboardEvent('keyup', {
+      keyCode: 90, key: 'z', code: 'KeyZ', bubbles: true
+    }));
+  }, 10);
+}, 20);
