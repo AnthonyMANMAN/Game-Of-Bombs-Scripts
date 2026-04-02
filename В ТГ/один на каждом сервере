@@ -1,0 +1,241 @@
+// ============================================================
+//  GoB Monitor — Multi-instance (one browser per server)
+//  Usage:
+//    npm install puppeteer
+//    node gob-monitor-multi.js
+// ============================================================
+
+const puppeteer = require('puppeteer');
+const https     = require('https');
+
+// ── CONFIG ──────────────────────────────────────────────────
+const BOT_TOKEN      = '8549384361:AAGEWldNkI_zw2TT1bToQmCPkRJkAS6XeAA';
+const CHAT_ID        = '-5230757934';
+const LOGIN_USERNAME = 'afoonie';
+const LOGIN_PASSWORD = '45645';
+const TARGET_SERVERS = ['US', 'EU', 'BR', 'AU', 'JP'];
+const MSG_MAX_AGE_MS = 2 * 60 * 1000;
+const POLL_INTERVAL  = 1_000; // 1 second per server instance
+// ────────────────────────────────────────────────────────────
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function sendToTelegram(text) {
+    return new Promise(resolve => {
+        const body = JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'HTML' });
+        const options = {
+            hostname: 'api.telegram.org',
+            path    : `/bot${BOT_TOKEN}/sendMessage`,
+            method  : 'POST',
+            headers : {
+                'Content-Type'  : 'application/json',
+                'Content-Length': Buffer.byteLength(body)
+            }
+        };
+        const req = https.request(options, res => {
+            res.on('data', () => {});
+            res.on('end', () => resolve(res.statusCode === 200));
+        });
+        req.on('error', () => resolve(false));
+        req.write(body);
+        req.end();
+    });
+}
+
+function formatMessage(text) {
+    if (/плутоний|plutonium/i.test(text)) return '🟢 ' + text;
+    if (/паук|spider/i.test(text))        return '🔴 ' + text;
+    if (/хомяк|hamster/i.test(text))      return '🔵 ' + text;
+    return text;
+}
+
+async function getMessages(page) {
+    return page.evaluate(() => {
+        const now    = new Date();
+        const maxAge = 2 * 60 * 1000;
+
+        const chat =
+            document.getElementById('listChat') ||
+            document.querySelector('.chat-list') ||
+            document.querySelector('ul.chat');
+        if (!chat) return [];
+
+        const passed = [];
+        chat.querySelectorAll('li').forEach(li => {
+            const raw = (li.textContent || '').trim().replace(/\s+/g, ' ');
+            if (!/SERVER:/i.test(raw) && !/-tg|-тг/i.test(raw)) return;
+            if (/ignored|сообщ\. проигнор/i.test(raw)) return;
+
+            const timeEl = li.querySelector('.time');
+            if (timeEl) {
+                const [hh, mm] = timeEl.textContent.trim().split(':').map(Number);
+                if (!isNaN(hh) && !isNaN(mm)) {
+                    const t = new Date(now);
+                    t.setHours(hh, mm, 0, 0);
+                    const age = now - t;
+                    if (age < 0 || age > maxAge) return;
+                }
+            }
+            passed.push(raw);
+        });
+        return passed;
+    });
+}
+
+async function switchServer(page, name) {
+    return page.evaluate(serverName => {
+        for (const sel of ['#server-select .server-list li:not(.down)', '.server-list li:not(.down)']) {
+            for (const li of document.querySelectorAll(sel)) {
+                const h2 = li.querySelector('h2');
+                if (h2 && h2.textContent.trim() === serverName) {
+                    if (li.classList.contains('selected')) return 'already';
+                    li.click(); return 'clicked';
+                }
+            }
+        }
+        return 'not-found';
+    }, name);
+}
+
+// ── Per-server instance ───────────────────────────────────────
+async function runServerInstance(serverName) {
+    console.log(`[${serverName}] Starting instance...`);
+
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+
+    // Suppress console noise from the page
+    page.on('console', () => {});
+    page.on('pageerror', () => {});
+
+    try {
+        await page.goto('https://gameofbombs.com/', { waitUntil: 'networkidle2', timeout: 30_000 });
+        await sleep(2000);
+
+        // ── Login ──────────────────────────────────────────────
+        const formVisible = await page.$('form[name="lform"]');
+        if (formVisible) {
+            await page.evaluate((u, p) => {
+                const setNative = (el, val) => {
+                    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                    desc.set.call(el, val);
+                    el.dispatchEvent(new Event('input',  { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('blur',   { bubbles: true }));
+                };
+                const email = document.querySelector('form[name="lform"] input[name="email"]');
+                const pwd   = document.querySelector('form[name="lform"] input[name="pwd"]');
+                if (email) setNative(email, u);
+                if (pwd)   setNative(pwd, p);
+            }, LOGIN_USERNAME, LOGIN_PASSWORD);
+
+            const loginBtn = await page.$('form[name="lform"] button.reg');
+            if (loginBtn) await loginBtn.click();
+            else await page.keyboard.press('Enter');
+
+            await page.waitForSelector('.butt_left_menu.to-play', { timeout: 15_000 });
+            console.log(`[${serverName}] Logged in.`);
+        }
+
+        await sleep(1000);
+
+        // ── Play → Mixed room ──────────────────────────────────
+        await page.click('.butt_left_menu.to-play');
+        await page.waitForSelector('.server-wrap', { timeout: 10_000 });
+        await sleep(600);
+
+        await page.evaluate(() => {
+            for (const wrap of document.querySelectorAll('.server-wrap')) {
+                const h2 = wrap.querySelector('h2');
+                if (h2 && h2.textContent.trim().toLowerCase() === 'mixed') { wrap.click(); return; }
+            }
+            const first = document.querySelector('.server-wrap');
+            if (first) first.click();
+        });
+
+        await page.waitForSelector('#listChat', { timeout: 15_000 });
+        await sleep(1500);
+
+        // ── Uncensored channel ─────────────────────────────────
+        await page.evaluate(() => {
+            for (const btn of document.querySelectorAll('button[ng-click]')) {
+                if (btn.getAttribute('ng-click') === 'selectChannel(2)' ||
+                    btn.textContent.trim().startsWith('Uncensored')) {
+                    btn.click(); return;
+                }
+            }
+        });
+
+        await sleep(1500);
+
+        // ── Switch to target server ────────────────────────────
+        const sw = await switchServer(page, serverName);
+        console.log(`[${serverName}] Switch result: ${sw}`);
+        await sleep(2000);
+
+        // ── Poll loop ──────────────────────────────────────────
+        const seenMessages = new Map();
+
+        console.log(`[${serverName}] Starting poll loop every ${POLL_INTERVAL}ms...`);
+
+        while (true) {
+            try {
+                const msgs = await getMessages(page);
+                const now  = Date.now();
+                const fresh = [];
+
+                for (const raw of msgs) {
+                    const text = formatMessage(raw);
+                    const last = seenMessages.get(text);
+                    if (last && now - last < MSG_MAX_AGE_MS) continue;
+                    seenMessages.set(text, now);
+                    fresh.push(text);
+                }
+
+                // Clean up old entries to avoid memory growth
+                for (const [key, ts] of seenMessages.entries()) {
+                    if (now - ts > MSG_MAX_AGE_MS) seenMessages.delete(key);
+                }
+
+                if (fresh.length > 0) {
+                    const ok = await sendToTelegram(`🎮 ${serverName}\n${fresh.join('\n')}`);
+                    console.log(`[${serverName}] Sent ${fresh.length} message(s). OK=${ok}`);
+                }
+            } catch (pollErr) {
+                console.error(`[${serverName}] Poll error:`, pollErr.message);
+            }
+
+            await sleep(POLL_INTERVAL);
+        }
+
+    } catch (err) {
+        console.error(`[${serverName}] Fatal error:`, err.message);
+        await browser.close();
+
+        // Restart after a short delay
+        console.log(`[${serverName}] Restarting in 10s...`);
+        await sleep(10_000);
+        runServerInstance(serverName); // recursive restart
+    }
+}
+
+// ── MAIN — launch all instances in parallel ───────────────────
+(async () => {
+    console.log(`Launching ${TARGET_SERVERS.length} instances: ${TARGET_SERVERS.join(', ')}`);
+
+    // Stagger launches by 3s each to avoid hammering the site simultaneously
+    for (let i = 0; i < TARGET_SERVERS.length; i++) {
+        runServerInstance(TARGET_SERVERS[i]);
+        if (i < TARGET_SERVERS.length - 1) await sleep(3_000);
+    }
+
+    process.on('SIGINT', () => {
+        console.log('\nShutting down...');
+        process.exit(0);
+    });
+})();
