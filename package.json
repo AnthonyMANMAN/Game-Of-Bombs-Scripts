@@ -1,0 +1,35 @@
+{
+  "name": "scriptdash-gob",
+  "version": "1.0.0",
+  "description": "Script Dashboard for Game of Bombs — Desktop Edition",
+  "main": "main.js",
+  "author": "GOB Script Dashboard",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.gob.scriptdash",
+    "productName": "ScriptDash GOB",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+  "target": "nsis",
+  "sign": false,
+  "signingHashAlgorithms": null,
+  "forceCodeSigning": false
+},
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

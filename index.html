@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline';">
+<title>Панель скриптов — Game of Bombs</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --surface2: #131920;
+    --surface3: #1a2230;
+    --border: #1e2d3d;
+    --border2: #253545;
+    --accent: #00d4ff;
+    --accent2: #ff4d6d;
+    --accent3: #39ff14;
+    --accent4: #ffd700;
+    --text: #c9d8e8;
+    --muted: #4a6070;
+    --muted2: #6a8090;
+    --glow: 0 0 12px rgba(0,212,255,0.4);
+    --glow2: 0 0 12px rgba(57,255,20,0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rajdhani', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-app-region: no-drag; }
+  body::before { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px); pointer-events: none; z-index: 9000; }
+
+  /* ── Titlebar ─────────────────────────────────────────────────── */
+  .titlebar { height: 38px; background: #060a0e; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; -webkit-app-region: drag; flex-shrink: 0; user-select: none; }
+  .titlebar-logo { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 0.14em; text-shadow: var(--glow); -webkit-app-region: no-drag; }
+  .titlebar-badge { background: var(--accent); color: #000; font-size: 8px; padding: 1px 5px; border-radius: 2px; font-weight: 700; letter-spacing: 0.08em; margin-left: 8px; }
+  .titlebar-spacer { flex: 1; }
+  .titlebar-platform { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: var(--muted); -webkit-app-region: no-drag; }
+
+  /* ── Header ───────────────────────────────────────────────────── */
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 54px; border-bottom: 1px solid var(--border); background: var(--surface); position: relative; flex-shrink: 0; }
+  header::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg,transparent,var(--accent),transparent); opacity: 0.5; }
+  .logo { font-family: 'Share Tech Mono', monospace; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 10px; letter-spacing: 0.12em; text-shadow: var(--glow); }
+  .logo-badge { background: var(--accent); color: #000; font-size: 9px; padding: 2px 6px; border-radius: 2px; font-weight: 700; letter-spacing: 0.1em; animation: pulse-badge 2s infinite; }
+  @keyframes pulse-badge { 0%,100%{opacity:1}50%{opacity:0.6} }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .stats-bar { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--muted2); display: flex; gap: 16px; margin-right: 8px; }
+  .stats-bar span span { color: var(--accent); }
+
+  /* ── Buttons ──────────────────────────────────────────────────── */
+  .btn { font-family: 'Share Tech Mono', monospace; font-size: 11px; padding: 7px 14px; border-radius: 3px; border: none; cursor: pointer; transition: all 0.15s ease; letter-spacing: 0.08em; display: flex; align-items: center; gap: 6px; }
+  .btn-primary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .btn-primary:hover { background: var(--accent); color: #000; box-shadow: var(--glow); }
+  .btn-ghost { background: transparent; color: var(--muted2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted2); }
+  .btn-danger { background: transparent; color: var(--accent2); border: 1px solid transparent; padding: 6px 10px; }
+  .btn-danger:hover { background: rgba(255,77,109,0.1); border-color: var(--accent2); }
+  .btn-run { background: var(--accent3); color: #000; font-weight: 700; border: none; padding: 7px 16px; box-shadow: var(--glow2); }
+  .btn-run:hover { background: #50ff30; }
+  .btn-copy { background: var(--surface3); color: var(--text); border: 1px solid var(--border2); padding: 7px 14px; }
+  .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Layout ───────────────────────────────────────────────────── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 270px; min-width: 270px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-top { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .script-list { flex: 1 1 0; overflow-y: auto; padding: 8px; min-height: 0; }
+  .script-list::-webkit-scrollbar { width: 4px; }
+  .script-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── Search / Filter ──────────────────────────────────────────── */
+  .search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 8px 11px; color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 11px; outline: none; transition: border 0.15s; }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 6px rgba(0,212,255,0.2); }
+  .search-input::placeholder { color: var(--muted); }
+  .filter-row { display: flex; gap: 5px; }
+  .filter-chip { font-family: 'Share Tech Mono', monospace; font-size: 9px; padding: 4px 10px; border-radius: 2px; border: 1px solid var(--border); background: transparent; color: var(--muted2); cursor: pointer; transition: all 0.15s; letter-spacing: 0.06em; }
+  .filter-chip:hover { color: var(--text); border-color: var(--border2); }
+  .filter-chip.active { background: var(--accent); color: #000; border-color: var(--accent); box-shadow: var(--glow); }
+
+  /* ── Script items ─────────────────────────────────────────────── */
+  .script-item { border-radius: 3px; padding: 10px 12px; margin-bottom: 3px; cursor: pointer; border: 1px solid transparent; border-left: 2px solid transparent; transition: all 0.12s ease; }
+  .script-item:hover { background: var(--surface2); border-color: var(--border); border-left-color: var(--muted); }
+  .script-item.active { background: var(--surface2); border-color: var(--border2); border-left-color: var(--accent); }
+  .script-item-name { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .script-item.active .script-item-name { color: var(--accent); }
+  .script-item-desc { font-size: 11px; color: var(--muted2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+  .script-item-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+
+  /* ── Tags ─────────────────────────────────────────────────────── */
+  .tag { font-family: 'Share Tech Mono', monospace; font-size: 8px; padding: 2px 6px; border-radius: 2px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .tag-auto { background: rgba(255,215,0,0.12); color: var(--accent4); border: 1px solid rgba(255,215,0,0.2); }
+  .tag-manual { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
+  .tag-custom { background: rgba(255,255,255,0.05); color: var(--muted2); border: 1px solid var(--border); }
+
+  /* ── Panel ────────────────────────────────────────────────────── */
+  .panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+  .panel-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 14px; }
+  .panel-empty-icon { width: 52px; height: 52px; border: 1px solid var(--border2); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); position: relative; }
+  .panel-empty-icon::before { content: ''; position: absolute; inset: -1px; border-radius: 4px; background: linear-gradient(135deg, var(--accent), transparent); opacity: 0.15; }
+  .panel-empty p { font-size: 14px; letter-spacing: 0.05em; }
+  .panel-empty span { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); }
+  .panel-header { padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface); flex-shrink: 0; }
+  .panel-title { flex: 1; }
+  .panel-name { font-family: 'Share Tech Mono', monospace; font-size: 14px; color: var(--accent); text-shadow: var(--glow); margin-bottom: 5px; }
+  .panel-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .run-badge { font-family: 'Share Tech Mono', monospace; font-size: 9px; padding: 2px 8px; border-radius: 2px; background: rgba(255,255,255,0.04); color: var(--muted2); border: 1px solid var(--border); }
+  .panel-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+  .panel-body::-webkit-scrollbar { width: 3px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── Form fields ──────────────────────────────────────────────── */
+  .field-label { font-family: 'Share Tech Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted2); margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .field-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border2), transparent); }
+  .desc-block { font-size: 13px; color: var(--muted2); line-height: 1.6; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: 0 3px 3px 0; }
+  .code-block { background: #060a0e; border: 1px solid var(--border); border-radius: 3px; padding: 16px; font-family: 'Share Tech Mono', monospace; font-size: 11px; line-height: 1.65; overflow-x: auto; white-space: pre-wrap; word-break: break-word; color: #8dc8e8; max-height: 360px; overflow-y: auto; }
+  .code-block::-webkit-scrollbar { width: 3px; height: 3px; }
+  .code-block::-webkit-scrollbar-thumb { background: var(--border2); }
+  .text-input, .textarea-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 9px 12px; color: var(--text); font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 500; outline: none; transition: border 0.15s; }
+  .text-input:focus, .textarea-input:focus { border-color: var(--accent); box-shadow: 0 0 6px rgba(0,212,255,0.15); }
+  .text-input::placeholder, .textarea-input::placeholder { color: var(--muted); }
+  .textarea-code { font-family: 'Share Tech Mono', monospace; font-size: 11px; line-height: 1.65; resize: vertical; min-height: 220px; background: #060a0e; color: #8dc8e8; }
+
+  /* ── Trigger selector ─────────────────────────────────────────── */
+  .trigger-group { display: flex; gap: 8px; }
+  .trigger-option { flex: 1; padding: 10px 12px; border-radius: 3px; border: 1px solid var(--border); background: var(--surface2); cursor: pointer; text-align: center; transition: all 0.15s; }
+  .trigger-option input { display: none; }
+  .trigger-option:hover { border-color: var(--border2); }
+  .trigger-option.sel-auto { border-color: var(--accent4); background: rgba(255,215,0,0.06); }
+  .trigger-option.sel-manual { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .trigger-label { font-family: 'Share Tech Mono', monospace; font-size: 11px; font-weight: 500; display: block; margin-bottom: 2px; }
+  .trigger-option.sel-auto .trigger-label { color: var(--accent4); }
+  .trigger-option.sel-manual .trigger-label { color: var(--accent); }
+  .trigger-sublabel { font-size: 10px; color: var(--muted2); }
+
+  /* ── Tag editing ──────────────────────────────────────────────── */
+  .tag-input-row { display: flex; gap: 8px; }
+  .tag-input-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 7px 10px; color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 11px; outline: none; }
+  .tag-input-row input:focus { border-color: var(--accent); }
+  .tag-input-row input::placeholder { color: var(--muted); }
+  .tag-list { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+  .tag-removable { font-family: 'Share Tech Mono', monospace; font-size: 9px; padding: 3px 8px; border-radius: 2px; background: rgba(255,255,255,0.05); color: var(--muted2); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.1s; }
+  .tag-removable:hover { background: rgba(255,77,109,0.1); color: var(--accent2); border-color: var(--accent2); }
+
+  /* ── Copy modal ───────────────────────────────────────────────── */
+  .copy-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 500; align-items: center; justify-content: center; }
+  .copy-overlay.open { display: flex; }
+  .copy-modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; padding: 22px; width: 640px; max-width: 92vw; max-height: 82vh; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 0 40px rgba(0,212,255,0.12), 0 0 80px rgba(0,0,0,0.6); position: relative; }
+  .copy-modal::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.6; }
+  .copy-modal-header { display: flex; align-items: center; justify-content: space-between; }
+  .copy-modal-title { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--accent3); text-shadow: var(--glow2); letter-spacing: 0.1em; }
+  .copy-modal-code { background: #040810; border: 1px solid var(--border2); border-radius: 3px; padding: 14px; font-family: 'Share Tech Mono', monospace; font-size: 11px; color: #8dc8e8; line-height: 1.65; overflow-y: auto; max-height: 340px; white-space: pre-wrap; word-break: break-word; flex: 1; }
+  .copy-modal-code::-webkit-scrollbar { width: 3px; }
+  .copy-modal-code::-webkit-scrollbar-thumb { background: var(--border2); }
+  .copy-hint { font-size: 12px; color: var(--muted2); padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; line-height: 1.5; }
+  .copy-hint strong { color: var(--accent); font-family: 'Share Tech Mono', monospace; }
+  .copy-hint kbd { display: inline-block; background: var(--surface3); border: 1px solid var(--border2); border-radius: 3px; padding: 1px 6px; font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text); }
+  .copy-modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
+  .close-btn { background: none; border: none; color: var(--muted2); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 3px; transition: all 0.1s; font-family: 'Share Tech Mono', monospace; }
+  .close-btn:hover { color: var(--accent2); }
+
+  /* ── Toast ────────────────────────────────────────────────────── */
+  .toast { position: fixed; bottom: 22px; right: 22px; background: var(--surface2); border: 1px solid var(--border2); border-left: 2px solid var(--accent3); border-radius: 3px; padding: 10px 16px; font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text); opacity: 0; transform: translateY(8px); transition: all 0.2s ease; pointer-events: none; z-index: 9999; display: flex; align-items: center; gap: 10px; box-shadow: 0 0 20px rgba(57,255,20,0.1); }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); flex-shrink: 0; box-shadow: var(--glow2); }
+
+  /* ── Misc ─────────────────────────────────────────────────────── */
+  .empty-list { text-align: center; padding: 40px 20px; color: var(--muted); font-family: 'Share Tech Mono', monospace; font-size: 11px; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<!-- Native-style titlebar (drag area) -->
+<div class="titlebar">
+  <span class="titlebar-logo">◈ SCRIPT DASHBOARD <span class="titlebar-badge">GAME OF BOMBS</span></span>
+  <span class="titlebar-spacer"></span>
+  <span class="titlebar-platform" id="platformLabel"></span>
+</div>
+
+<header>
+  <div class="logo">
+    ◈ ПАНЕЛЬ.СКРИПТОВ
+    <span class="logo-badge">DESKTOP</span>
+  </div>
+  <div class="header-right">
+    <div class="stats-bar">
+      <span>СКРИПТОВ: <span id="statTotal">0</span></span>
+      <span>АВТО: <span id="statAuto">0</span></span>
+      <span>РУЧНЫХ: <span id="statManual">0</span></span>
+    </div>
+    <button class="btn btn-ghost" onclick="exportScripts()">⬇ ЭКСПОРТ</button>
+    <button class="btn btn-ghost" onclick="importScripts()">⬆ ИМПОРТ</button>
+    <button class="btn btn-primary" onclick="newScript()">＋ НОВЫЙ</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="search-input" type="text" placeholder="// поиск скриптов..." oninput="filterScripts(this.value)">
+      <div class="filter-row">
+        <button class="filter-chip active" onclick="setFilter('all',this)">ВСЕ</button>
+        <button class="filter-chip" onclick="setFilter('auto',this)">АВТО</button>
+        <button class="filter-chip" onclick="setFilter('manual',this)">РУЧНЫЕ</button>
+      </div>
+    </div>
+    <div class="script-list" id="scriptList"></div>
+  </div>
+  <div class="panel" id="panel">
+    <div class="panel-empty">
+      <div class="panel-empty-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <p>ВЫБЕРИТЕ СКРИПТ</p>
+      <span>// скрипты сохраняются локально</span>
+    </div>
+  </div>
+</div>
+
+<!-- Copy / Run modal -->
+<div class="copy-overlay" id="copyOverlay" onclick="closeCopyModal(event)">
+  <div class="copy-modal">
+    <div class="copy-modal-header">
+      <div class="copy-modal-title" id="copyModalTitle">▶ ГОТОВ К ЗАПУСКУ</div>
+      <button class="close-btn" onclick="closeCopyModal()">✕</button>
+    </div>
+    <div class="copy-hint">
+      Откройте DevTools (<strong><kbd>F12</kbd></strong>) → вкладка <strong>Консоль</strong> → вставьте → нажмите <strong><kbd>Enter</kbd></strong>
+    </div>
+    <div class="copy-modal-code" id="copyModalCode"></div>
+    <div class="copy-modal-footer">
+      <button class="btn btn-ghost" onclick="closeCopyModal()">ЗАКРЫТЬ</button>
+      <button class="btn btn-run" onclick="copyModalCode()">⎘ КОПИРОВАТЬ В БУФЕР</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div class="toast-dot"></div><span id="toastMsg"></span></div>
+
+<script>
+// ── Platform label ─────────────────────────────────────────────────────────
+const api = window.electronAPI;
+if (api) {
+  const p = api.platform;
+  document.getElementById('platformLabel').textContent =
+    p === 'darwin' ? 'macOS' : p === 'win32' ? 'Windows' : 'Linux';
+}
+
+// ── Built-in scripts ───────────────────────────────────────────────────────
+const PRELOADED = [
+  {
+    id:'builtin_world_grid',name:'Координаты в Блоке',
+    description:'Hooks into the layer0 canvas to draw a red 32px world grid with wrapped tile coordinates (0-31). Also tracks all drawImage calls to detect block positions. Use toggleWorldGrid(), getBlockAt(x,y), getAllBlocks().',
+    trigger:'manual',tags:['canvas','debug','grid'],runCount:0,created:1700000000000,builtin:true,
+    code:`(() => {
+  let layer0Ctx = null;
+  let showWorldGrid = true;
+  let blockPositions = {};
+  
+  const drawWorldGrid = () => {
+    if (!layer0Ctx || !showWorldGrid) return;
+    const transform = layer0Ctx.getTransform();
+    if (Math.abs(transform.e) < 10 && Math.abs(transform.f) < 10) return;
+    layer0Ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
+    layer0Ctx.lineWidth = 1;
+    const tileSize = 32;
+    const scale = transform.a;
+    const worldLeft = -transform.e / scale;
+    const worldTop = -transform.f / scale;
+    const worldRight = worldLeft + layer0Ctx.canvas.width / scale;
+    const worldBottom = worldTop + layer0Ctx.canvas.height / scale;
+    const startX = Math.floor(worldLeft / tileSize) * tileSize;
+    const startY = Math.floor(worldTop / tileSize) * tileSize;
+    for (let x = startX; x <= worldRight + tileSize; x += tileSize) {
+      layer0Ctx.beginPath(); layer0Ctx.moveTo(x, worldTop - tileSize); layer0Ctx.lineTo(x, worldBottom + tileSize); layer0Ctx.stroke();
+    }
+    for (let y = startY; y <= worldBottom + tileSize; y += tileSize) {
+      layer0Ctx.beginPath(); layer0Ctx.moveTo(worldLeft - tileSize, y); layer0Ctx.lineTo(worldRight + tileSize, y); layer0Ctx.stroke();
+    }
+    layer0Ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+    layer0Ctx.font = 'bold 10px monospace';
+    for (let x = startX; x <= worldRight; x += tileSize) {
+      for (let y = startY; y <= worldBottom; y += tileSize) {
+        const wx = ((Math.floor(x/tileSize)%32)+32)%32;
+        const wy = ((Math.floor(y/tileSize)%32)+32)%32;
+        layer0Ctx.fillText(wx+','+wy, x+2, y+12);
+      }
+    }
+  };
+  
+  const hookCanvasContext = (ctx, canvas) => {
+    if (canvas.id === 'layer0') {
+      layer0Ctx = ctx;
+      console.log('World grid hooked - 32px tiles, 32x32 wrapped world');
+      const proto = Object.getPrototypeOf(ctx);
+      const origRestore = proto.restore, origSave = proto.save, origDraw = proto.drawImage;
+      let saveCount = 0;
+      proto.save = function(...a) { saveCount++; return origSave.apply(this,a); };
+      proto.restore = function(...a) { if(canvas.id==='layer0'&&saveCount>0) drawWorldGrid(); saveCount--; return origRestore.apply(this,a); };
+      proto.drawImage = function(image,...args) {
+        if (canvas.id === 'layer0') {
+          let wx,wy,w,h;
+          if(args.length===2){wx=args[0];wy=args[1];w=image.width;h=image.height;}
+          else if(args.length===4){wx=args[0];wy=args[1];w=args[2];h=args[3];}
+          else if(args.length===8){wx=args[4];wy=args[5];w=args[6];h=args[7];}
+          if(w>=16&&w<=64&&h>=16&&h<=64){
+            const tx=((Math.floor(wx/32)%32)+32)%32, ty=((Math.floor(wy/32)%32)+32)%32;
+            blockPositions[tx+','+ty]={x:wx,y:wy,width:w,height:h,tileX:tx,tileY:ty,image:image.src||'unknown'};
+          }
+        }
+        return origDraw.apply(this,[image,...args]);
+      };
+    }
+  };
+  
+  const hookAll = () => { for(const c of document.querySelectorAll('canvas')){const ctx=c.getContext('2d');if(ctx&&!ctx._wgHooked){hookCanvasContext(ctx,c);ctx._wgHooked=true;}} };
+  hookAll();
+  new MutationObserver(hookAll).observe(document.body,{childList:true,subtree:true});
+  
+  window.toggleWorldGrid = () => { showWorldGrid=!showWorldGrid; console.log('World grid:',showWorldGrid?'ON':'OFF'); };
+  window.getBlockAt = (x,y) => { const wx=((x%32)+32)%32,wy=((y%32)+32)%32; return blockPositions[wx+','+wy]||null; };
+  window.getAllBlocks = () => Object.values(blockPositions);
+  window.getBlocksInArea = (x1,y1,x2,y2) => { const b=[]; for(let x=x1;x<=x2;x++) for(let y=y1;y<=y2;y++){const bl=window.getBlockAt(x,y);if(bl)b.push(bl);} return b; };
+  console.log('Commands: toggleWorldGrid() | getBlockAt(x,y) | getAllBlocks() | getBlocksInArea(x1,y1,x2,y2)');
+})()`
+  },
+  {
+    id:'builtin_combined_en',name:'Англ Вариант 3х скриптов',
+    description:'English layout only. J = toggle Auto Chain (50 bombs/sec), L = toggle K-Stick (hold K down), H = toggle Skin Cycler. Also exposes toggleAutoChain(), toggleKStick(), toggleSkinCycler(), getStatus() in console.',
+    trigger:'manual',tags:['autochain','kstick','skincycler','english'],runCount:0,created:1700000001000,builtin:true,
+    code:`// Англ Вариант 3х скриптов
+// J = Auto Chain | L = K-Stick | H = Skin Cycler
+let autoChain_active=false,autoChain_interval=null,kStuck=false,preventKKeyUp=null;
+let skinCycler_active=false,skinCycler_interval=null,skinCycler_currentIndex=0,skinCycler_skinsList=[];
+const SKIN_CYCLE_SPEED=100;
+const log=m=>console.log('[Combined]',m);
+const isK=e=>e.key.toLowerCase()==='k'||e.code==='KeyK';
+const isL=e=>e.key.toLowerCase()==='l'||e.code==='KeyL';
+const isJ=e=>e.key.toLowerCase()==='j';
+const isH=e=>e.key.toLowerCase()==='h';
+
+function autoChain_stop(){if(autoChain_interval){clearInterval(autoChain_interval);autoChain_interval=null;}}
+function autoChain_start(){
+  autoChain_stop();
+  autoChain_interval=setInterval(()=>{
+    if(!autoChain_active)return;
+    document.dispatchEvent(new KeyboardEvent("keydown",{keyCode:75,key:"k",code:"KeyK",bubbles:true}));
+    setTimeout(()=>document.dispatchEvent(new KeyboardEvent("keyup",{keyCode:75,key:"k",code:"KeyK",bubbles:true})),10);
+  },20);
+  log("Auto Chain: started 50/sec");
+}
+function autoChain_toggle(){autoChain_active=!autoChain_active;log("Auto Chain: "+(autoChain_active?"ON":"OFF"));autoChain_active?autoChain_start():autoChain_stop();}
+
+function kStick_toggle(){
+  if(!kStuck){
+    preventKKeyUp=e=>{if(isK(e)){e.preventDefault();e.stopPropagation();}};
+    document.addEventListener('keyup',preventKKeyUp,true);kStuck=true;log("K-Stick: BLOCKED");
+  }else{
+    if(preventKKeyUp)document.removeEventListener('keyup',preventKKeyUp,true);preventKKeyUp=null;kStuck=false;log("K-Stick: UNBLOCKED");
+  }
+}
+
+function sc_init(){
+  const angular=window.angular;if(!angular)return false;
+  const el=document.querySelector('[ng-repeat*="skin in group.skins"]');if(!el)return false;
+  let ps=angular.element(el).scope()?.$parent;
+  while(ps&&!ps.group)ps=ps.$parent;
+  if(ps?.group?.skins){skinCycler_skinsList=ps.group.skins;log("Skin Cycler: "+skinCycler_skinsList.length+" skins");return true;}
+  return false;
+}
+function sc_activate(skin){
+  const angular=window.angular;if(!angular)return;
+  for(const el of document.querySelectorAll('[ng-click*="activateSkin"]')){
+    const s=angular.element(el).scope();if(s?.activateSkin){s.$apply(()=>{s.selectSkin?.(skin);s.activateSkin(skin);});return;}
+  }
+  const el=document.querySelector('[ng-repeat*="skin in group.skins"]');
+  if(el){let ps=angular.element(el).scope()?.$parent;while(ps){if(ps.activateSkin&&ps.selectSkin){ps.$apply(()=>{ps.selectSkin(skin);ps.activateSkin(skin);});return;}ps=ps.$parent;}}
+}
+function sc_next(){
+  if(!skinCycler_skinsList.length&&!sc_init()){skinCycler_stop();return;}
+  if(skinCycler_skinsList.length<=1)return;
+  skinCycler_currentIndex=(skinCycler_currentIndex+1)>=skinCycler_skinsList.length?1:skinCycler_currentIndex+1;
+  sc_activate(skinCycler_skinsList[skinCycler_currentIndex]);
+}
+function skinCycler_start(){
+  if(skinCycler_active)return;
+  if(!sc_init()||!skinCycler_skinsList.length){log("No skins! Visit skins page first.");return;}
+  skinCycler_active=true;skinCycler_interval=setInterval(sc_next,SKIN_CYCLE_SPEED);log("Skin Cycler: STARTED");
+}
+function skinCycler_stop(){if(!skinCycler_active)return;skinCycler_active=false;clearInterval(skinCycler_interval);skinCycler_interval=null;log("Skin Cycler: STOPPED");}
+function skinCycler_toggle(){skinCycler_active?skinCycler_stop():skinCycler_start();}
+
+document.addEventListener("keydown",e=>{
+  if(isJ(e)&&!e.repeat){autoChain_toggle();if(!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&!document.activeElement.isContentEditable)e.preventDefault();}
+  if(isL(e)&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!['INPUT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();kStick_toggle();}
+  if(isH(e)&&!e.repeat&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!['INPUT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();skinCycler_toggle();}
+});
+window.addEventListener('beforeunload',()=>{autoChain_stop();skinCycler_stop();if(preventKKeyUp)document.removeEventListener('keyup',preventKKeyUp,true);});
+window.toggleAutoChain=()=>{autoChain_toggle();return"Auto Chain: "+(autoChain_active?"ON":"OFF");};
+window.toggleKStick=()=>{kStick_toggle();return"K-Stick: "+(kStuck?"BLOCKED":"UNBLOCKED");};
+window.toggleSkinCycler=()=>{skinCycler_toggle();return"Skin Cycler: "+(skinCycler_active?"ON":"OFF");};
+window.getStatus=()=>({autoChain:autoChain_active?"ON":"OFF",kStick:kStuck?"BLOCKED":"UNBLOCKED",skinCycler:skinCycler_active?"ON":"OFF"});
+console.log('Combined (EN) loaded! J=AutoChain | L=K-Stick | H=SkinCycler');`
+  },
+  {
+    id:'builtin_combined_ru',name:'Ру вариант 3х скриптов',
+    description:'English + Russian keyboard layout support. J/О = Auto Chain, L/Д = K-Stick (blocks Л too), H/Р = Skin Cycler. Identical to EN version but Cyrillic key detection added.',
+    trigger:'manual',tags:['autochain','kstick','skincycler','russian','english'],runCount:0,created:1700000002000,builtin:true,
+    code:`// Ру вариант 3х скриптов
+// J/О=AutoChain | L/Д=K-Stick | H/Р=SkinCycler
+let autoChain_active=false,autoChain_interval=null,kStuck=false,preventKKeyUp=null;
+let skinCycler_active=false,skinCycler_interval=null,skinCycler_currentIndex=0,skinCycler_skinsList=[];
+const SKIN_CYCLE_SPEED=100;
+const log=m=>console.log('[Combined]',m);
+const isK=e=>{const k=e.key.toLowerCase();return k==='k'||e.code==='KeyK'||k==='л';};
+const isL=e=>{const k=e.key.toLowerCase();return k==='l'||e.code==='KeyL'||k==='д';};
+const isJ=e=>{const k=e.key.toLowerCase();return k==='j'||e.code==='KeyJ'||k==='о';};
+const isH=e=>{const k=e.key.toLowerCase();return k==='h'||e.code==='KeyH'||k==='р';};
+
+function autoChain_stop(){if(autoChain_interval){clearInterval(autoChain_interval);autoChain_interval=null;}}
+function autoChain_start(){
+  autoChain_stop();
+  autoChain_interval=setInterval(()=>{
+    if(!autoChain_active)return;
+    document.dispatchEvent(new KeyboardEvent("keydown",{keyCode:75,key:"k",code:"KeyK",bubbles:true}));
+    setTimeout(()=>document.dispatchEvent(new KeyboardEvent("keyup",{keyCode:75,key:"k",code:"KeyK",bubbles:true})),10);
+  },20);
+  log("Auto Chain: started 50/sec");
+}
+function autoChain_toggle(){autoChain_active=!autoChain_active;log("Auto Chain: "+(autoChain_active?"ON":"OFF"));autoChain_active?autoChain_start():autoChain_stop();}
+
+function kStick_toggle(){
+  if(!kStuck){
+    preventKKeyUp=e=>{if(isK(e)){e.preventDefault();e.stopPropagation();}};
+    document.addEventListener('keyup',preventKKeyUp,true);kStuck=true;log("K-Stick: K/Л BLOCKED");
+  }else{
+    if(preventKKeyUp)document.removeEventListener('keyup',preventKKeyUp,true);preventKKeyUp=null;kStuck=false;log("K-Stick: UNBLOCKED");
+  }
+}
+
+function sc_init(){
+  const angular=window.angular;if(!angular)return false;
+  const el=document.querySelector('[ng-repeat*="skin in group.skins"]');if(!el)return false;
+  let ps=angular.element(el).scope()?.$parent;
+  while(ps&&!ps.group)ps=ps.$parent;
+  if(ps?.group?.skins){skinCycler_skinsList=ps.group.skins;log("Skin Cycler: "+skinCycler_skinsList.length+" skins");return true;}
+  return false;
+}
+function sc_activate(skin){
+  const angular=window.angular;if(!angular)return;
+  for(const el of document.querySelectorAll('[ng-click*="activateSkin"]')){
+    const s=angular.element(el).scope();if(s?.activateSkin){s.$apply(()=>{s.selectSkin?.(skin);s.activateSkin(skin);});return;}
+  }
+  const el=document.querySelector('[ng-repeat*="skin in group.skins"]');
+  if(el){let ps=angular.element(el).scope()?.$parent;while(ps){if(ps.activateSkin&&ps.selectSkin){ps.$apply(()=>{ps.selectSkin(skin);ps.activateSkin(skin);});return;}ps=ps.$parent;}}
+}
+function sc_next(){
+  if(!skinCycler_skinsList.length&&!sc_init()){skinCycler_stop();return;}
+  if(skinCycler_skinsList.length<=1)return;
+  skinCycler_currentIndex=(skinCycler_currentIndex+1)>=skinCycler_skinsList.length?1:skinCycler_currentIndex+1;
+  sc_activate(skinCycler_skinsList[skinCycler_currentIndex]);
+}
+function skinCycler_start(){
+  if(skinCycler_active)return;
+  if(!sc_init()||!skinCycler_skinsList.length){log("No skins! Visit skins page first.");return;}
+  skinCycler_active=true;skinCycler_interval=setInterval(sc_next,SKIN_CYCLE_SPEED);log("Skin Cycler: STARTED");
+}
+function skinCycler_stop(){if(!skinCycler_active)return;skinCycler_active=false;clearInterval(skinCycler_interval);skinCycler_interval=null;log("Skin Cycler: STOPPED");}
+function skinCycler_toggle(){skinCycler_active?skinCycler_stop():skinCycler_start();}
+
+document.addEventListener("keydown",e=>{
+  if(isJ(e)&&!e.repeat){autoChain_toggle();if(!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&!document.activeElement.isContentEditable)e.preventDefault();}
+  if(isL(e)&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!['INPUT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();kStick_toggle();}
+  if(isH(e)&&!e.repeat&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!['INPUT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();skinCycler_toggle();}
+});
+window.addEventListener('beforeunload',()=>{autoChain_stop();skinCycler_stop();if(preventKKeyUp)document.removeEventListener('keyup',preventKKeyUp,true);});
+window.toggleAutoChain=()=>{autoChain_toggle();return"Auto Chain: "+(autoChain_active?"ON":"OFF");};
+window.toggleKStick=()=>{kStick_toggle();return"K-Stick: "+(kStuck?"BLOCKED":"UNBLOCKED");};
+window.toggleSkinCycler=()=>{skinCycler_toggle();return"Skin Cycler: "+(skinCycler_active?"ON":"OFF");};
+window.getStatus=()=>({autoChain:autoChain_active?"ON":"OFF",kStick:kStuck?"BLOCKED":"UNBLOCKED",skinCycler:skinCycler_active?"ON":"OFF"});
+console.log('Combined (EN+RU) loaded! J/О=AutoChain | L/Д=K-Stick | H/Р=SkinCycler');`
+  },
+  {
+    id:'builtin_skin_cycler_ui',name:'Цикл Скинов',
+    description:'Lightweight skin cycler with a floating panel UI. Select which skins to include, adjust cycle speed (ms), use ALL/NONE/RELOAD buttons. Ctrl+K to toggle. Highlights currently active skin.',
+    trigger:'manual',tags:['skincycler','ui','angular','floating'],runCount:0,created:1700000003000,builtin:true,
+    code:`(function(){
+  let cycling=false,intervalId=null,currentIndex=0,cycleSpeed=100,skinsList=[],selectedIndices=new Set();
+  function createUI(){
+    const ui=document.createElement('div');ui.id='skinCycler';
+    ui.innerHTML='<style>#skinCycler{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.85);color:#fff;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;z-index:999999;max-width:300px}#skinCycler button{background:#333;border:1px solid #555;color:#fff;padding:4px 8px;margin:2px;cursor:pointer;font-size:11px;border-radius:2px}#skinCycler button:hover{background:#444}#skinCycler button.active{background:#4a4;border-color:#6c6}#skinCycler button.current{background:#44a;border-color:#66c}#skinCycler input[type=number]{width:60px;background:#222;border:1px solid #555;color:#fff;padding:2px 4px;font-size:11px}.sc-row{margin:4px 0;display:flex;align-items:center;gap:4px;flex-wrap:wrap}.sc-label{font-size:10px;opacity:.7;min-width:40px}#scButtons{display:flex;flex-wrap:wrap;gap:2px;max-height:200px;overflow-y:auto;padding:4px;background:rgba(0,0,0,.3);border-radius:2px}#scButtons button{min-width:32px;padding:3px 6px;margin:0}</style><div class="sc-row"><button id="scToggle">START</button><span id="scStatus">0/0</span></div><div class="sc-row"><span class="sc-label">Speed:</span><input type="number" id="scSpeed" value="100" min="10" max="5000" step="10"><span style="font-size:10px">ms</span></div><div class="sc-row"><button id="scAll">ALL</button><button id="scNone">NONE</button><button id="scReload">RELOAD</button></div><div id="scButtons"></div>';
+    document.body.appendChild(ui);
+    document.getElementById('scToggle').onclick=toggleCycling;
+    document.getElementById('scSpeed').onchange=e=>{const v=parseInt(e.target.value);if(v>=10&&v<=5000){const was=cycling;if(was)stopCycling();cycleSpeed=v;if(was)startCycling();}};
+    document.getElementById('scAll').onclick=()=>{for(let i=1;i<skinsList.length;i++)selectedIndices.add(i);updateUI();};
+    document.getElementById('scNone').onclick=()=>{selectedIndices.clear();updateUI();};
+    document.getElementById('scReload').onclick=()=>{initSkins();renderBtns();updateUI();};
+  }
+  function renderBtns(){const c=document.getElementById('scButtons');c.innerHTML='';for(let i=1;i<skinsList.length;i++){const b=document.createElement('button');b.textContent=i;b.dataset.idx=i;b.onclick=()=>{selectedIndices.has(i)?(selectedIndices.delete(i),b.classList.remove('active')):(selectedIndices.add(i),b.classList.add('active'));updateUI();};if(selectedIndices.has(i))b.classList.add('active');c.appendChild(b);}}
+  function updateUI(){const s=document.getElementById('scStatus'),t=document.getElementById('scToggle');if(s)s.textContent=selectedIndices.size+'/'+(skinsList.length-1);if(t){t.textContent=cycling?'STOP':'START';t.classList.toggle('active',cycling);}document.querySelectorAll('#scButtons button').forEach(b=>b.classList.remove('current'));if(cycling&&currentIndex>=0){const a=Array.from(selectedIndices);const b=document.querySelector('#scButtons button[data-idx="'+a[currentIndex]+'"]');if(b)b.classList.add('current');}}
+  function initSkins(){const angular=window.angular;if(!angular)return false;const el=document.querySelector('[ng-repeat*="skin in group.skins"]');if(!el)return false;const sc=angular.element(el).scope();if(!sc||!sc.$parent)return false;let ps=sc.$parent;while(ps&&!ps.group)ps=ps.$parent;if(ps?.group?.skins){skinsList=ps.group.skins;selectedIndices.clear();for(let i=1;i<skinsList.length;i++)selectedIndices.add(i);return true;}return false;}
+  function activate(skin){const angular=window.angular;if(!angular)return;const el=document.querySelector('[ng-repeat*="skin in group.skins"]');if(!el)return;let ps=angular.element(el).scope()?.$parent;while(ps){if(ps.activateSkin&&ps.selectSkin){ps.$apply(()=>{ps.selectSkin(skin);ps.activateSkin(skin);});return;}ps=ps.$parent;}}
+  function cycleNext(){if(!selectedIndices.size){stopCycling();return;}const a=Array.from(selectedIndices);currentIndex=(currentIndex+1)%a.length;activate(skinsList[a[currentIndex]]);updateUI();}
+  function startCycling(){if(cycling||!selectedIndices.size)return;cycling=true;currentIndex=-1;intervalId=setInterval(cycleNext,cycleSpeed);updateUI();}
+  function stopCycling(){if(!cycling)return;cycling=false;clearInterval(intervalId);intervalId=null;updateUI();}
+  function toggleCycling(){cycling?stopCycling():startCycling();}
+  document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='k'){e.preventDefault();toggleCycling();}});
+  createUI();
+  if(initSkins()){renderBtns();updateUI();console.log('Skin Cycler UI: '+(skinsList.length-1)+' skins. Ctrl+K to toggle.');}
+  else console.log('Visit skins page first, then click RELOAD');
+})()`
+  },
+  {
+    id:'builtin_key_broadcaster',name:'2+ Окна',
+    description:'Syncs keyboard input across browser tabs via IndexedDB. Mirrors W/A/S/D/K and arrow keys in real-time. V key toggles on/off. Shows a green/red indicator. Supports Russian layout.',
+    trigger:'manual',tags:['multitab','keysync','indexeddb','russian'],runCount:0,created:1700000004000,builtin:true,
+    code:`let db;const dbName="gameOfBombsKeyEvents",storeName="keyEvents",windowId=Math.random().toString(36).substring(2,15);
+let lastProcessedTimestamp=Date.now(),keyStates={},isEnabled=true,pollingInterval=null,cleanupInterval=null;
+const keysToMonitor=['w','a','s','d','k','r','c','z','x','y','u','h','j','i',' ','arrowup','arrowright','arrowdown','arrowleft','ц','ф','ы','в','л','к','с','я','ч','н','г','р','о','ш'];
+const ruMap={'ц':'w','ф':'a','ы':'s','в':'d','л':'k','к':'r','с':'c','я':'z','ч':'x','н':'y','г':'u','р':'h','о':'j','ш':'i'};
+const mapKey=k=>ruMap[k.toLowerCase()]||k;
+function getKeyCode(k){const mk=mapKey(k.toLowerCase());if(mk.startsWith('arrow')){return{arrowup:38,arrowright:39,arrowdown:40,arrowleft:37}[mk]||0;}if(mk.length===1)return mk.toUpperCase().charCodeAt(0);if(mk===' ')return 32;return 0;}
+function getCodeStr(k){const mk=mapKey(k.toLowerCase());if(mk.startsWith('arrow'))return mk;if(mk===' ')return'Space';if(mk.length===1)return'Key'+mk.toUpperCase();return'';}
+function createIndicator(){const d=document.createElement('div');d.id='kbi';Object.assign(d.style,{position:'fixed',bottom:'10px',right:'10px',backgroundColor:'rgba(0,128,0,0.7)',color:'white',padding:'5px 10px',borderRadius:'5px',fontFamily:'monospace',fontSize:'12px',zIndex:'9999',pointerEvents:'none',transition:'background-color 0.3s'});d.textContent='Key Broadcaster: ON';document.body.appendChild(d);return d;}
+function updateInd(){const d=document.getElementById('kbi')||createIndicator();d.style.backgroundColor=isEnabled?'rgba(0,128,0,0.7)':'rgba(128,0,0,0.7)';d.textContent='Key Broadcaster: '+(isEnabled?'ON':'OFF');}
+function openDatabase(){const req=indexedDB.open(dbName,2);req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(storeName)){const s=d.createObjectStore(storeName,{keyPath:"id"});s.createIndex("timestamp","timestamp",{unique:false});}};req.onsuccess=e=>{db=e.target.result;startServices();};req.onerror=e=>console.error("IndexedDB error:",e.target.error);}
+function startServices(){stopServices();if(isEnabled&&db){lastProcessedTimestamp=Date.now();pollingInterval=setInterval(checkForNewEvents,16);cleanupInterval=setInterval(cleanupOldEvents,1000);}}
+function stopServices(){if(pollingInterval){clearInterval(pollingInterval);pollingInterval=null;}if(cleanupInterval){clearInterval(cleanupInterval);cleanupInterval=null;}Object.keys(keyStates).forEach(k=>{keyStates[k]=false;});}
+function toggle(){isEnabled=!isEnabled;isEnabled?startServices():stopServices();updateInd();}
+document.addEventListener("keydown",e=>{if(e.key.toLowerCase()==='v'||e.key.toLowerCase()==='м'){toggle();return;}const k=e.key.toLowerCase();if(!isEnabled||!keysToMonitor.includes(k))return;if(!keyStates[k]){keyStates[k]=true;store({id:windowId+'-'+k+'-'+Date.now(),type:"keydown",key:e.key,keyCode:e.keyCode||getKeyCode(k),timestamp:Date.now(),origin:windowId,mappedKey:mapKey(k)});}});
+document.addEventListener("keyup",e=>{if(e.key.toLowerCase()==='v'||e.key.toLowerCase()==='м')return;const k=e.key.toLowerCase();if(!isEnabled||!keysToMonitor.includes(k))return;keyStates[k]=false;store({id:windowId+'-'+k+'-'+Date.now(),type:"keyup",key:e.key,keyCode:e.keyCode||getKeyCode(k),timestamp:Date.now(),origin:windowId,mappedKey:mapKey(k)});});
+function store(ev){if(!db)return;db.transaction([storeName],"readwrite").objectStore(storeName).add(ev);}
+function cleanupOldEvents(){if(!db)return;const t=db.transaction([storeName],"readwrite"),s=t.objectStore(storeName);s.index("timestamp").openCursor(IDBKeyRange.upperBound(Date.now()-500)).onsuccess=e=>{const c=e.target.result;if(c){s.delete(c.primaryKey);c.continue();}};}
+function checkForNewEvents(){if(!db)return;db.transaction([storeName],"readonly").objectStore(storeName).index("timestamp").openCursor(IDBKeyRange.lowerBound(lastProcessedTimestamp+1)).onsuccess=e=>{const c=e.target.result;if(c){const ev=c.value;if(ev.origin!==windowId&&Date.now()-ev.timestamp<100){const lk=ev.key.toLowerCase();if(ev.type==="keydown"&&!keyStates[lk]){keyStates[lk]=true;sim(ev);}else if(ev.type==="keyup"&&keyStates[lk]){keyStates[lk]=false;sim(ev);}}lastProcessedTimestamp=Math.max(lastProcessedTimestamp,ev.timestamp);c.continue();}};}
+function sim(ev){const uk=ev.mappedKey||ev.key;document.dispatchEvent(new KeyboardEvent(ev.type,{key:uk,keyCode:ev.keyCode,code:getCodeStr(uk),bubbles:true,cancelable:true}));}
+openDatabase();createIndicator();
+console.log('Key Broadcaster loaded. V = toggle ON/OFF');`
+  },
+  {
+    id:'builtin_auto_respawn',name:'Фарм Киллов',
+    description:'Watches for the Respawn [Space] button and auto-clicks it when visible. 3 seconds after respawn, performs a left→right arrow key nudge. Z key toggles on/off.',
+    trigger:'auto',tags:['respawn','movement','automation'],runCount:0,created:1700000005000,builtin:true,
+    code:`const scoreboard=document.getElementById("scoreboard-new");
+let respawnTimer=null,movementTimer=null,isScriptActive=false,ii=null;
+function startScript(){
+  if(ii)return;
+  ii=setInterval(()=>{
+    if(!isScriptActive||scoreboard.offsetParent===null)return;
+    const btn=[...document.getElementsByTagName("button")].find(b=>b.innerText.indexOf("Respawn [Space]")===0);
+    if(btn){
+      if(respawnTimer)clearTimeout(respawnTimer);
+      if(movementTimer)clearTimeout(movementTimer);
+      btn.click();
+      respawnTimer=setTimeout(()=>{
+        if(!isScriptActive)return;
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',code:'ArrowLeft',keyCode:37,which:37}));
+        setTimeout(()=>{
+          document.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowLeft',code:'ArrowLeft',keyCode:37,which:37}));
+          setTimeout(()=>{
+            document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',code:'ArrowRight',keyCode:39,which:39}));
+            setTimeout(()=>{document.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowRight',code:'ArrowRight',keyCode:39,which:39}));},50);
+          },50);
+        },50);
+      },3000);
+    }
+  },100);
+}
+function stopScript(){if(ii){clearInterval(ii);ii=null;}if(respawnTimer){clearTimeout(respawnTimer);respawnTimer=null;}if(movementTimer){clearTimeout(movementTimer);movementTimer=null;}}
+document.addEventListener('keydown',e=>{
+  if(e.key.toLowerCase()==='z'){
+    isScriptActive=!isScriptActive;
+    console.log("Auto-respawn "+(isScriptActive?"ENABLED":"DISABLED"));
+    isScriptActive?startScript():stopScript();
+  }
+});
+console.log("Auto-respawn loaded. Z = toggle.");
+startScript();`
+  },
+  {
+    id:'builtin_remove_modals',name:'Удалить модальные окна',
+    description:'Удаляет все элементы с классами .out_modal и .out_modal_light со страницы. Полезно для очистки нежелательных всплывающих окон.',
+    trigger:'manual',tags:['ui','cleanup','modals'],runCount:0,created:1700000006000,builtin:true,
+    code:`document.querySelectorAll('.out_modal, .out_modal_light').forEach(el => el.remove());
+console.log('✓ Модальные окна удалены');`
+  },
+  {
+    id:'builtin_websocket_ping',name:'Добавка к Пингу',
+    description:'Добавляет искусственную задержку 50ms ко всем исходящим WebSocket-сообщениям. Полезно для тестирования поведения игры при высоком пинге.',
+    trigger:'manual',tags:['websocket','ping','lag','network'],runCount:0,created:1700000007000,builtin:true,
+    code:`(function() {
+  const PING = 50;
+  const originalSend = WebSocket.prototype.send;
+  WebSocket.prototype.send = function(data) {
+    setTimeout(() => originalSend.call(this, data), PING);
+  };
+  console.log('✓ +50ms ping added to WebSocket messages');
+})()`
+  },
+];
+
+// ── Storage (falls back to localStorage when not in Electron) ──────────────
+const STORAGE_KEY = 'scriptdash_gob_v1';
+
+function storageSave(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+function storageLoad() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { return []; }
+}
+
+// ── App state ──────────────────────────────────────────────────────────────
+let scripts = [], activeId = null, currentFilter = 'all', searchQuery = '', editingId = null, formTags = [];
+
+function loadScripts() {
+  const saved = storageLoad();
+  const savedIds = new Set(saved.map(s => s.id));
+  scripts = [...saved];
+  for (const p of PRELOADED) { if (!savedIds.has(p.id)) scripts.push(p); }
+}
+
+function save() { storageSave(scripts); updateStats(); }
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = scripts.length;
+  document.getElementById('statAuto').textContent = scripts.filter(s => s.trigger === 'auto').length;
+  document.getElementById('statManual').textContent = scripts.filter(s => s.trigger === 'manual').length;
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ── Filtering ──────────────────────────────────────────────────────────────
+function setFilter(f, el) { currentFilter = f; document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); renderList(); }
+function filterScripts(q) { searchQuery = q.toLowerCase(); renderList(); }
+function filteredScripts() {
+  return scripts.filter(s => {
+    const mf = currentFilter === 'all' || s.trigger === currentFilter;
+    const ms = !searchQuery || s.name.toLowerCase().includes(searchQuery) || (s.description || '').toLowerCase().includes(searchQuery) || (s.tags || []).some(t => t.toLowerCase().includes(searchQuery));
+    return mf && ms;
+  });
+}
+
+// ── Render list ────────────────────────────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('scriptList');
+  const items = filteredScripts();
+  if (!items.length) { list.innerHTML = '<div class="empty-list">// скрипты не найдены</div>'; updateStats(); return; }
+  list.innerHTML = items.map(s => `
+    <div class="script-item ${s.id === activeId ? 'active' : ''}" onclick="selectScript('${s.id}')">
+      <div class="script-item-name">${escHtml(s.name)}</div>
+      ${s.description ? `<div class="script-item-desc">${escHtml(s.description)}</div>` : ''}
+      <div class="script-item-tags">
+        <span class="tag ${s.trigger === 'auto' ? 'tag-auto' : 'tag-manual'}">${s.trigger === 'auto' ? 'авто' : 'ручной'}</span>
+        ${(s.tags || []).map(t => `<span class="tag tag-custom">${escHtml(t)}</span>`).join('')}
+      </div>
+    </div>`).join('');
+  updateStats();
+}
+
+// ── View script ────────────────────────────────────────────────────────────
+function selectScript(id) { activeId = id; renderList(); const s = scripts.find(x => x.id === id); if (s) renderView(s); }
+
+function renderView(s) {
+  editingId = null;
+  const rc = s.runCount || 0;
+  document.getElementById('panel').innerHTML = `
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-name">${escHtml(s.name)}</div>
+        <div class="panel-meta">
+          <span class="tag ${s.trigger === 'auto' ? 'tag-auto' : 'tag-manual'}">${s.trigger === 'auto' ? 'авто' : 'ручной'}</span>
+          ${(s.tags || []).map(t => `<span class="tag tag-custom">${escHtml(t)}</span>`).join('')}
+          <span class="run-badge">▶ ${rc} ЗАПУСК${rc === 1 ? '' : rc >= 2 && rc <= 4 ? 'А' : 'ОВ'}</span>
+        </div>
+      </div>
+      <div class="panel-actions">
+        ${!s.builtin ? `<button class="btn btn-danger" onclick="deleteScript('${s.id}')">✕</button>` : ''}
+        <button class="btn btn-ghost" onclick="editScript('${s.id}')">✎ ИЗМЕНИТЬ</button>
+        <button class="btn btn-copy" onclick="showCopyModal('${s.id}')">⎘ КОПИРОВАТЬ</button>
+        <button class="btn btn-run" onclick="runScript('${s.id}')">▶ ЗАПУСТИТЬ</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      ${s.description ? `<div><div class="field-label">Описание</div><div class="desc-block">${escHtml(s.description)}</div></div>` : ''}
+      <div><div class="field-label">Код</div><div class="code-block">${escHtml(s.code)}</div></div>
+    </div>`;
+}
+
+// ── Copy / Run modal ───────────────────────────────────────────────────────
+function runScript(id) { const s = scripts.find(x => x.id === id); if (!s) return; s.runCount = (s.runCount || 0) + 1; save(); showCopyModal(id); }
+
+function showCopyModal(id) {
+  const s = scripts.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('copyModalTitle').textContent = '▶ ' + s.name.toUpperCase();
+  document.getElementById('copyModalCode').textContent = s.code;
+  document.getElementById('copyOverlay').classList.add('open');
+}
+
+function closeCopyModal(e) { if (!e || e.target === document.getElementById('copyOverlay')) document.getElementById('copyOverlay').classList.remove('open'); }
+
+async function copyModalCode() {
+  const code = document.getElementById('copyModalCode').textContent;
+  if (api) {
+    await api.writeClipboard(code);
+  } else {
+    await navigator.clipboard.writeText(code);
+  }
+  toast('СКОПИРОВАНО В БУФЕР');
+}
+
+// ── New / Edit form ────────────────────────────────────────────────────────
+function newScript() { activeId = null; editingId = null; formTags = []; renderList(); renderForm(null); }
+function editScript(id) { editingId = id; const s = scripts.find(x => x.id === id); formTags = s ? [...(s.tags || [])] : []; renderForm(s); }
+
+function renderForm(s) {
+  const isNew = !s;
+  document.getElementById('panel').innerHTML = `
+    <div class="panel-header">
+      <div class="panel-title"><div class="panel-name">${isNew ? '// НОВЫЙ СКРИПТ' : '// ИЗМЕНИТЬ: ' + escHtml(s.name)}</div></div>
+      <div class="panel-actions">
+        ${!isNew ? `<button class="btn btn-ghost" onclick="selectScript('${s.id}')">ОТМЕНА</button>` : ''}
+        <button class="btn btn-primary" onclick="saveForm()">✓ СОХРАНИТЬ</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div><div class="field-label">Название скрипта</div><input id="f_name" class="text-input" placeholder="напр. Координаты в Тайлах" value="${s ? escAttr(s.name) : ''}"></div>
+      <div><div class="field-label">Описание</div><input id="f_desc" class="text-input" placeholder="Что делает этот скрипт?" value="${s ? escAttr(s.description || '') : ''}"></div>
+      <div><div class="field-label">Тип запуска</div><div class="trigger-group">
+        <label class="trigger-option ${(!s || s.trigger === 'manual') ? 'sel-manual' : ''}">
+          <input type="radio" name="trigger" value="manual" ${(!s || s.trigger === 'manual') ? 'checked' : ''} onchange="updateTriggerStyle()">
+          <span class="trigger-label">РУЧНОЙ</span><span class="trigger-sublabel">запуск по требованию</span>
+        </label>
+        <label class="trigger-option ${s && s.trigger === 'auto' ? 'sel-auto' : ''}">
+          <input type="radio" name="trigger" value="auto" ${s && s.trigger === 'auto' ? 'checked' : ''} onchange="updateTriggerStyle()">
+          <span class="trigger-label">АВТО-ЗАПУСК</span><span class="trigger-sublabel">при загрузке страницы</span>
+        </label>
+      </div></div>
+      <div><div class="field-label">Теги</div>
+        <div class="tag-input-row"><input id="tagInput" placeholder="добавить тег + Enter" onkeydown="addTagOnEnter(event)"><button class="btn btn-ghost" style="padding:7px 12px;font-size:10px" onclick="addTag()">ДОБАВИТЬ</button></div>
+        <div class="tag-list" id="tagList">${renderTagList()}</div>
+      </div>
+      <div><div class="field-label">Код</div><textarea id="f_code" class="textarea-input textarea-code" placeholder="// вставьте JavaScript код сюда...">${s ? escHtml(s.code) : ''}</textarea></div>
+    </div>`;
+}
+
+function updateTriggerStyle() {
+  document.querySelectorAll('.trigger-option').forEach(el => {
+    const r = el.querySelector('input[type=radio]');
+    el.classList.remove('sel-auto', 'sel-manual');
+    if (r.checked) el.classList.add(r.value === 'auto' ? 'sel-auto' : 'sel-manual');
+  });
+}
+
+function renderTagList() { return formTags.map((t, i) => `<button class="tag-removable" onclick="removeTag(${i})">${escHtml(t)} ×</button>`).join(''); }
+function addTagOnEnter(e) { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }
+function addTag() { const inp = document.getElementById('tagInput'); const val = inp.value.trim(); if (val && !formTags.includes(val)) { formTags.push(val); document.getElementById('tagList').innerHTML = renderTagList(); } inp.value = ''; inp.focus(); }
+function removeTag(i) { formTags.splice(i, 1); document.getElementById('tagList').innerHTML = renderTagList(); }
+
+function saveForm() {
+  const name = document.getElementById('f_name').value.trim();
+  const code = document.getElementById('f_code').value.trim();
+  if (!name) { toast('ВВЕДИТЕ НАЗВАНИЕ СКРИПТА'); return; }
+  if (!code) { toast('ВВЕДИТЕ КОД'); return; }
+  const trigger = document.querySelector('input[name="trigger"]:checked')?.value || 'manual';
+  const desc = document.getElementById('f_desc').value.trim();
+  if (editingId) {
+    const s = scripts.find(x => x.id === editingId);
+    if (s) { s.name = name; s.code = code; s.trigger = trigger; s.description = desc; s.tags = [...formTags]; s.builtin = false; }
+    activeId = editingId; editingId = null; toast('СКРИПТ ОБНОВЛЁН');
+  } else {
+    const s = { id: 'sc_' + Date.now(), name, code, trigger, description: desc, tags: [...formTags], runCount: 0, created: Date.now() };
+    scripts.push(s); activeId = s.id; toast('СКРИПТ СОХРАНЁН');
+  }
+  save(); renderList(); selectScript(activeId);
+}
+
+function deleteScript(id) {
+  if (!confirm('Удалить этот скрипт?')) return;
+  scripts = scripts.filter(x => x.id !== id); activeId = null; save(); renderList();
+  document.getElementById('panel').innerHTML = '<div class="panel-empty"><div class="panel-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><p>СКРИПТ УДАЛЁН</p><span>// выберите или создайте новый скрипт</span></div>';
+  toast('СКРИПТ УДАЛЁН');
+}
+
+// ── Import / Export (Electron native dialogs) ──────────────────────────────
+async function exportScripts() {
+  const json = JSON.stringify(scripts, null, 2);
+  if (api) {
+    const result = await api.exportScripts(json);
+    if (result.ok) toast('ЭКСПОРТИРОВАНО → ' + result.filePath.split(/[/\\]/).pop());
+  } else {
+    const b = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'scriptdash-gob.json'; a.click();
+    toast('ЭКСПОРТИРОВАНО');
+  }
+}
+
+async function importScripts() {
+  if (api) {
+    const result = await api.importScripts();
+    if (!result.ok) return;
+    try {
+      const data = JSON.parse(result.content);
+      if (!Array.isArray(data)) throw new Error();
+      let added = 0;
+      const ids = new Set(scripts.map(s => s.id));
+      data.forEach(s => { if (!ids.has(s.id)) { scripts.push(s); added++; } });
+      save(); renderList();
+      toast('ИМПОРТИРОВАНО ' + added + ' СКРИПТ' + (added === 1 ? '' : added >= 2 && added <= 4 ? 'А' : 'ОВ'));
+    } catch { toast('НЕВЕРНЫЙ ФАЙЛ'); }
+  } else {
+    // fallback for browser
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = e => {
+      const file = e.target.files[0]; if (!file) return;
+      const r = new FileReader();
+      r.onload = ev => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!Array.isArray(data)) throw new Error();
+          let added = 0; const ids = new Set(scripts.map(s => s.id));
+          data.forEach(s => { if (!ids.has(s.id)) { scripts.push(s); added++; } });
+          save(); renderList();
+          toast('ИМПОРТИРОВАНО ' + added);
+        } catch { toast('НЕВЕРНЫЙ ФАЙЛ'); }
+      };
+      r.readAsText(file);
+    };
+    input.click();
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+loadScripts();
+save();
+renderList();
+if (scripts.length) selectScript(scripts[0].id);
+</script>
+</body>
+</html>
