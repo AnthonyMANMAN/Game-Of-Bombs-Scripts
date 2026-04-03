@@ -1,10 +1,38 @@
-# ScriptDash GOB — Desktop Edition
+# Scripts — Game of Bombs
 
-Script management panel for **Game of Bombs**, packaged as a native desktop app with Electron.
+A collection of scripts and tools for **Game of Bombs**, plus a full-featured script management dashboard available in both browser and native desktop flavors.
 
 ---
 
-## Quick Start
+## What's in this repo
+
+| Folder / File | Description |
+|---|---|
+| `В ТГ` | Scripts for Telegram integration |
+| `Всякое` | Miscellaneous scripts |
+| `Локал` | Local utility scripts |
+| `Мод Атласа, Тайлсета` | Atlas & tileset mod scripts |
+| `Работа с Канвасом` | Canvas manipulation scripts |
+| `Спам В Чат` | Chat spam scripts |
+| `Цепь, Спин, Бита, Перки` | Chain, spin, bat & perks scripts |
+| `script-dashboard.html` | Browser-based ScriptDash UI (no install needed) |
+| `src/index.html` | ScriptDash UI bundled inside the Electron app |
+
+---
+
+## ScriptDash — Script Management Panel
+
+ScriptDash is a visual dashboard for organizing, editing, copying, importing, and exporting your Game of Bombs scripts. It comes in two versions:
+
+### Browser version
+Just open `script-dashboard.html` directly in your browser — no installation required.
+
+### Desktop version (Electron)
+A native app wrapper around the same UI, with proper OS integrations like native file dialogs and taskbar icons.
+
+---
+
+## Quick Start (Desktop)
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) v18 or newer
@@ -15,67 +43,27 @@ npm install
 npm start
 ```
 
-### Build an installer
+### Build a distributable installer
 
 | Platform | Command | Output |
-|----------|---------|--------|
-| Windows  | `npm run dist:win`   | `dist/ScriptDash GOB Setup.exe` |
-| macOS    | `npm run dist:mac`   | `dist/ScriptDash GOB.dmg` |
-| Linux    | `npm run dist:linux` | `dist/ScriptDash GOB.AppImage` |
+|---|---|---|
+| Windows | `npm run dist:win` | `dist/ScriptDash GOB Setup.exe` |
+| macOS | `npm run dist:mac` | `dist/ScriptDash GOB.dmg` |
+| Linux | `npm run dist:linux` | `dist/ScriptDash GOB.AppImage` |
 
 ---
 
-## Project Structure
+## Browser vs Desktop
 
-```
-scriptdash-desktop/
-├── main.js          ← Electron main process (window, dialogs, clipboard)
-├── preload.js       ← Secure IPC bridge (contextBridge)
-├── package.json     ← Dependencies + electron-builder config
-├── src/
-│   └── index.html   ← Full UI (renderer process)
-└── assets/
-    ├── icon.png     ← 256×256 app icon (add your own)
-    ├── icon.ico     ← Windows icon  (add your own)
-    └── icon.icns    ← macOS icon    (add your own)
-```
+| Feature | Browser | Desktop |
+|---|---|---|
+| Export | `<a download>` workaround | Native Save dialog |
+| Import | `<input type=file>` | Native Open dialog |
+| Clipboard | `navigator.clipboard` | Electron clipboard API |
+| Window frame | Browser chrome | Native title bar |
+| Storage | `localStorage` | `localStorage` (persisted per-app) |
+| Icons | Browser tab favicon | OS taskbar / dock icon |
 
 ---
 
-## What changed vs the browser version
-
-| Feature | Browser version | Desktop version |
-|---------|----------------|-----------------|
-| Export  | `<a download>` hack | Native Save dialog |
-| Import  | `<input type=file>` | Native Open dialog |
-| Copy to clipboard | `navigator.clipboard` | Electron clipboard API |
-| Window frame | browser chrome | native title bar |
-| Storage | `localStorage` | `localStorage` (Electron persists it per-app) |
-| Icons | browser tab | OS taskbar / dock icon |
-
----
-
-## Adding an Icon
-
-Place your icon files in the `assets/` folder:
-
-- `icon.png`  — 256×256 PNG (Linux + fallback)
-- `icon.ico`  — Windows multi-size ICO
-- `icon.icns` — macOS ICNS bundle
-
-Free converter: https://www.icoconverter.com/
-
----
-
-## Scripts are saved locally
-
-All scripts (including built-ins) are stored in Electron's `localStorage`,
-which lives in the app's user-data directory:
-
-| OS | Path |
-|----|------|
-| Windows | `%APPDATA%\scriptdash-gob\` |
-| macOS | `~/Library/Application Support/scriptdash-gob/` |
-| Linux | `~/.config/scriptdash-gob/` |
-
-Use **ЭКСПОРТ / ИМПОРТ** to back up or share your script collection.
+## Project Structure (Desktop)
