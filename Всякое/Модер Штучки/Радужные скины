@@ -4,7 +4,8 @@ const loops={
   hamster:["!hAglBGgIAgD8A8AOADgAY","!hAglBGgIAgL9b8MPAfwMp","!hAglBGgIAgOofoP6A$gMC","!hAglBGgIAAMYfAPwG8BMz","!hAglBGgIAAMDfDfw_8P8L","!hAglBGgIAAADgDwg_IPwI","!hAglBGgIAADPgLwO_DPwo","!hAglBGgIAgD9g$APmD9AX"],
   bears:["!bIMgAAQAA_gDADwA_AFg=","!bIMgAAQAA_s3Avw6_CeA=","!bIMgAAQAA_nLAnh97fng=","!bIMgAAQAARP8AZEuQLTU=","!bIMgAAQAABP_7peuXruc=","!bIMgAAQAAAIQ_EOhAoK8=","!bIMgAAQAAqoC_CugqoNM=","!bIMgAAQAA_gC3Hsh_UKM="],
   sword:["!BQQUGAAAwIBT$AGA=","!BQQUGAAAwIBT$DXw=","!BQQUGAAAwIBT2H$g=","!BQQUGAAAwIBQ2H1g=","!BQQUGAAAwIBQGH1s=","!BQQUGAAAwIBQG5O8=","!BQQUGAAAwIBS$4Fs=","!BQQUGAAAwIBT$IKo="],
-  outfit:["!BQQU2_AA0IBQGAEg=","!BQQU23MA_IBQGAAg=","!BQQU2AH8_IBQGACg=","!BQQU2AL8yIBQGAMQ=","!BQQU2qD8wIBQGAGg=","!BQQU2_CgwIBQGAMQ=","!BQQU2_AAwIBQGABw="]
+  outfit:["!BQQU2_AA0IBQGAEg=","!BQQU23MA_IBQGAAg=","!BQQU2AH8_IBQGACg=","!BQQU2AL8yIBQGAMQ=","!BQQU2qD8wIBQGAGg=","!BQQU2_CgwIBQGAMQ=","!BQQU2_AAwIBQGABw="],
+  pumpkin:["!BIQBoAAAAAAAAQAAAdAD4AeAHQAQ=","!BIQBoAAAAAAAAQAAA_g34L$Bf4Ac=","!BIQBoAAAAAAAAQAAA_h_4d$D_AAY=","!BIQBoAAAAAAAAQAAAgB8AfiD5YAU=","!BIQBoAAAAAAAAQAAAgL8H_jz4XAc=","!BIQBoAAAAAAAAQAAAQuCfgD8C3wc=","!BIQBoAAAAAAAAQAAAfuDfgf8HWQQ="]
 };
 
 const loopColors={
@@ -12,10 +13,11 @@ const loopColors={
   hamster:{bg:'#2a1f0e', text:'#fb923c', border:'#92400e', active:'#78350f'},
   bears:  {bg:'#1a1a2e', text:'#818cf8', border:'#3730a3', active:'#312e81'},
   sword:  {bg:'#2a1a1a', text:'#f87171', border:'#991b1b', active:'#7f1d1d'},
-  outfit: {bg:'#1a2535', text:'#38bdf8', border:'#0369a1', active:'#0c4a6e'}
+  outfit: {bg:'#1a2535', text:'#38bdf8', border:'#0369a1', active:'#0c4a6e'},
+  pumpkin:{bg:'#2a1800', text:'#fb8c00', border:'#e65100', active:'#bf360c'}
 };
 
-const loopEmoji={horse:'🐴',hamster:'🐹',bears:'🐻',sword:'⚔️',outfit:'👘'};
+const loopEmoji={horse:'🐴',hamster:'🐹',bears:'🐻',sword:'⚔️',outfit:'👘',pumpkin:'🎃'};
 
 let activeLoop='horse';
 let skins=[...loops.horse];
@@ -43,6 +45,7 @@ ui.innerHTML=`
       <button id="sb-loop-bears"   style="flex:1;min-width:50px;padding:5px 3px;background:#1a1a2e;color:#818cf8;border:1px solid #3730a3;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold">🐻 Bears</button>
       <button id="sb-loop-sword"   style="flex:1;min-width:50px;padding:5px 3px;background:#2a1a1a;color:#f87171;border:1px solid #991b1b;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold">⚔️ Sword</button>
       <button id="sb-loop-outfit"  style="flex:1;min-width:50px;padding:5px 3px;background:#1a2535;color:#38bdf8;border:1px solid #0369a1;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold">👘 Outfit</button>
+      <button id="sb-loop-pumpkin" style="flex:1;min-width:50px;padding:5px 3px;background:#2a1800;color:#fb8c00;border:1px solid #e65100;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold">🎃 Pumpkin</button>
     </div>
     <div style="padding:8px 10px;border-bottom:1px solid #2a2a2a">
       <input id="sb-search" placeholder="Search skins..." style="width:100%;padding:5px 8px;background:#111;border:1px solid #333;border-radius:6px;color:#eee;font-size:12px;outline:none;box-sizing:border-box">
