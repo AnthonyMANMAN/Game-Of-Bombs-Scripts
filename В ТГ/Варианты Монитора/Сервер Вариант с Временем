@@ -1,0 +1,355 @@
+#!/usr/bin/env node
+'use strict';
+
+const puppeteer = require('puppeteer');
+const https     = require('https');
+
+const BOT_TOKEN      = '8549384361:AAGEWldNkI_zw2TT1bToQmCPkRJkAS6XeAA';
+const CHAT_ID        = '-1003433277732';
+const TARGET_URL     = 'https://gameofbombs.com';
+const LOGIN_USERNAME = 'afoonie';
+const LOGIN_PASSWORD = '45645';
+const TARGET_SERVERS = ['US', 'EU', 'BR', 'JP', 'AU'];
+const CYCLE_MS       = 2000;
+const SWITCH_WAIT_MS = 1500;
+const MAX_AGE_MS     = 2 * 60 * 1000;
+const DEDUP_TTL_MS   = 5 * 60 * 1000;
+const BROWSER_TTL_MS = 20 * 60 * 1000;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function log(level, msg) {
+    const icons = { info: 'i', warn: '!', error: 'x', ok: 'v' };
+    console.log(`${new Date().toISOString()} [${icons[level] || '-'}] ${msg}`);
+}
+
+// Dedup keyed on message TEXT only — prevents the same chat line from
+// appearing twice when it is still visible right after a server switch.
+const globalDedup = {};
+let totalSent = 0;
+
+function sendToTelegram(text) {
+    return new Promise(resolve => {
+        const body = JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'HTML' });
+        const req  = https.request({
+            hostname: 'api.telegram.org',
+            path    : `/bot${BOT_TOKEN}/sendMessage`,
+            method  : 'POST',
+            headers : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        }, res => { res.resume(); resolve(res.statusCode === 200); });
+        req.on('error', () => resolve(false));
+        req.write(body);
+        req.end();
+    });
+}
+
+function colorDot(text) {
+    if (/плутоний|plutonium/i.test(text)) return '🟢 - Плут ' + text;
+    if (/паук|spider/i.test(text))        return '🔴 - Паук ' + text;
+    if (/хомяк|hamster/i.test(text))      return '🔵 - Хомяк ' + text;
+    return text;
+}
+
+// Dedup purely by message text — cross-server false duplicates are eliminated.
+function isDupe(text) {
+    const now = Date.now();
+    if (globalDedup[text] && now - globalDedup[text] < DEDUP_TTL_MS) return true;
+    globalDedup[text] = now;
+    return false;
+}
+
+// Periodically evict old entries so the dedup map doesn't grow forever.
+setInterval(() => {
+    const cutoff = Date.now() - DEDUP_TTL_MS;
+    for (const k of Object.keys(globalDedup)) {
+        if (globalDedup[k] < cutoff) delete globalDedup[k];
+    }
+}, 60_000);
+
+const getAvailableServers = page => page.evaluate(() => {
+    const seen = new Set();
+    return [
+        ...document.querySelectorAll('#server-select .server-list li:not(.down) h2'),
+        ...document.querySelectorAll('.server-list li:not(.down) h2'),
+    ].map(el => el.textContent.trim()).filter(n => {
+        if (!n || n === 'DEV' || seen.has(n)) return false;
+        seen.add(n); return true;
+    });
+});
+
+const getCurrentServer = page => page.evaluate(() => {
+    const a = document.querySelector('#server-select .server-list li.selected h2');
+    if (a) return a.textContent.trim().toUpperCase();
+    const b = document.querySelector('.server-list .selected h2');
+    if (b) return b.textContent.trim().toUpperCase();
+    const c = document.querySelector('.butt_left_menu.ng-binding .colorRed');
+    if (c) return c.textContent.trim().toUpperCase();
+    return 'UNKNOWN';
+});
+
+const switchServer = (page, name) => page.evaluate(n => {
+    for (const sel of ['#server-select .server-list li:not(.down)', '.server-list li:not(.down)']) {
+        for (const li of document.querySelectorAll(sel)) {
+            const h2 = li.querySelector('h2');
+            if (h2 && h2.textContent.trim() === n) {
+                if (li.classList.contains('selected')) return 'already';
+                li.click(); return 'clicked';
+            }
+        }
+    }
+    return 'not-found';
+}, name);
+
+// Read the timer that was last painted on any canvas in the page.
+const getPageTimer = page => page.evaluate(() => window._gobTimer || '--:--');
+
+async function checkServer(page, server) {
+    const now      = Date.now();
+    const todayStr = new Date().toDateString();
+
+    // Grab the round timer at the moment we scrape the chat.
+    const timer = await getPageTimer(page);
+
+    const items = await page.evaluate(() => {
+        const chat = document.getElementById('listChat') ||
+                     document.querySelector('.chat-list') ||
+                     document.querySelector('ul.chat');
+        if (!chat) return [];
+        return [...chat.querySelectorAll('li')].map(li => ({
+            text    : (li.textContent || '').replace(/\s+/g, ' ').trim(),
+            timeText: li.querySelector('.time')?.textContent.trim() ?? null,
+        }));
+    });
+
+    const fresh = [];
+
+    for (const { text, timeText } of items) {
+        if (!/SERVER:/i.test(text) && !/-tg|-тг/i.test(text)) continue;
+        if (/ignored|сообщ\. проигнор/i.test(text)) continue;
+
+        if (timeText) {
+            const [hh, mm] = timeText.split(':').map(Number);
+            if (!isNaN(hh) && !isNaN(mm)) {
+                const t = new Date(); t.setHours(hh, mm, 0, 0);
+                if (t.toDateString() !== todayStr) continue;
+                const age = now - t.getTime();
+                if (age < 0 || age > MAX_AGE_MS) continue;
+            }
+        }
+
+        const msg = colorDot(text);
+        if (isDupe(msg)) continue;   // text-only dedup catches cross-server repeats
+
+        fresh.push(msg);
+    }
+
+    if (fresh.length) {
+        // Append the round timer to every outgoing batch so recipients know
+        // how much time was left in the round when the message was spotted.
+        const timerLine = timer !== '--:--' ? `⏱ Время в Раунде: ${timer}` : '';
+        const payload   = [`🎮 ${server}`, timerLine, ...fresh]
+            .filter(Boolean)
+            .join('\n');
+
+        const ok = await sendToTelegram(payload);
+        if (ok) {
+            totalSent += fresh.length;
+            log('ok', `Sent ${fresh.length} from ${server} (timer: ${timer}, total: ${totalSent})`);
+        }
+    }
+}
+
+// Inject a lightweight canvas hook so window._gobTimer is always current.
+// Called once after page load; survives for the lifetime of the browser session.
+async function injectTimerHook(page) {
+    await page.evaluate(() => {
+        if (window._gobTimerHooked) return;
+        window._gobTimer       = '--:--';
+        window._gobTimerHooked = true;
+
+        // Hook getContext so every canvas context gets the fillText patch.
+        const origGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+            const ctx = origGetContext.apply(this, [type, ...args]);
+            if (type === '2d' && ctx && !ctx._timerPatched) {
+                const origFillText = ctx.fillText.bind(ctx);
+                ctx.fillText = function (text, x, y, ...rest) {
+                    // Round timers are always in "M:SS" or "MM:SS" format.
+                    if (/^\d{1,2}:\d{2}$/.test(String(text))) {
+                        window._gobTimer = String(text);
+                    }
+                    return origFillText(text, x, y, ...rest);
+                };
+                ctx._timerPatched = true;
+            }
+            return ctx;
+        };
+
+        // Also patch any canvas contexts that already exist on the page.
+        for (const canvas of document.querySelectorAll('canvas')) {
+            try {
+                const ctx = canvas.getContext('2d');
+                if (ctx && !ctx._timerPatched) {
+                    const origFillText = ctx.fillText.bind(ctx);
+                    ctx.fillText = function (text, x, y, ...rest) {
+                        if (/^\d{1,2}:\d{2}$/.test(String(text))) {
+                            window._gobTimer = String(text);
+                        }
+                        return origFillText(text, x, y, ...rest);
+                    };
+                    ctx._timerPatched = true;
+                }
+            } catch (_) { /* cross-origin canvas — skip */ }
+        }
+    });
+}
+
+async function launchAndSetup() {
+    log('info', 'Launching browser...');
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote'],
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+        // Pre-inject the timer hook before any page scripts run so the
+        // getContext override is in place before the game creates its canvases.
+        window._gobTimer       = '--:--';
+        window._gobTimerHooked = true;
+
+        const origGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+            const ctx = origGetContext.apply(this, [type, ...args]);
+            if (type === '2d' && ctx && !ctx._timerPatched) {
+                const origFillText = ctx.fillText.bind(ctx);
+                ctx.fillText = function (text, x, y, ...rest) {
+                    if (/^\d{1,2}:\d{2}$/.test(String(text))) {
+                        window._gobTimer = String(text);
+                    }
+                    return origFillText(text, x, y, ...rest);
+                };
+                ctx._timerPatched = true;
+            }
+            return ctx;
+        };
+    });
+
+    await page.goto(TARGET_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+    await sleep(2000);
+
+    // Belt-and-suspenders: also patch any contexts that are already live.
+    await injectTimerHook(page);
+
+    const formVisible = await page.$('form[name="lform"]');
+    if (formVisible) {
+        log('info', 'Logging in...');
+        await page.evaluate((u, p) => {
+            const set = (el, val) => {
+                const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                desc.set.call(el, val);
+                ['input', 'change', 'blur'].forEach(e => el.dispatchEvent(new Event(e, { bubbles: true })));
+            };
+            const email = document.querySelector('form[name="lform"] input[name="email"]');
+            const pwd   = document.querySelector('form[name="lform"] input[name="pwd"]');
+            if (email) set(email, u);
+            if (pwd)   set(pwd, p);
+        }, LOGIN_USERNAME, LOGIN_PASSWORD);
+
+        const btn = await page.$('form[name="lform"] button.reg');
+        if (btn) await btn.click(); else await page.keyboard.press('Enter');
+
+        try {
+            await page.waitForSelector('.butt_left_menu.to-play', { timeout: 20000 });
+            log('ok', 'Login successful.');
+        } catch { log('warn', 'Login may have failed — continuing.'); }
+    }
+
+    await sleep(500);
+    try {
+        await page.click('.butt_left_menu.to-play');
+        await page.waitForSelector('.server-wrap', { timeout: 10000 });
+        await sleep(600);
+    } catch { /* already in game */ }
+
+    await page.evaluate(() => {
+        for (const w of document.querySelectorAll('.server-wrap')) {
+            if (w.querySelector('h2')?.textContent.trim().toLowerCase() === 'mixed') { w.click(); return; }
+        }
+        document.querySelector('.server-wrap')?.click();
+    });
+
+    try { await page.waitForSelector('#listChat', { timeout: 15000 }); } catch { /* continue */ }
+    await sleep(1500);
+
+    await page.evaluate(() => {
+        for (const btn of document.querySelectorAll('button[ng-click]')) {
+            if (btn.getAttribute('ng-click') === 'selectChannel(2)' ||
+                btn.textContent.trim().startsWith('Uncensored')) { btn.click(); return; }
+        }
+    });
+    await sleep(1000);
+    log('ok', 'Setup complete.');
+
+    return { browser, page };
+}
+
+async function runCycle(browser, page) {
+    return new Promise((resolve) => {
+        let idx = 0;
+        const timer = setInterval(async () => {
+            try {
+                const available = await getAvailableServers(page);
+                const targets   = TARGET_SERVERS.filter(s => available.includes(s));
+                if (!targets.length) return;
+
+                const target = targets[idx % targets.length];
+                idx++;
+
+                const sw = await switchServer(page, target);
+                if (sw === 'not-found') return;
+
+                await sleep(SWITCH_WAIT_MS);
+                const cur = await getCurrentServer(page);
+                await checkServer(page, cur);
+            } catch (_) { /* ignore transient errors */ }
+        }, CYCLE_MS);
+
+        setTimeout(() => {
+            clearInterval(timer);
+            resolve();
+        }, BROWSER_TTL_MS);
+    });
+}
+
+(async () => {
+    log('info', 'Starting GoB Monitor...');
+
+    process.on('SIGINT',  () => process.exit(0));
+    process.on('SIGTERM', () => process.exit(0));
+
+    while (true) {
+        let browser;
+        try {
+            const session = await launchAndSetup();
+            browser = session.browser;
+            const page  = session.page;
+
+            const init = await getCurrentServer(page);
+            await checkServer(page, init);
+
+            await runCycle(browser, page);
+            log('info', 'Scheduled browser restart...');
+        } catch (err) {
+            log('error', `Session error: ${err.message}`);
+            await sleep(5000);
+        } finally {
+            if (browser) {
+                try { await browser.close(); } catch (_) {}
+                log('info', 'Browser closed.');
+            }
+        }
+    }
+})();
