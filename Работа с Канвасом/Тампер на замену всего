@@ -1,0 +1,66 @@
+// ==UserScript==
+// @name         Tileset Replace
+// @namespace    http://tampermonkey.net/
+// @version      1.3
+// @description  Replaces tileset.png, items.png, and atlas6.png with custom images on gameofbombs (CORS-safe)
+// @author       You
+// @match        *://gameofbombs.com/*
+// @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
+// @run-at       document-start
+// ==/UserScript==
+(function() {
+    'use strict';
+
+    const REPLACEMENTS = [
+        {
+            match: "tileset.png?v=6",
+            url: "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/refs/heads/main/image%20(16).png"
+        },
+        {
+            match: "items.png",
+            url: "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/refs/heads/main/powerups.png"
+        },
+        {
+            match: "atlas6.png?v=3",
+            url: "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/refs/heads/main/atlasedit.png"
+        }
+    ];
+
+    // Pre-fetch all replacement images as blob URLs to bypass CORS
+    REPLACEMENTS.forEach(entry => {
+        entry.blobURL = null;
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: entry.url,
+            responseType: "blob",
+            onload: function(response) {
+                entry.blobURL = URL.createObjectURL(response.response);
+                console.log(`[TilesetReplace] Blob ready for "${entry.match}":`, entry.blobURL);
+            },
+            onerror: function(err) {
+                console.error(`[TilesetReplace] Failed to fetch "${entry.match}":`, err);
+            }
+        });
+    });
+
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    const originalSet = descriptor.set;
+
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+        set(value) {
+            if (typeof value === 'string') {
+                const match = REPLACEMENTS.find(entry => value.includes(entry.match));
+                if (match) {
+                    const target = match.blobURL || match.url;
+                    console.log(`[TilesetReplace] Intercepted: ${value} → ${target}`);
+                    originalSet.call(this, target);
+                    return;
+                }
+            }
+            originalSet.call(this, value);
+        },
+        get: descriptor.get,
+        configurable: true
+    });
+})();
