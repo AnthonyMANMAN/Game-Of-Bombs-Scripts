@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Tileset Replace
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  Replaces tileset.png, items.png, and atlas6.png with custom images on gameofbombs (CORS-safe)
+// @version      1.4
+// @description  Replaces tileset.png, items.png, atlas6.png, and explosion.png with custom images on gameofbombs (CORS-safe)
 // @author       You
 // @match        *://gameofbombs.com/*
 // @grant        GM_xmlhttpRequest
@@ -24,6 +24,10 @@
         {
             match: "atlas6.png?v=3",
             url: "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/refs/heads/main/atlasedit.png"
+        },
+        {
+            match: "explosion.png",
+            url: "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/refs/heads/main/explosion%20(1).png"
         }
     ];
 
