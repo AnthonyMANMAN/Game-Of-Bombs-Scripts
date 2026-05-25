@@ -1,0 +1,50 @@
+// ==UserScript==
+// @name         Tileset Replace
+// @namespace    http://tampermonkey.net/
+// @version      1.4
+// @description  Replaces tileset.png?v=6 with a custom image on gameofbombs (CORS-safe)
+// @author       You
+// @match        *://gameofbombs.com/*
+// @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
+// @run-at       document-start
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    const ORIGINAL = "tileset.png?v=6";
+    const REPLACEMENT = "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/main/tileset-autumn%20(1).png";
+
+    let blobURL = null;
+
+    GM_xmlhttpRequest({
+        method: "GET",
+        url: REPLACEMENT,
+        responseType: "blob",
+        onload: function(response) {
+            blobURL = URL.createObjectURL(response.response);
+            console.log('[TilesetReplace] Blob URL ready:', blobURL);
+        },
+        onerror: function(err) {
+            console.error('[TilesetReplace] Failed to fetch replacement image:', err);
+        }
+    });
+
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    const originalSet = descriptor.set;
+
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+        set(value) {
+            if (typeof value === 'string' && value.includes(ORIGINAL)) {
+                const target = blobURL || REPLACEMENT;
+                console.log('[TilesetReplace] Intercepted:', value, '→', target);
+                originalSet.call(this, target);
+            } else {
+                originalSet.call(this, value);
+            }
+        },
+        get: descriptor.get,
+        configurable: true
+    });
+})();
