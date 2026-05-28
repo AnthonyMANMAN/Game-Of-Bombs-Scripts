@@ -14,7 +14,7 @@
     'use strict';
 
     const ORIGINAL = "tileset.png?v=6";
-    const REPLACEMENT = "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/main/tileset-autumn%20(1).png";
+    const REPLACEMENT = "https://raw.githubusercontent.com/AnthonyMANMAN/Scripts/main/Reskins/tileset-autumn.png";
 
     let blobURL = null;
 
