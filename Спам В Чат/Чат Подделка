@@ -1,0 +1,131 @@
+(function() {
+  if (document.getElementById('__inject_panel')) return;
+
+  const panel = document.createElement('div');
+  panel.id = '__inject_panel';
+  panel.style.cssText = `
+    position: fixed; bottom: 20px; right: 20px; z-index: 999999;
+    background: #1a1a2e; border: 1px solid #444; border-radius: 8px;
+    padding: 12px; width: 340px; font-family: sans-serif; font-size: 13px;
+    color: #eee; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  `;
+
+  panel.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <b style="font-size:14px;">💬 Chat Injector</b>
+      <button onclick="document.getElementById('__inject_panel').remove()"
+        style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <input id="__inj_nick" placeholder="Nickname" value="~Afoonie"
+        style="padding:6px 8px; border-radius:4px; border:1px solid #555; background:#111; color:#eee;" />
+      <select id="__inj_type"
+        style="padding:6px 8px; border-radius:4px; border:1px solid #555; background:#111; color:#eee;">
+        <option value="normal">Normal</option>
+        <option value="mine">Mine (my-msg)</option>
+        <option value="server">SERVER (green)</option>
+      </select>
+      <input id="__inj_msg" placeholder="Message text..."
+        style="padding:6px 8px; border-radius:4px; border:1px solid #555; background:#111; color:#eee;" />
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="__inj_showtime" />
+        <label for="__inj_showtime">Timestamp</label>
+        <input id="__inj_time" value="13:37" style="width:55px; padding:4px 6px; border-radius:4px; border:1px solid #555; background:#111; color:#eee;" />
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button id="__inj_btn"
+          style="flex:1; padding:7px; border-radius:4px; border:none; background:#2d6a9f; color:#fff; cursor:pointer; font-size:13px;">
+          Inject
+        </button>
+        <button onclick="document.getElementById('listChat').innerHTML=''"
+          style="padding:7px 12px; border-radius:4px; border:1px solid #555; background:#111; color:#aaa; cursor:pointer; font-size:13px;">
+          Clear
+        </button>
+      </div>
+      <div id="__inj_status" style="font-size:11px; color:#888; min-height:14px;"></div>
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  // --- key blocking ---
+  function block(e) { e.stopImmediatePropagation(); }
+  const inputs = panel.querySelectorAll('input, select, button');
+  inputs.forEach(el => {
+    el.addEventListener('focus', () => {
+      document.addEventListener('keydown', block, true);
+      document.addEventListener('keyup',   block, true);
+      document.addEventListener('keypress',block, true);
+    });
+    el.addEventListener('blur', () => {
+      document.removeEventListener('keydown', block, true);
+      document.removeEventListener('keyup',   block, true);
+      document.removeEventListener('keypress',block, true);
+    });
+  });
+
+  const status = (msg, err) => {
+    const el = document.getElementById('__inj_status');
+    el.style.color = err ? '#e06c75' : '#98c379';
+    el.textContent = msg;
+    setTimeout(() => el.textContent = '', 2000);
+  };
+
+  function inject() {
+    const list = document.getElementById('listChat');
+    if (!list) return status('❌ #listChat not found on page', true);
+
+    const nick  = document.getElementById('__inj_nick').value.trim();
+    const msg   = document.getElementById('__inj_msg').value.trim();
+    const type  = document.getElementById('__inj_type').value;
+    const show  = document.getElementById('__inj_showtime').checked;
+    const time  = document.getElementById('__inj_time').value.trim();
+
+    if (!nick || !msg) return status('⚠ Fill in nickname and message', true);
+
+    const isServer = type === 'server';
+    const isMine   = type === 'mine';
+
+    const li = document.createElement('li');
+    li.className = 'ng-scope' + (isServer ? ' green' : '');
+
+    li.innerHTML = `
+      <span>
+        <b class="nickname ng-binding${isMine ? ' my-msg' : ''}">${nick}</b>:
+      </span>
+      <span class="text">
+        ${show ? `<span class="time colorFFF">${time}</span>` : ''}
+        <span class="ng-binding ng-scope">${msg}</span>
+      </span>
+    `;
+
+    list.appendChild(li);
+    list.scrollTop = list.scrollHeight;
+    document.getElementById('__inj_msg').value = '';
+    status('✓ Injected');
+  }
+
+  document.getElementById('__inj_btn').addEventListener('click', inject);
+  document.getElementById('__inj_msg').addEventListener('keydown', e => {
+    if (e.key === 'Enter') inject();
+  });
+  document.getElementById('__inj_type').addEventListener('change', function() {
+    const n = document.getElementById('__inj_nick');
+    if (this.value === 'server') { n.value = 'SERVER'; n.disabled = true; }
+    else { n.disabled = false; if (n.value === 'SERVER') n.value = '~Afoonie'; }
+  });
+
+  const header = panel.querySelector('div');
+  let dragging, ox, oy;
+  header.style.cursor = 'move';
+  header.addEventListener('mousedown', e => {
+    dragging = true; ox = e.clientX - panel.offsetLeft; oy = e.clientY - panel.offsetTop;
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    panel.style.left = (e.clientX - ox) + 'px';
+    panel.style.top  = (e.clientY - oy) + 'px';
+    panel.style.right = 'auto'; panel.style.bottom = 'auto';
+  });
+  document.addEventListener('mouseup', () => dragging = false);
+})();
