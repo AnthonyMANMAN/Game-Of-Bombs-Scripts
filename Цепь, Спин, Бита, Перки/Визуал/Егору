@@ -1,0 +1,81 @@
+/**
+ * Ф-Stick Script
+ * Press 'Й' to toggle Ф key blocking
+ */
+
+// Global state variables for Ф-Stick
+let fStuck = false;
+let preventFKeyUp = null;
+
+// Logging function
+function logActivity(message) {
+    console.log(`[Ф-Stick] ${message}`);
+}
+
+// Key detection functions
+function isFKey(event) {
+    // Ф key in Russian layout (maps to 'a' key physically)
+    return event.key === 'ф' || event.key === 'Ф' || event.code === 'KeyA';
+}
+
+function isYKey(event) {
+    // Й key in Russian layout (maps to 'q' key physically)
+    return event.key === 'й' || event.key === 'Й' || event.code === 'KeyQ';
+}
+
+// Ф-Stick Functions
+function fStick_toggle() {
+    if (!fStuck) {
+        preventFKeyUp = function(event) {
+            if (isFKey(event)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+        document.addEventListener('keyup', preventFKeyUp, true);
+        fStuck = true;
+        logActivity("Ф key BLOCKED");
+    } else {
+        if (preventFKeyUp) {
+            document.removeEventListener('keyup', preventFKeyUp, true);
+            preventFKeyUp = null;
+        }
+        fStuck = false;
+        logActivity("Ф key UNBLOCKED");
+    }
+}
+
+// Keyboard event listener
+document.addEventListener("keydown", (event) => {
+    // Ф-Stick toggle - Й key
+    if (isYKey(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+            event.preventDefault();
+            fStick_toggle();
+        }
+    }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (preventFKeyUp) {
+        document.removeEventListener('keyup', preventFKeyUp, true);
+    }
+});
+
+// Global function for manual control
+window.toggleFStick = function() {
+    fStick_toggle();
+    return `Ф-Stick is now ${fStuck ? 'BLOCKED' : 'UNBLOCKED'}`;
+};
+
+window.getStatus = function() {
+    return {
+        fStick: fStuck ? 'BLOCKED' : 'UNBLOCKED'
+    };
+};
+
+console.log('✅ Ф-Stick loaded successfully!');
+console.log('📋 Controls:');
+console.log('   • Press Й to toggle Ф-Stick (Ф key blocking)');
+console.log('🔧 Manual functions: toggleFStick(), getStatus()');
