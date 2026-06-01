@@ -1,81 +1,95 @@
-/**
- * Ф-Stick Script
- * Press 'Й' to toggle Ф key blocking
- */
+// ==UserScript==
+// @name         Ф-Stick for Game of Bombs
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Press Й to toggle Ф key blocking on Game of Bombs
+// @author       You
+// @match        *://gameofbombs.com/*
+// @match        *://*.gameofbombs.com/*
+// @grant        none
+// @run-at       document-start
+// ==/UserScript==
 
-// Global state variables for Ф-Stick
-let fStuck = false;
-let preventFKeyUp = null;
+(function () {
+    'use strict';
 
-// Logging function
-function logActivity(message) {
-    console.log(`[Ф-Stick] ${message}`);
-}
+    let fStuck = false;
+    let preventFKeyUp = null;
 
-// Key detection functions
-function isFKey(event) {
-    // Ф key in Russian layout (maps to 'a' key physically)
-    return event.key === 'ф' || event.key === 'Ф' || event.code === 'KeyA';
-}
+    function logActivity(message) {
+        console.log(`[Ф-Stick] ${message}`);
+    }
 
-function isYKey(event) {
-    // Й key in Russian layout (maps to 'q' key physically)
-    return event.key === 'й' || event.key === 'Й' || event.code === 'KeyQ';
-}
+    function isFKey(event) {
+        return (
+            event.key === 'ф' ||
+            event.key === 'Ф' ||
+            event.code === 'KeyA'
+        );
+    }
 
-// Ф-Stick Functions
-function fStick_toggle() {
-    if (!fStuck) {
-        preventFKeyUp = function(event) {
-            if (isFKey(event)) {
+    function isYKey(event) {
+        return (
+            event.key === 'й' ||
+            event.key === 'Й' ||
+            event.code === 'KeyQ'
+        );
+    }
+
+    function fStick_toggle() {
+        if (!fStuck) {
+            preventFKeyUp = function (event) {
+                if (isFKey(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                }
+            };
+
+            document.addEventListener('keyup', preventFKeyUp, true);
+
+            fStuck = true;
+            logActivity('Ф key BLOCKED');
+        } else {
+            if (preventFKeyUp) {
+                document.removeEventListener('keyup', preventFKeyUp, true);
+                preventFKeyUp = null;
+            }
+
+            fStuck = false;
+            logActivity('Ф key UNBLOCKED');
+        }
+    }
+
+    document.addEventListener(
+        'keydown',
+        function (event) {
+            if (
+                isYKey(event) &&
+                !event.ctrlKey &&
+                !event.altKey &&
+                !event.metaKey
+            ) {
                 event.preventDefault();
                 event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                fStick_toggle();
             }
-        };
-        document.addEventListener('keyup', preventFKeyUp, true);
-        fStuck = true;
-        logActivity("Ф key BLOCKED");
-    } else {
+        },
+        true
+    );
+
+    window.addEventListener('beforeunload', () => {
         if (preventFKeyUp) {
             document.removeEventListener('keyup', preventFKeyUp, true);
-            preventFKeyUp = null;
         }
-        fStuck = false;
-        logActivity("Ф key UNBLOCKED");
-    }
-}
+    });
 
-// Keyboard event listener
-document.addEventListener("keydown", (event) => {
-    // Ф-Stick toggle - Й key
-    if (isYKey(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-            event.preventDefault();
-            fStick_toggle();
-        }
-    }
-});
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    if (preventFKeyUp) {
-        document.removeEventListener('keyup', preventFKeyUp, true);
-    }
-});
-
-// Global function for manual control
-window.toggleFStick = function() {
-    fStick_toggle();
-    return `Ф-Stick is now ${fStuck ? 'BLOCKED' : 'UNBLOCKED'}`;
-};
-
-window.getStatus = function() {
-    return {
-        fStick: fStuck ? 'BLOCKED' : 'UNBLOCKED'
+    window.toggleFStick = function () {
+        fStick_toggle();
+        return `Ф-Stick is now ${fStuck ? 'BLOCKED' : 'UNBLOCKED'}`;
     };
-};
 
-console.log('✅ Ф-Stick loaded successfully!');
-console.log('📋 Controls:');
-console.log('   • Press Й to toggle Ф-Stick (Ф key blocking)');
-console.log('🔧 Manual functions: toggleFStick(), getStatus()');
+    console.log('✅ Ф-Stick loaded on Game of Bombs');
+})();
