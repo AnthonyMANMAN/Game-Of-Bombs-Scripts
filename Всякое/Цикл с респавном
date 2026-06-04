@@ -1,0 +1,434 @@
+(function() {
+    'use strict';
+
+    const BOT_TOKEN = '8549384361:AAGEWldNkI_zw2TT1bToQmCPkRJkAS6XeAA';
+    const CHAT_ID = '-5230757934';
+
+    let sentMessages = {};
+    let currentServer = null;
+    let serverCycleInterval = null;
+    let targetServerNames = ['US', 'EU', 'RU', 'BR', 'AU', 'JP'];
+    let currentTargetIndex = 0;
+    let uiCreated = false;
+    let minimized = false;
+    let totalMessagesSent = 0;
+
+    if (!window.lastSentMessagesStore) window.lastSentMessagesStore = {};
+
+    const USER_ID = Math.random().toString(36).substring(2, 15);
+    if (!window.globalMessageStore) window.globalMessageStore = {};
+
+    // ─── RESPAWN LOGIC ───────────────────────────────────────────────
+    function tryRespawn() {
+        return new Promise((resolve) => {
+            const btn = document.querySelector('button[ng-click="commandSpace()"]');
+            if (btn) {
+                btn.click();
+                console.log('✅ Respawned via В бой button');
+                resolve(true);
+                return;
+            }
+
+            console.log('⚠️ В бой button not found, trying Space key...');
+            let attempts = 0;
+            const interval = setInterval(() => {
+                const btn = document.querySelector('button[ng-click="commandSpace()"]');
+                if (btn) {
+                    btn.click();
+                    console.log('✅ Respawned via В бой button (retry)');
+                    clearInterval(interval);
+                    resolve(true);
+                    return;
+                }
+
+                // Simulate spacebar press as fallback
+                const spaceEvent = new KeyboardEvent('keydown', {
+                    key: ' ',
+                    code: 'Space',
+                    keyCode: 32,
+                    which: 32,
+                    bubbles: true
+                });
+                document.dispatchEvent(spaceEvent);
+                console.log(`⌨️ Space key pressed (attempt ${attempts + 1})`);
+
+                attempts++;
+                if (attempts >= 5) {
+                    clearInterval(interval);
+                    console.log('❌ Could not respawn after 5 attempts');
+                    resolve(false);
+                }
+            }, 1000);
+        });
+    }
+    // ─────────────────────────────────────────────────────────────────
+
+    function createUI() {
+        if (uiCreated) return;
+        const existingUI = document.getElementById('gob-monitor-ui');
+        if (existingUI) existingUI.remove();
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+            @keyframes pulse { 0%, 100% { box-shadow: 0 0 15px rgba(76,175,80,0.3); } 50% { box-shadow: 0 0 25px rgba(76,175,80,0.6); } }
+            .gob-ui-button-hover:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        `;
+        document.head.appendChild(style);
+
+        const container = document.createElement('div');
+        container.id = 'gob-monitor-ui';
+        container.style.cssText = `
+            position:fixed; top:10px; right:430px; width:240px;
+            background:linear-gradient(145deg,rgba(20,20,30,0.95),rgba(40,40,60,0.95));
+            color:#fff; padding:0; border-radius:16px;
+            font-family:'Segoe UI',sans-serif; z-index:9999; user-select:none;
+            box-shadow:0 8px 32px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.1);
+            border:1px solid rgba(255,255,255,0.1);
+            animation:slideIn 0.3s ease-out; transition:all 0.3s ease;
+            backdrop-filter:blur(10px);
+        `;
+
+        const header = document.createElement('div');
+        header.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:12px;height:12px;background:linear-gradient(45deg,#4CAF50,#45a049);border-radius:50%;animation:pulse 2s infinite;"></div>
+                <span style="font-weight:600;font-size:16px;">Монитор</span>
+            </div>`;
+        header.style.cssText = `
+            background:linear-gradient(135deg,rgba(76,175,80,0.2),rgba(56,142,60,0.2));
+            padding:16px 20px; border-radius:16px 16px 0 0;
+            border-bottom:1px solid rgba(255,255,255,0.1); position:relative;
+        `;
+        container.appendChild(header);
+
+        const contentArea = document.createElement('div');
+        contentArea.id = 'gob-content-area';
+        contentArea.style.cssText = `padding:16px 20px;`;
+
+        // Status
+        const status = document.createElement('div');
+        status.style.cssText = `display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;border:1px solid rgba(255,255,255,0.1);`;
+        const statusLabel = document.createElement('span');
+        statusLabel.textContent = 'Статус:';
+        statusLabel.style.cssText = `font-weight:500;font-size:13px;color:#E0E0E0;`;
+        const statusValue = document.createElement('span');
+        statusValue.id = 'gob-status-value';
+        statusValue.textContent = '🔄 Инициализация...';
+        statusValue.style.cssText = `font-weight:600;font-size:11px;color:#4CAF50;background:rgba(76,175,80,0.2);padding:4px 8px;border-radius:6px;border:1px solid rgba(76,175,80,0.3);min-width:80px;text-align:center;`;
+        status.appendChild(statusLabel);
+        status.appendChild(statusValue);
+        contentArea.appendChild(status);
+
+        // User ID
+        const userIdDiv = document.createElement('div');
+        userIdDiv.style.cssText = `margin-bottom:12px;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid rgba(255,255,255,0.1);font-size:10px;color:#888;text-align:center;`;
+        userIdDiv.textContent = `ID: ${USER_ID}`;
+        contentArea.appendChild(userIdDiv);
+
+        // Server checkboxes
+        const serverSection = document.createElement('div');
+        serverSection.style.cssText = `margin-bottom:12px;padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;border:1px solid rgba(255,255,255,0.1);`;
+        const serverLabel = document.createElement('div');
+        serverLabel.textContent = 'Целевые серверы:';
+        serverLabel.style.cssText = `font-weight:500;margin-bottom:8px;color:#E0E0E0;font-size:13px;`;
+        const serverCheckboxes = document.createElement('div');
+        serverCheckboxes.style.cssText = `display:grid;grid-template-columns:repeat(3,1fr);gap:8px;`;
+        ['US','EU','RU','BR','AU','JP'].forEach(server => {
+            const lbl = document.createElement('label');
+            lbl.style.cssText = `display:flex;align-items:center;cursor:pointer;padding:6px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);`;
+            const cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.value = server;
+            cb.checked = targetServerNames.includes(server);
+            cb.style.cssText = `margin-right:6px;accent-color:#4CAF50;`;
+            cb.addEventListener('change', updateTargetServers);
+            const span = document.createElement('span');
+            span.textContent = server;
+            span.style.cssText = `font-size:12px;color:#E0E0E0;font-weight:500;`;
+            lbl.appendChild(cb); lbl.appendChild(span);
+            serverCheckboxes.appendChild(lbl);
+        });
+        serverSection.appendChild(serverLabel);
+        serverSection.appendChild(serverCheckboxes);
+        contentArea.appendChild(serverSection);
+
+        // Buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `display:flex;flex-direction:column;gap:8px;margin-bottom:12px;`;
+
+        const startButton = document.createElement('button');
+        startButton.id = 'gob-start-btn';
+        startButton.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><span>▶️</span><span>Начать мониторинг</span></div>`;
+        startButton.style.cssText = `background:linear-gradient(135deg,#4CAF50,#45a049);color:white;border:none;border-radius:10px;padding:12px 16px;cursor:pointer;font-weight:600;font-size:13px;transition:all 0.2s ease;`;
+        startButton.classList.add('gob-ui-button-hover');
+        startButton.onclick = toggleServerCycle;
+
+        const stopButton = document.createElement('button');
+        stopButton.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><span>⏹️</span><span>Стоп</span></div>`;
+        stopButton.style.cssText = `background:linear-gradient(135deg,#ff4757,#ff3838);color:white;border:none;border-radius:10px;padding:12px 16px;cursor:pointer;font-weight:600;font-size:13px;transition:all 0.2s ease;`;
+        stopButton.classList.add('gob-ui-button-hover');
+        stopButton.onclick = stopServerCycle;
+
+        const checkButton = document.createElement('button');
+        checkButton.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><span>🔍</span><span>Проверить текущий</span></div>`;
+        checkButton.style.cssText = `background:linear-gradient(135deg,#4299e1,#3182ce);color:white;border:none;border-radius:10px;padding:12px 16px;cursor:pointer;font-weight:600;font-size:13px;transition:all 0.2s ease;`;
+        checkButton.classList.add('gob-ui-button-hover');
+        checkButton.onclick = checkCurrentServer;
+
+        buttonContainer.appendChild(startButton);
+        buttonContainer.appendChild(stopButton);
+        buttonContainer.appendChild(checkButton);
+        contentArea.appendChild(buttonContainer);
+
+        // Stats
+        const stats = document.createElement('div');
+        stats.style.cssText = `display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;border:1px solid rgba(255,255,255,0.1);`;
+        const statsLabel = document.createElement('span');
+        statsLabel.textContent = 'Отправлено:';
+        statsLabel.style.cssText = `font-weight:500;font-size:13px;color:#E0E0E0;`;
+        const statsValue = document.createElement('span');
+        statsValue.id = 'gob-message-count';
+        statsValue.textContent = '0';
+        statsValue.style.cssText = `font-weight:600;font-size:11px;color:#4CAF50;background:rgba(76,175,80,0.2);padding:4px 8px;border-radius:6px;border:1px solid rgba(76,175,80,0.3);min-width:32px;text-align:center;`;
+        stats.appendChild(statsLabel);
+        stats.appendChild(statsValue);
+        contentArea.appendChild(stats);
+
+        container.appendChild(contentArea);
+
+        // Minimize button
+        const toggleButton = document.createElement('button');
+        toggleButton.innerHTML = '−';
+        toggleButton.style.cssText = `position:absolute;top:12px;right:12px;width:28px;height:28px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:50%;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;`;
+        toggleButton.addEventListener('click', () => {
+            minimized = !minimized;
+            const ca = document.getElementById('gob-content-area');
+            if (ca) {
+                ca.style.display = minimized ? 'none' : 'block';
+                container.style.width = minimized ? '200px' : '240px';
+                toggleButton.innerHTML = minimized ? '+' : '−';
+            }
+        });
+        container.appendChild(toggleButton);
+        document.body.appendChild(container);
+        uiCreated = true;
+    }
+
+    function updateStatus(message = null) {
+        const statusEl = document.getElementById('gob-status-value');
+        if (!statusEl) return;
+        if (message) {
+            statusEl.textContent = message;
+            statusEl.style.color = '#FFD700';
+        } else {
+            statusEl.textContent = serverCycleInterval ? `🔄 ${currentServer || '...'}` : '⏸️ Остановлено';
+            statusEl.style.color = serverCycleInterval ? '#4CAF50' : '#FF5252';
+        }
+        const counterEl = document.getElementById('gob-message-count');
+        if (counterEl) counterEl.textContent = totalMessagesSent;
+    }
+
+    function updateTargetServers() {
+        const checkboxes = document.querySelectorAll('#gob-monitor-ui input[type="checkbox"]');
+        targetServerNames = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+        updateStatus();
+    }
+
+    function toggleServerCycle() {
+        serverCycleInterval ? stopServerCycle() : startServerCycle();
+    }
+
+    function stopServerCycle() {
+        if (serverCycleInterval) { clearInterval(serverCycleInterval); serverCycleInterval = null; }
+        updateStatus();
+        const startBtn = document.getElementById('gob-start-btn');
+        if (startBtn) startBtn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><span>▶️</span><span>Начать мониторинг</span></div>`;
+    }
+
+    async function checkCurrentServer() {
+        const server = getCurrentServer();
+        updateStatus(`🔍 Проверка ${server}...`);
+        try {
+            await checkAndSendServerMessages(server);
+            updateStatus();
+        } catch (e) {
+            updateStatus('❌ Проверка не удалась');
+        }
+    }
+
+    function getCurrentServer() {
+        const sel = document.querySelector('#server-select .server-list li.selected h2');
+        if (sel) return sel.textContent.trim().toUpperCase();
+        const btn = document.querySelector('.butt_left_menu.ng-binding .colorRed');
+        if (btn) return btn.textContent.trim().toUpperCase();
+        return 'UNKNOWN';
+    }
+
+    function getAvailableServers() {
+        return Array.from(document.querySelectorAll('#server-select .server-list li:not(.down)'))
+            .map(el => { const h = el.querySelector('h2'); return h ? h.textContent.trim() : null; })
+            .filter(n => n && n !== 'DEV');
+    }
+
+    function getNextTargetServer() {
+        const available = getAvailableServers();
+        const cur = getCurrentServer();
+        for (let i = 0; i < targetServerNames.length; i++) {
+            const target = targetServerNames[currentTargetIndex];
+            currentTargetIndex = (currentTargetIndex + 1) % targetServerNames.length;
+            if (available.includes(target) && target !== cur) return target;
+        }
+        const others = available.filter(s => s !== cur);
+        return others.length > 0 ? others[0] : null;
+    }
+
+    function switchToServer(serverName) {
+        const serverEls = document.querySelectorAll('#server-select .server-list li:not(.down)');
+        for (const el of serverEls) {
+            const nameEl = el.querySelector('h2');
+            if (nameEl && nameEl.textContent.trim() === serverName) {
+                if (el.classList.contains('selected')) return true;
+                el.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function startServerCycle() {
+        if (serverCycleInterval) clearInterval(serverCycleInterval);
+        if (getAvailableServers().length === 0 || targetServerNames.length === 0) return;
+
+        const startBtn = document.getElementById('gob-start-btn');
+        if (startBtn) startBtn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><span>⏸️</span><span>Пауза мониторинга</span></div>`;
+
+        let isProcessing = false;
+
+        serverCycleInterval = setInterval(async () => {
+            if (isProcessing) return;
+            const targetServer = getNextTargetServer();
+            if (!targetServer || !switchToServer(targetServer)) return;
+
+            isProcessing = true;
+
+            // Wait for server switch to register
+            setTimeout(async () => {
+                const newServer = getCurrentServer();
+                if (newServer !== currentServer) {
+                    currentServer = newServer;
+                    updateStatus(`🔁 Переход на ${currentServer}...`);
+
+                    // ── RESPAWN after joining server ──
+                    setTimeout(async () => {
+                        updateStatus(`⚔️ Спавн на ${currentServer}...`);
+                        await tryRespawn();
+
+                        // Wait a moment then scan messages
+                        setTimeout(async () => {
+                            try {
+                                await checkAndSendServerMessages(currentServer);
+                            } catch (e) {
+                                console.error('❌ Error processing messages:', e);
+                            } finally {
+                                updateStatus();
+                                isProcessing = false;
+                            }
+                        }, 2000);
+                    }, 1500);
+                    // ─────────────────────────────────
+                } else {
+                    isProcessing = false;
+                }
+            }, 1500);
+        }, 500);
+    }
+
+    // ─── MESSAGE SENDING ─────────────────────────────────────────────
+    function createGlobalMessageKey(server, text) { return `${server}|${text}`; }
+
+    function isMessageAlreadySentGlobally(server, text) {
+        const key = createGlobalMessageKey(server, text);
+        const entry = window.globalMessageStore[key];
+        if (entry && (new Date() - entry.timestamp < 5 * 60 * 1000) && entry.userId !== USER_ID) return true;
+        return false;
+    }
+
+    function markMessageAsSentGlobally(server, text) {
+        window.globalMessageStore[createGlobalMessageKey(server, text)] = { timestamp: new Date(), userId: USER_ID };
+    }
+
+    function formatMessageWithColoredDots(text) {
+        if (/плутоний|plutonium/i.test(text)) return '🟢 ' + text;
+        if (/паук|spider/i.test(text)) return '🔴 ' + text;
+        if (/хомяк|hamster/i.test(text)) return '🔵 ' + text;
+        return text;
+    }
+
+    async function checkAndSendServerMessages(serverName) {
+        const messages = document.querySelectorAll('#listChat li');
+        const serverMessages = [];
+        const now = new Date();
+        const maxAge = 2 * 60 * 1000;
+        const today = now.toDateString();
+        const store = window.lastSentMessagesStore;
+        if (!store[serverName]) store[serverName] = {};
+
+        messages.forEach(message => {
+            const text = message.textContent || message.innerText;
+            const isServerMsg = /SERVER:/i.test(text);
+            const hasTg = /-tg|-тг/i.test(text);
+            if (!isServerMsg && !hasTg) return;
+            if (/ignored/i.test(text)) return;
+
+            const timeEl = message.querySelector('.time');
+            if (timeEl) {
+                const [hh, mm] = timeEl.textContent.trim().split(':').map(Number);
+                if (!isNaN(hh) && !isNaN(mm)) {
+                    const msgTime = new Date(now);
+                    msgTime.setHours(hh, mm, 0, 0);
+                    if (msgTime.toDateString() !== today) return;
+                    const age = now - msgTime;
+                    if (age > maxAge || age < 0) return;
+                }
+            }
+
+            let cleaned = formatMessageWithColoredDots(text.replace(/\s+/g, ' ').trim());
+            if (/сообщ\. проигнор/i.test(cleaned)) return;
+            if (isMessageAlreadySentGlobally(serverName, cleaned)) return;
+
+            const key = `${cleaned}|${today}`;
+            if (store[serverName][key] && now - store[serverName][key] < maxAge) return;
+
+            store[serverName][key] = now;
+            markMessageAsSentGlobally(serverName, cleaned);
+            serverMessages.push(cleaned);
+        });
+
+        if (serverMessages.length > 0) {
+            const combined = `🎮 ${serverName} [${USER_ID.substring(0, 6)}]\n${serverMessages.join('\n')}`;
+            const ok = await sendToTelegram(combined);
+            if (ok) { totalMessagesSent += serverMessages.length; updateStatus(); }
+        }
+    }
+
+    async function sendToTelegram(message) {
+        try {
+            const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: 'HTML' })
+            });
+            return res.ok;
+        } catch (e) {
+            console.error('❌ Telegram error:', e);
+            return false;
+        }
+    }
+
+    function init() {
+        const setup = () => setTimeout(() => { createUI(); updateStatus(); }, 3000);
+        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', setup) : setup();
+    }
+
+    init();
+})();
