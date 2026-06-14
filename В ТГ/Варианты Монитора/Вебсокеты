@@ -204,7 +204,7 @@ async function processMessage(serverName, msgText) {
     }
 
     if (!isWarmedUp()) {
-        log('info', `[${serverName}] Warmup — skipping: ${msgText.substring(0, 60)}`);
+        log('info', `[${serverName}] Global warmup — skipping: ${msgText.substring(0, 60)}`);
         return;
     }
 
@@ -228,13 +228,18 @@ function connectRoom(serverName, authToken) {
     const url = `wss://${domain}/?room=${roomId}&play&auth=b&version=${VERSION}&token=${authToken}`;
     let ws;
     let dead = false;
+    let connectTime = 0;
+    const isRoomWarmedUp = () => Date.now() - connectTime > WARMUP_MS;
 
     function connect() {
         if (dead) return;
         log('info', `Connecting to ${serverName}...`);
         ws = new WebSocket(url, { rejectUnauthorized: false });
 
-        ws.on('open', () => log('ok', `${serverName} connected`));
+        ws.on('open', () => {
+            connectTime = Date.now();
+            log('ok', `${serverName} connected`);
+        });
 
         ws.on('message', async (raw) => {
             try {
@@ -251,6 +256,10 @@ function connectRoom(serverName, authToken) {
                     /плутоний|plutonium|паук|spider|хомяк|hamster/i.test(str);
 
                 if (needsScan) {
+                    if (!isRoomWarmedUp()) {
+                        log('info', `[${serverName}] Room warmup — skipping`);
+                        return;
+                    }
                     const chatText = extractChatText(str);
                     if (chatText) {
                         log('info', `[${serverName}] Chat: ${chatText}`);
