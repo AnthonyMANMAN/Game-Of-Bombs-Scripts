@@ -48,6 +48,7 @@ function log(level, msg) {
 function formatTimer(rawTimeLeft) {
     if (rawTimeLeft === undefined) return '--:--';
     const secs = Math.floor(rawTimeLeft / 10);
+    if (secs < 0) return '--:--';
     return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 }
 
@@ -146,10 +147,22 @@ function getMatchInfo(text) {
 }
 
 const globalDedup = {};
+
+// Normalize text for dedup — keep only printable ASCII + Cyrillic, lowercase
+function normalizeForDedup(str) {
+    return str
+        .replace(/[^\x20-\x7E\u0400-\u04FF]/g, '')  // keep only readable chars
+        .replace(/\s+/g, ' ')                            // collapse whitespace
+        .trim()
+        .toLowerCase();
+}
+
 function isDupe(key) {
+    const norm = normalizeForDedup(key);
+    if (!norm || norm.length < 3) return true; // too short = junk, always skip
     const now = Date.now();
-    if (globalDedup[key] && now - globalDedup[key] < DEDUP_TTL_MS) return true;
-    globalDedup[key] = now;
+    if (globalDedup[norm] && now - globalDedup[norm] < DEDUP_TTL_MS) return true;
+    globalDedup[norm] = now;
     return false;
 }
 setInterval(() => {
@@ -183,6 +196,13 @@ async function processMessage(serverName, msgText) {
     const match = getMatchInfo(msgText);
     if (!match) return;
 
+    // Check timer FIRST before anything else — negative timer = round transition, skip
+    const rawTimer = timers[serverName];
+    if (rawTimer !== undefined && Math.floor(rawTimer / 10) < 0) {
+        log('info', `[${serverName}] Timer negative — skipping`);
+        return;
+    }
+
     if (!isWarmedUp()) {
         log('info', `[${serverName}] Warmup — skipping: ${msgText.substring(0, 60)}`);
         return;
@@ -190,7 +210,7 @@ async function processMessage(serverName, msgText) {
 
     if (isDupe(msgText)) return;
 
-    const timerStr = formatTimer(timers[serverName]);
+    const timerStr = formatTimer(rawTimer);
     const line1 = `${match.emoji} ${serverName}, ${timerStr}, ${match.label}`;
     const payload = `${line1}\n${msgText}`;
 
