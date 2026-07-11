@@ -1,6 +1,6 @@
 // Paste in console on gameofbombs.com, on the OTHER device
 (function() {
-  const TOKEN = '41d1254be8982bab55da7e417708a6d7';
+  const TOKEN = 'сюда вставь токен';
 
   document.cookie = `bsession=${TOKEN}; path=/; domain=.gameofbombs.com`;
 
