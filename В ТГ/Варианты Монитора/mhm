@@ -1,0 +1,350 @@
+ ==UserScript==
+// @name         GoB WS Monitor -> Telegram
+// @namespace    gob-ws-monitor
+// @version      0.1.32
+// @description  Mirrors in-game event notifications to Telegram (bot-flagged account, admin-approved)
+// @match        https://gameofbombs.com/*
+// @match        https://*.gameofbombs.com/*
+// @grant        GM_xmlhttpRequest
+// @connect      gameofbombs.com
+// @connect      api.telegram.org
+// @connect      s1.rootbeer.gameofbombs.com
+// @connect      s2.coffee.gameofbombs.com
+// @connect      s2.cachaca.gameofbombs.com
+// @connect      s2.sake.gameofbombs.com
+// @connect      s1.flatwhite.gameofbombs.com
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    // ─── CONFIG ────────────────────────────────────────────────────────────
+    const BOT_TOKEN      = '8549384361:AAGEWldNkI_zw2TT1bToQmCPkRJkAS6XeAA';
+    const CHAT_ID        = '-1003433277732';
+    const LOGIN_USERNAME = 'afoonie';
+    const LOGIN_PASSWORD = '45645';
+
+    const DEDUP_TTL_MS = 5 * 60 * 1000;
+    const RECONNECT_MS = 5000;
+    const PING_MS      = 500;
+    const VERSION      = '0.1.32';
+    const WARMUP_MS    = 15 * 1000;
+    const SESSION_MS   = 50 * 60 * 1000;
+
+    const DOMAINS = {
+        US: 's1.rootbeer.gameofbombs.com',
+        EU: 's2.coffee.gameofbombs.com',
+        BR: 's2.cachaca.gameofbombs.com',
+        JP: 's2.sake.gameofbombs.com',
+        AU: 's1.flatwhite.gameofbombs.com',
+    };
+
+    const ROOM_IDS = {
+        US: 'US_MIX',
+        EU: 'EU_MIX',
+        BR: 'BR1',
+        JP: 'JP1',
+        AU: 'AU1',
+    };
+    // ───────────────────────────────────────────────────────────────────────
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const startTime = Date.now();
+    const isWarmedUp = () => Date.now() - startTime > WARMUP_MS;
+
+    const timers = {};
+
+    function log(level, msg) {
+        const icons = { info: 'i', warn: '!', error: 'x', ok: 'v' };
+        console.log(`[GoB-Monitor] ${new Date().toISOString()} [${icons[level] || '-'}] ${msg}`);
+    }
+
+    function formatTimer(rawTimeLeft) {
+        if (rawTimeLeft === undefined) return '--:--';
+        const secs = Math.floor(rawTimeLeft / 10);
+        if (secs < 0) return '--:--';
+        return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    }
+
+    // ─── GM_xmlhttpRequest HELPERS ─────────────────────────────────────────
+    function gmRequest(opts) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                ...opts,
+                onload: res => resolve(res),
+                onerror: err => reject(err),
+                ontimeout: () => reject(new Error('timeout')),
+            });
+        });
+    }
+
+    // ─── PING SOCKETS (for accurate timers) ────────────────────────────────
+    function startPingSockets() {
+        for (const [label, domain] of Object.entries(DOMAINS)) {
+            const connect = () => {
+                const ws = new WebSocket(`wss://${domain}/`);
+                ws.addEventListener('open', () => {
+                    ws.send(JSON.stringify({ pingtest: Date.now() }));
+                    const pingInterval = setInterval(() => {
+                        if (ws.readyState === WebSocket.OPEN)
+                            ws.send(JSON.stringify({ time: Date.now() }));
+                        else
+                            clearInterval(pingInterval);
+                    }, PING_MS);
+                });
+                ws.addEventListener('message', ev => {
+                    try {
+                        const d = JSON.parse(ev.data);
+                        if (d.timeLeft !== undefined) {
+                            timers[label] = d.timeLeft;
+                        } else if (Array.isArray(d.rooms)) {
+                            const r = d.rooms.find(r => r.timeLeft !== undefined);
+                            if (r) timers[label] = r.timeLeft;
+                        }
+                    } catch (_) {}
+                });
+                ws.addEventListener('close', () => setTimeout(connect, RECONNECT_MS));
+                ws.addEventListener('error', () => {});
+            };
+            connect();
+        }
+    }
+
+    // ─── LOGIN ─────────────────────────────────────────────────────────────
+    function login() {
+        return new Promise((resolve, reject) => {
+            const body = JSON.stringify({ email: LOGIN_USERNAME, pwd: LOGIN_PASSWORD });
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: 'https://gameofbombs.com/api/v3/user/login',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                data: body,
+                onload: res => {
+                    try {
+                        const json = JSON.parse(res.responseText);
+                        if (json.token) return resolve(json.token);
+                        reject(new Error('No token: ' + res.responseText.substring(0, 100)));
+                    } catch (e) {
+                        reject(new Error('Login parse error: ' + res.responseText.substring(0, 100)));
+                    }
+                },
+                onerror: reject,
+            });
+        });
+    }
+
+    // ─── TELEGRAM ──────────────────────────────────────────────────────────
+    function sendToTelegram(text) {
+        return new Promise(resolve => {
+            const body = JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'HTML' });
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
+                headers: { 'Content-Type': 'application/json' },
+                data: body,
+                onload: res => resolve(res.status === 200),
+                onerror: () => resolve(false),
+            });
+        });
+    }
+
+    // ─── MATCH DETECTION ───────────────────────────────────────────────────
+    function getMatchInfo(text) {
+        if (/ignored|сообщ\. проигнор/i.test(text)) return null;
+
+        const hasPlutoniumEvent = /plutonium[_\s]*(found|taken|exploded|dropped)/i.test(text);
+        const isPlutoniumMention = /плутоний|plutonium/i.test(text);
+        const isFakePlutonium = isPlutoniumMention && !hasPlutoniumEvent;
+
+        if (/-tg|-тг/i.test(text) || /SERVER:/i.test(text)) {
+            if (isPlutoniumMention) {
+                if (isFakePlutonium) return null;
+                return { emoji: '🟢', label: 'Плутоний' };
+            }
+            if (/паук|spider|evil.?spider/i.test(text))    return { emoji: '🔴', label: 'Паук' };
+            if (/хомяк|hamster|evil.?hamster/i.test(text)) return { emoji: '🔵', label: 'Хомяк' };
+            return { emoji: '💬', label: 'Чат' };
+        }
+
+        if (isPlutoniumMention) {
+            if (isFakePlutonium) return null;
+            return { emoji: '🟢', label: 'Плутоний' };
+        }
+        if (/evil.?spider|злой.?паук/i.test(text))   return { emoji: '🔴', label: 'Паук' };
+        if (/evil.?hamster|злой.?хомяк/i.test(text)) return { emoji: '🔵', label: 'Хомяк' };
+        return null;
+    }
+
+    const globalDedup = {};
+
+    function normalizeForDedup(str) {
+        return str
+            .replace(/[^\x20-\x7E\u0400-\u04FF]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function isDupe(key) {
+        const norm = normalizeForDedup(key);
+        if (!norm || norm.length < 3) return true;
+        const now = Date.now();
+        if (globalDedup[norm] && now - globalDedup[norm] < DEDUP_TTL_MS) return true;
+        globalDedup[norm] = now;
+        return false;
+    }
+    setInterval(() => {
+        const cutoff = Date.now() - DEDUP_TTL_MS;
+        for (const k of Object.keys(globalDedup))
+            if (globalDedup[k] < cutoff) delete globalDedup[k];
+    }, 60_000);
+
+    // ─── EXTRACT CHAT TEXT FROM BINARY FRAME ───────────────────────────────
+    function extractChatText(str) {
+        const patterns = [
+            /SERVER:[^\x00-\x1F]+/i,
+            /[^\x00-\x1F]*-tg[^\x00-\x1F]*/i,
+            /[^\x00-\x1F]*-тг[^\x00-\x1F]*/i,
+            /[^\x00-\x1F]*(плутоний|plutonium)[^\x00-\x1F]*/i,
+            /[^\x00-\x1F]*(evil.?spider|злой.?паук)[^\x00-\x1F]*/i,
+            /[^\x00-\x1F]*(evil.?hamster|злой.?хомяк)[^\x00-\x1F]*/i,
+        ];
+        for (const p of patterns) {
+            const m = str.match(p);
+            if (m) return m[0].replace(/[\x00-\x1F]+/g, ' ').trim();
+        }
+        return null;
+    }
+
+    // ─── PROCESS MESSAGE ───────────────────────────────────────────────────
+    let totalSent = 0;
+    async function processMessage(serverName, msgText) {
+        if (!msgText) return;
+
+        const match = getMatchInfo(msgText);
+        if (!match) return;
+
+        const rawTimer = timers[serverName];
+        if (rawTimer !== undefined && Math.floor(rawTimer / 10) < 0) {
+            log('info', `[${serverName}] Timer negative — skipping`);
+            return;
+        }
+
+        if (!isWarmedUp()) {
+            log('info', `[${serverName}] Global warmup — skipping: ${msgText.substring(0, 60)}`);
+            return;
+        }
+
+        if (isDupe(msgText)) return;
+
+        const timerStr = formatTimer(rawTimer);
+        const line1 = `${match.emoji} ${serverName}, ${timerStr}, ${match.label}`;
+        const payload = `${line1}\n${msgText}`;
+
+        const ok = await sendToTelegram(payload);
+        if (ok) {
+            totalSent++;
+            log('ok', `Sent from ${serverName} (timer: ${timerStr}, total: ${totalSent}): ${msgText.substring(0, 80)}`);
+        }
+    }
+
+    // ─── CHAT ROOM CONNECTION ───────────────────────────────────────────────
+    function connectRoom(serverName, authToken) {
+        const domain = DOMAINS[serverName];
+        const roomId = ROOM_IDS[serverName];
+        const url = `wss://${domain}/?room=${roomId}&play&auth=b&version=${VERSION}&token=${authToken}`;
+        let ws;
+        let dead = false;
+        let connectTime = 0;
+        const isRoomWarmedUp = () => Date.now() - connectTime > WARMUP_MS;
+
+        function connect() {
+            if (dead) return;
+            log('info', `Connecting to ${serverName}...`);
+            ws = new WebSocket(url);
+
+            ws.addEventListener('open', () => {
+                connectTime = Date.now();
+                log('ok', `${serverName} connected`);
+            });
+
+            ws.addEventListener('message', async (ev) => {
+                try {
+                    const str = typeof ev.data === 'string' ? ev.data : '';
+                    if (!str) return;
+
+                    try { JSON.parse(str); return; } catch (_) {}
+
+                    const needsScan =
+                        str.includes('SERVER:') ||
+                        str.includes('-tg') ||
+                        str.includes('-тг') ||
+                        /плутоний|plutonium|паук|spider|хомяк|hamster/i.test(str);
+
+                    if (needsScan) {
+                        if (!isRoomWarmedUp()) {
+                            log('info', `[${serverName}] Room warmup — skipping`);
+                            return;
+                        }
+                        const chatText = extractChatText(str);
+                        if (chatText) {
+                            log('info', `[${serverName}] Chat: ${chatText}`);
+                            await processMessage(serverName, chatText);
+                        }
+                    }
+                } catch (e) {}
+            });
+
+            ws.addEventListener('close', (ev) => {
+                if (!dead) {
+                    log('warn', `${serverName} disconnected (${ev.code}) — reconnecting in ${RECONNECT_MS}ms`);
+                    setTimeout(connect, RECONNECT_MS);
+                }
+            });
+
+            ws.addEventListener('error', err => log('error', `${serverName} WS error`));
+        }
+
+        connect();
+        return { stop: () => { dead = true; if (ws) ws.close(); } };
+    }
+
+    // ─── MAIN LOOP (recursive setTimeout instead of blocking while(true)) ──
+    async function runSession() {
+        try {
+            log('info', 'Logging in...');
+            const authToken = await login();
+            log('ok', `Token: ${authToken.substring(0, 8)}...`);
+
+            const connections = [];
+            for (const serverName of Object.keys(DOMAINS)) {
+                connections.push(connectRoom(serverName, authToken));
+                await sleep(500);
+            }
+
+            log('ok', `Monitoring: ${Object.keys(DOMAINS).join(', ')}`);
+            log('info', 'Watching for: SERVER:, -tg, -тг, Plutonium, Evil Spider, Evil Hamster');
+
+            setTimeout(() => {
+                log('info', 'Refreshing token...');
+                for (const c of connections) c.stop();
+                setTimeout(runSession, 2000);
+            }, SESSION_MS);
+
+        } catch (err) {
+            log('error', `Session error: ${err.message}`);
+            setTimeout(runSession, 10000);
+        }
+    }
+
+    log('info', 'Starting GoB WS Monitor (Tampermonkey)...');
+    log('info', `Warmup: ${WARMUP_MS / 1000}s — old messages will be ignored`);
+    startPingSockets();
+    log('info', 'Ping sockets started for timer tracking');
+    runSession();
+
+})();
